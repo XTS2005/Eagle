@@ -15,60 +15,93 @@ struct TweaksView: View {
         NavigationStack {
             List {
                 Section(header: HeaderLabel(text: "SpringBoard", icon: "house")) {
-                    NavigationLink("RemoteCall Customizer", destination: RemoteView(mgr: mgr))
-                        .disabled(!mgr.rcready)
-                    NavigationLink("Liquid Glass", destination: LiquidGlassView())
-                        .disabled(!mgr.vfsready)
-                    NavigationLink("SpringBoard Customizer", destination: SpringBoardView(mgr: mgr))
-                        .disabled(!mgr.vfsready)
+                    if LaraCustomProfile.includes(.remoteCallCustomizer) {
+                        NavigationLink("RemoteCall Customizer", destination: RemoteView(mgr: mgr))
+                            .disabled(!mgr.rcready)
+                    }
+                    if LaraCustomProfile.includes(.liquidGlass) {
+                        NavigationLink("Liquid Glass", destination: LiquidGlassView())
+                            .disabled(!mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.springBoardCustomizer) {
+                        NavigationLink("SpringBoard Customizer", destination: SpringBoardView(mgr: mgr))
+                            .disabled(!mgr.vfsready)
+                    }
                 }
                 
                 Section(header: HeaderLabel(text: "Lock Screen", icon: "lock")) {
-                    NavigationLink("Passcode Theme", destination: PasscodeView(mgr: mgr))
-                        .disabled(!mgr.sbxready)
+                    if LaraCustomProfile.includes(.passcodeTheme) {
+                        NavigationLink("Passcode Theme", destination: PasscodeView(mgr: mgr))
+                            .disabled(!mgr.sbxready)
+                    }
                 }
                 
                 Section(header: HeaderLabel(text: "Apps", icon: "app")) {
-                    NavigationLink("Card Overwrite", destination: CardView())
-                        .disabled(!mgr.vfsready)
-                    NavigationLink("App Decrypt", destination: DecryptView())
-                        .disabled(!mgr.sbxready)
-                    NavigationLink("3 App Bypass", destination: AppsView())
-                        .disabled(!mgr.sbxready)
-                    NavigationLink("Unblacklist", destination: WhitelistView())
-                        .disabled(!mgr.sbxready)
-                    NavigationLink("JIT Enabler", destination: JitView())
-                        .disabled(!mgr.sbxready)
+                    if LaraCustomProfile.includes(.cardOverwrite) {
+                        NavigationLink("Card Overwrite", destination: CardView())
+                            .disabled(!mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.appDecrypt) {
+                        NavigationLink("App Decrypt", destination: DecryptView())
+                            .disabled(!mgr.sbxready)
+                    }
+                    if LaraCustomProfile.includes(.threeAppBypass) {
+                        NavigationLink("3 App Bypass", destination: AppsView())
+                            .disabled(!mgr.sbxready)
+                    }
+                    if LaraCustomProfile.includes(.unblacklist) {
+                        NavigationLink("Unblacklist", destination: WhitelistView())
+                            .disabled(!mgr.sbxready)
+                    }
+                    if LaraCustomProfile.includes(.jitEnabler) {
+                        NavigationLink("JIT Enabler", destination: JitView())
+                            .disabled(!mgr.sbxready)
+                    }
                 }
                 
                 Section(header: HeaderLabel(text: "User Interface", icon: "eye")) {
-                    NavigationLink("dirtyZero", destination: dirtyZeroView())
-                        .disabled(!mgr.vfsready)
-                    NavigationLink("Show Hidden Icons", destination: ShowHiddenIconsView(mgr: mgr))
-                        .disabled(!mgr.sbxready && !mgr.vfsready)
-                    NavigationLink("MobileGestalt", destination: GestaltView(mgr: mgr))
-                        .disabled(!mgr.sbxready)
-                    NavigationLink("Font Overwrite", destination: FontPicker(mgr: mgr))
-                        .disabled(!mgr.vfsready)
-                    NavigationLink("SystemColor Patcher", destination: SystemColor(mgr: mgr))
-                        .disabled(!mgr.sbxready || !mgr.vfsready)
+                    if LaraCustomProfile.includes(.dirtyZero) {
+                        NavigationLink("dirtyZero", destination: dirtyZeroView())
+                            .disabled(!mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.showHiddenIcons) {
+                        NavigationLink("Show Hidden Icons", destination: ShowHiddenIconsView(mgr: mgr))
+                            .disabled(!mgr.sbxready && !mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.mobileGestalt) {
+                        NavigationLink("MobileGestalt", destination: GestaltView(mgr: mgr))
+                            .disabled(!mgr.sbxready)
+                    }
+                    if LaraCustomProfile.includes(.fontOverwrite) {
+                        NavigationLink("Font Overwrite", destination: FontPicker(mgr: mgr))
+                            .disabled(!mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.systemColorPatcher) {
+                        NavigationLink("SystemColor Patcher", destination: SystemColor(mgr: mgr))
+                            .disabled(!mgr.sbxready || !mgr.vfsready)
+                    }
                 }
                 
                 Section(header: HeaderLabel(text: "System", icon: "gear")) {
-                    NavigationLink("VarClean", destination: VarCleanView())
-                        .disabled(!mgr.sbxready)
-                    NavigationLink("Custom Overwrite", destination: CustomView(mgr: mgr))
-                        .disabled(!mgr.vfsready)
-                    NavigationLink("OTA Updates", destination: OTAView(mgr: mgr))
-                    NavigationLink("Screen Time", destination: ScreenTimeView(mgr: mgr))
+                    if LaraCustomProfile.includes(.varClean) {
+                        NavigationLink("VarClean", destination: VarCleanView())
+                            .disabled(!mgr.sbxready)
+                    }
+                    if LaraCustomProfile.includes(.customOverwrite) {
+                        NavigationLink("Custom Overwrite", destination: CustomView(mgr: mgr))
+                            .disabled(!mgr.vfsready)
+                    }
+                    if LaraCustomProfile.includes(.otaUpdates) {
+                        NavigationLink("OTA Updates", destination: OTAView(mgr: mgr))
+                    }
+                    if LaraCustomProfile.includes(.screenTime) {
+                        NavigationLink("Screen Time", destination: ScreenTimeView(mgr: mgr))
+                    }
                 }
                 
-                Section(header: HeaderLabel(text: "Broken", icon: "exclamationmark.triangle.fill")) {
-                    NavigationLink("DarkBoard", destination: DarkBoardView())
-                        .disabled(true)
+                if LaraCustomProfile.includes(.extraTools) {
+                    NavigationLink("Extra Tools", destination: ToolsView())
                 }
-                
-                NavigationLink("Extra Tools", destination: ToolsView())
             }
             .disabled(!mgr.dsready)
             .navigationTitle("Tweaks")

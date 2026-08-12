@@ -519,6 +519,7 @@
 					"$(SRCROOT)/lara/kexploit",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Lara Custom";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -536,7 +537,7 @@
 					"$(PROJECT_DIR)/lara/lib",
 				);
 				MARKETING_VERSION = 0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.roooot.lara;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leonardobaptiste.laracustom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -571,6 +572,7 @@
 					"$(SRCROOT)/lara/kexploit",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Lara Custom";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -588,7 +590,7 @@
 					"$(PROJECT_DIR)/lara/lib",
 				);
 				MARKETING_VERSION = 0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.roooot.lara;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leonardobaptiste.laracustom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

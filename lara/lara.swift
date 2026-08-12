@@ -16,7 +16,7 @@ let g_isunsupported: Bool = isunsupported()
 var weonadebugbuild_pjbweouttahereexclamationmark: Bool = false
 
 @main
-struct lara: App {
+struct LaraCustomApp: App {
     @StateObject private var mgr = laramgr.shared
     @StateObject private var iconthememgr = IconThemeManager.shared
     @Environment(\.scenePhase) var scenephase
@@ -61,7 +61,7 @@ struct lara: App {
                 
                 
                 // i'm gonna strangle you root (the weight of your actions will crush you)
-                if showfmintabs {
+                if showfmintabs && LaraCustomProfile.includes(.fileManagerTab) {
                     SantanderView(startPath: "/")
                         .tabItem {
                             Image(systemName: "folder.fill")

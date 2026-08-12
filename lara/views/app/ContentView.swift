@@ -32,7 +32,7 @@ struct ContentView: View {
                 DebugSection
                 InlineLogsSection
             }
-            .navigationTitle("lara")
+            .navigationTitle("Lara Custom")
             .toolbar {
                 if selectedlogsdisplaymode == .toolbar {
                     Button(action: {
@@ -259,13 +259,17 @@ struct ContentView: View {
     
     private var ActionsSection: some View {
         Section(header: HeaderLabel(text: "Actions", icon: "wrench.and.screwdriver")) {
-            Button("Respring", action: {
-                mgr.respring()
-            })
+            if LaraCustomProfile.includes(.respringAction) {
+                Button("Respring", action: {
+                    mgr.respring()
+                })
+            }
             
-            Button("Panic!", action: {
-                mgr.panic()
-            })
+            if LaraCustomProfile.includes(.panicAction) {
+                Button("Panic!", action: {
+                    mgr.panic()
+                })
+            }
             
             if isdebugged() {
                 Button("Detach Debugger", action: {
