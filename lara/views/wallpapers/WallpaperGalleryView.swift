@@ -588,16 +588,20 @@ enum TendiesInstaller {
         for entry in archive.entries {
             let normalized = entry.path.replacingOccurrences(of: "\\", with: "/")
             let components = normalized.split(separator: "/", omittingEmptySubsequences: true)
-            guard !normalized.hasPrefix("/"), !components.contains("..") else {
-                throw CommunityWallpaperError.invalidPackage
-            }
             if components.contains("__MACOSX") || components.last?.hasPrefix("._") == true {
+                continue
+            }
+            guard !components.isEmpty,
+                  !normalized.hasPrefix("/"),
+                  !components.contains("..") else {
+                laramgr.shared.logmsg("(wallpaper) ignored unsafe archive entry: \(entry.path)")
                 continue
             }
 
             let output = root.appendingPathComponent(normalized).standardizedFileURL
             guard output.path == root.path || output.path.hasPrefix(safeRoot) else {
-                throw CommunityWallpaperError.invalidPackage
+                laramgr.shared.logmsg("(wallpaper) ignored archive entry outside temporary folder: \(entry.path)")
+                continue
             }
 
             if entry.isDirectory {
@@ -614,17 +618,34 @@ enum TendiesInstaller {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else {
             throw CommunityWallpaperError.invalidPackage
         }
 
         var descriptors: [TendiesDescriptor] = []
-        for case let file as URL in enumerator where file.lastPathComponent == markerName {
-            let descriptor = file.deletingLastPathComponent()
+        for case let file as URL in enumerator {
+            let descriptor: URL
+            if file.lastPathComponent == markerName {
+                descriptor = file.deletingLastPathComponent()
+            } else if file.lastPathComponent.caseInsensitiveCompare("versions") == .orderedSame,
+                      (try? file.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                // Older community packages do not always include the descriptor
+                // identifier marker. Nugget recognizes them from the descriptor
+                // directory and its versions folder, so Lara must do the same.
+                let candidate = file.deletingLastPathComponent()
+                guard candidate.deletingLastPathComponent().lastPathComponent
+                    .lowercased().contains("descriptor") else { continue }
+                descriptor = candidate
+            } else {
+                continue
+            }
+
             let versions = descriptor.appendingPathComponent("versions", isDirectory: true)
-            guard fm.fileExists(atPath: versions.path) else { continue }
+            var versionsIsDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: versions.path, isDirectory: &versionsIsDirectory),
+                  versionsIsDirectory.boolValue else { continue }
 
             let relativeComponents = descriptor.pathComponents.dropFirst(root.pathComponents.count)
             let lowerComponents = relativeComponents.map { $0.lowercased() }
@@ -675,10 +696,6 @@ enum TendiesInstaller {
     ) throws {
         let identifier = Int.random(in: 10_000...99_999)
         let fm = FileManager.default
-        try Data("\(identifier)".utf8).write(
-            to: descriptor.appendingPathComponent("com.apple.posterkit.provider.descriptor.identifier"),
-            options: .atomic
-        )
 
         guard let enumerator = fm.enumerator(
             at: descriptor,
@@ -686,52 +703,96 @@ enum TendiesInstaller {
             options: [.skipsHiddenFiles]
         ) else { return }
 
+        var plistUpdates: [(url: URL, data: Data)] = []
         for case let file as URL in enumerator {
-            switch file.lastPathComponent {
-            case "com.apple.posterkit.provider.contents.userInfo":
-                try updatePlist(at: file) { plist in
-                    plist["wallpaperRepresentingIdentifier"] = identifier
-                }
-            case "Wallpaper.plist":
-                try updatePlist(at: file) { plist in
-                    plist["identifier"] = identifier
-                    if normalizeCollections {
-                        plist["family"] = "Marble"
-                        plist["name"] = "Lavender"
-                        if var assets = plist["assets"] as? [String: Any],
-                           var lockAndHome = assets["lockAndHome"] as? [String: Any],
-                           var defaultAsset = lockAndHome["default"] as? [String: Any] {
-                            defaultAsset["name"] = "Lavender"
-                            lockAndHome["default"] = defaultAsset
-                            assets["lockAndHome"] = lockAndHome
-                            plist["assets"] = assets
+            do {
+                switch file.lastPathComponent {
+                case "com.apple.posterkit.provider.contents.userInfo":
+                    let data = try updatedPlistData(at: file) { plist in
+                        _ = replaceValue(
+                            forKey: "wallpaperRepresentingIdentifier",
+                            with: identifier,
+                            in: &plist
+                        )
+                    }
+                    plistUpdates.append((file, data))
+                case "Wallpaper.plist":
+                    let data = try updatedPlistData(at: file) { plist in
+                        plist["identifier"] = identifier
+                        if normalizeCollections {
+                            plist["family"] = "Marble"
+                            plist["name"] = "Lavender"
+                            if var assets = plist["assets"] as? [String: Any],
+                               var lockAndHome = assets["lockAndHome"] as? [String: Any],
+                               var defaultAsset = lockAndHome["default"] as? [String: Any] {
+                                defaultAsset["name"] = "Lavender"
+                                lockAndHome["default"] = defaultAsset
+                                assets["lockAndHome"] = lockAndHome
+                                plist["assets"] = assets
+                            }
                         }
                     }
+                    plistUpdates.append((file, data))
+                default:
+                    continue
                 }
-            default:
-                continue
+            } catch {
+                // A few legacy tendies use opaque metadata here. They can still
+                // be installed safely with their original internal identity.
+                laramgr.shared.logmsg(
+                    "(wallpaper) preserving legacy descriptor identity because \(file.lastPathComponent) could not be updated: \(error.localizedDescription)"
+                )
+                return
             }
         }
+
+        for update in plistUpdates {
+            try update.data.write(to: update.url, options: .atomic)
+        }
+        try Data("\(identifier)".utf8).write(
+            to: descriptor.appendingPathComponent("com.apple.posterkit.provider.descriptor.identifier"),
+            options: .atomic
+        )
     }
 
-    private static func updatePlist(
+    private static func updatedPlistData(
         at url: URL,
         mutate: (inout [String: Any]) -> Void
-    ) throws {
+    ) throws -> Data {
         let data = try Data(contentsOf: url)
+        var format = PropertyListSerialization.PropertyListFormat.binary
         guard var plist = try PropertyListSerialization.propertyList(
             from: data,
             options: [],
-            format: nil
+            format: &format
         ) as? [String: Any] else {
             throw CommunityWallpaperError.invalidPackage
         }
         mutate(&plist)
-        let updated = try PropertyListSerialization.data(
+        return try PropertyListSerialization.data(
             fromPropertyList: plist,
-            format: .binary,
+            format: format == .openStep ? .xml : format,
             options: 0
         )
-        try updated.write(to: url, options: .atomic)
+    }
+
+    @discardableResult
+    private static func replaceValue(
+        forKey key: String,
+        with value: Any,
+        in dictionary: inout [String: Any]
+    ) -> Bool {
+        var replaced = false
+        for currentKey in Array(dictionary.keys) {
+            if currentKey == key {
+                dictionary[currentKey] = value
+                replaced = true
+            } else if var nested = dictionary[currentKey] as? [String: Any],
+                      replaceValue(forKey: key, with: value, in: &nested) {
+                dictionary[currentKey] = nested
+                replaced = true
+            }
+        }
+        return replaced
     }
 }
