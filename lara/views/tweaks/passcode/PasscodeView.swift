@@ -12,12 +12,17 @@ import UniformTypeIdentifiers
 import Compression
 import Combine
 
-private let passcodeThemeStorageRoot = URL(
+private let legacyPasscodeThemeStorageRoot = URL(
     fileURLWithPath: "/var/mobile/.DO-NOT-DELETE-lara/PasscodeThemes",
     isDirectory: true
 )
 
-private let passcodeBackupDir = passcodeThemeStorageRoot
+private let legacyPasscodeBackupDir = legacyPasscodeThemeStorageRoot
+    .appendingPathComponent("Originals", isDirectory: true)
+
+private let passcodeBackupDir = FileManager.default
+    .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    .appendingPathComponent("EaglePasscode", isDirectory: true)
     .appendingPathComponent("Originals", isDirectory: true)
 
 struct PasscodeKey: Identifiable {
@@ -47,24 +52,29 @@ final class PasscodeThemeManager: ObservableObject {
 
     func backupIfNeeded(targetPath: String) {
         createDirectoriesIfNeeded()
-        let targetURL = URL(fileURLWithPath: targetPath)
         let backupURL = backupURLFor(targetPath: targetPath)
 
-        guard fm.fileExists(atPath: targetPath) else { return }
-        
-        if !fm.fileExists(atPath: backupURL.path) {
-            try? fm.copyItem(at: targetURL, to: backupURL)
-        }
+        guard !hasBackup(targetPath: targetPath) else { return }
+        let original = (try? Data(contentsOf: URL(fileURLWithPath: targetPath), options: .mappedIfSafe))
+            ?? laramgr.shared.vfsread(path: targetPath, maxSize: 8 * 1024 * 1024)
+        guard let original, !original.isEmpty else { return }
+        try? original.write(to: backupURL, options: .atomic)
     }
 
     func hasBackup(targetPath: String) -> Bool {
-        fm.fileExists(atPath: backupURLFor(targetPath: targetPath).path)
+        fm.fileExists(atPath: backupURLFor(targetPath: targetPath).path) ||
+            fm.fileExists(atPath: legacyBackupURLFor(targetPath: targetPath).path)
+    }
+
+    func originalDataIfAvailable(targetPath: String) -> Data? {
+        if let current = try? Data(contentsOf: backupURLFor(targetPath: targetPath), options: .mappedIfSafe) {
+            return current
+        }
+        return try? Data(contentsOf: legacyBackupURLFor(targetPath: targetPath), options: .mappedIfSafe)
     }
 
     func restoreBackup(targetPath: String) throws {
-        let backupURL = backupURLFor(targetPath: targetPath)
-        guard fm.fileExists(atPath: backupURL.path) else { return }
-        let data = try Data(contentsOf: backupURL)
+        guard let data = originalDataIfAvailable(targetPath: targetPath) else { return }
         
         let overwrite = laramgr.shared.lara_overwritefile(
             target: targetPath,
@@ -132,6 +142,11 @@ final class PasscodeThemeManager: ObservableObject {
             .replacingOccurrences(of: "/", with: "_")
         return passcodeBackupDir
             .appendingPathComponent(sanitized)
+    }
+
+    private func legacyBackupURLFor(targetPath: String) -> URL {
+        let sanitized = targetPath.replacingOccurrences(of: "/", with: "_")
+        return legacyPasscodeBackupDir.appendingPathComponent(sanitized)
     }
 }
 

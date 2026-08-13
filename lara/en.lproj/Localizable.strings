@@ -82,6 +82,8 @@
 "Idea original de drkm9743" = "Original idea by drkm9743";
 "Buscar tarjetas" = "Find cards";
 "Reiniciar interfaz" = "Restart interface";
+"Reinicia la interfaz para que iOS cargue los nuevos números del código." = "Restart the interface so iOS can load the new passcode digits.";
+"Finalizar y reiniciar" = "Finish and Restart";
 "Más tarde" = "Later";
 "Guardar" = "Save";
 "Terminación actual: ninguna" = "Current ending: none";

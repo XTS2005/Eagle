@@ -304,12 +304,20 @@ struct CompleteStyleRunResult: Identifiable {
             ($0.component == .passcode || $0.component == .card) && $0.state == .applied
         }
     }
+
+    var appliedPasscode: Bool {
+        components.contains { $0.component == .passcode && $0.state == .applied }
+    }
 }
 
 private enum CompleteStyleEngineError: LocalizedError {
     case badDownload
     case incompletePasscode
+    case passcodeTargetsIncomplete
     case passcodeUnavailable
+    case passcodeWriteFailed(String)
+    case passcodeVerificationFailed
+    case passcodeOriginalBackupFailed
     case cardUnavailable
     case cardImageFailed
     case cardBackupFailed
@@ -326,8 +334,16 @@ private enum CompleteStyleEngineError: LocalizedError {
             return LaraL10n.text(en: "One of the style assets could not be downloaded.", es: "No se pudo descargar uno de los recursos del estilo.")
         case .incompletePasscode:
             return LaraL10n.text(en: "The passcode theme does not contain all ten digits.", es: "El tema del código no contiene los diez números.")
+        case .passcodeTargetsIncomplete:
+            return LaraL10n.text(en: "Eagle found the passcode cache, but not all ten system digits.", es: "Eagle encontró la caché del código, pero no los diez números del sistema.")
         case .passcodeUnavailable:
             return LaraL10n.text(en: "The passcode cache was not found on this iPhone.", es: "No se encontró la caché del código en este iPhone.")
+        case .passcodeWriteFailed(let message):
+            return LaraL10n.text(en: "A passcode digit could not be written: \(message)", es: "No se pudo escribir un número del código: \(message)")
+        case .passcodeVerificationFailed:
+            return LaraL10n.text(en: "A passcode digit did not match after writing, so Eagle restored the previous digits.", es: "Un número del código no coincidió después de escribirlo, así que Eagle restauró los números anteriores.")
+        case .passcodeOriginalBackupFailed:
+            return LaraL10n.text(en: "The original passcode digits could not be saved safely.", es: "No se pudieron guardar de forma segura los números originales del código.")
         case .cardUnavailable:
             return LaraL10n.text(en: "No compatible Wallet card was found.", es: "No se encontró una tarjeta de Wallet compatible.")
         case .cardImageFailed:
@@ -502,6 +518,64 @@ private final class CompleteStyleUndoStore {
 }
 
 @MainActor
+private final class CompletePasscodeOriginalStore {
+    static let shared = CompletePasscodeOriginalStore()
+
+    private let fm = FileManager.default
+    private let fileURL: URL
+
+    private init() {
+        let directory = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LaraCompleteStyles", isDirectory: true)
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        fileURL = directory.appendingPathComponent("OriginalPasscode.plist")
+    }
+
+    func saveIfNeeded(_ files: [CompleteStyleFileSnapshot]) throws {
+        if let existing = load(), !existing.isEmpty {
+            let existingPaths = Set(existing.map(\.path))
+            let currentPaths = Set(files.map(\.path))
+            if existingPaths == currentPaths {
+                return
+            }
+        }
+        try? fm.removeItem(at: fileURL)
+        guard !files.isEmpty, files.allSatisfy({ !$0.data.isEmpty }) else {
+            throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+        }
+
+        do {
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            let data = try encoder.encode(files)
+            try data.write(to: fileURL, options: .atomic)
+
+            guard
+                let saved = try? Data(contentsOf: fileURL),
+                let decoded = try? PropertyListDecoder().decode([CompleteStyleFileSnapshot].self, from: saved),
+                decoded.count == files.count,
+                Dictionary(uniqueKeysWithValues: decoded.map { ($0.path, $0.data) }) ==
+                    Dictionary(uniqueKeysWithValues: files.map { ($0.path, $0.data) })
+            else {
+                throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+            }
+        } catch {
+            try? fm.removeItem(at: fileURL)
+            throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+        }
+    }
+
+    func load() -> [CompleteStyleFileSnapshot]? {
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? PropertyListDecoder().decode([CompleteStyleFileSnapshot].self, from: data)
+    }
+
+    func clear() {
+        try? fm.removeItem(at: fileURL)
+    }
+}
+
+@MainActor
 final class CompleteStyleManager: ObservableObject {
     static let shared = CompleteStyleManager()
 
@@ -634,6 +708,14 @@ final class CompleteStyleManager: ObservableObject {
                 if selection.passcodePack != nil,
                    CompletePasscodeStyleEngine.basePath() != nil {
                     undoSnapshot.passcodeFiles = try CompletePasscodeStyleEngine.snapshot()
+                    let originalFiles = undoSnapshot.passcodeFiles.map { file in
+                        CompleteStyleFileSnapshot(
+                            path: file.path,
+                            data: PasscodeThemeManager.shared.originalDataIfAvailable(targetPath: file.path)
+                                ?? file.data
+                        )
+                    }
+                    try CompletePasscodeOriginalStore.shared.saveIfNeeded(originalFiles)
                 }
                 if selection.cardPack != nil,
                    CompleteCardStyleEngine.hasCompatibleCard() {
@@ -661,7 +743,10 @@ final class CompleteStyleManager: ObservableObject {
                     }
                     let prepared = try await passcodeImages(for: pack)
                     let images = prepared.images
-                    let count = try CompletePasscodeStyleEngine.apply(images: images)
+                    let count = try CompletePasscodeStyleEngine.apply(
+                        images: images,
+                        rollbackFiles: undoSnapshot.passcodeFiles
+                    )
                     undoSnapshot.changedComponents.append(CompleteStyleComponent.passcode.rawValue)
                     persistUndoProgress()
                     results.append(.init(
@@ -1059,15 +1144,14 @@ final class CompleteStyleManager: ObservableObject {
     }
 }
 
+@MainActor
 enum CompletePasscodeStyleEngine {
     private static let telephonyOptions = (8...15).reversed().map { "TelephonyUI-\($0)" }
 
     static func basePath() -> String? {
         for version in telephonyOptions {
             let path = "/var/mobile/Library/Caches/\(version)"
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-               isDirectory.boolValue {
+            if hasAllDigits(targetPaths(in: path)) {
                 return path
             }
         }
@@ -1142,26 +1226,62 @@ enum CompletePasscodeStyleEngine {
         return restored
     }
 
-    @MainActor
-    static func apply(images: [String: Data]) throws -> Int {
+    static func apply(
+        images: [String: Data],
+        rollbackFiles: [CompleteStyleFileSnapshot]
+    ) throws -> Int {
         guard let basePath = basePath() else { throw CompleteStyleEngineError.passcodeUnavailable }
         let targets = targetPaths(in: basePath)
-        var applied = 0
-
-        for digit in (0...9).map(String.init) {
-            guard let image = images[digit] else { continue }
-            for path in targets[digit] ?? [] {
-                try PasscodeThemeManager.shared.applyImage(data: image, to: path)
-                applied += 1
-            }
+        guard hasAllDigits(targets) else { throw CompleteStyleEngineError.passcodeTargetsIncomplete }
+        guard (0...9).allSatisfy({ images[String($0)] != nil }) else {
+            throw CompleteStyleEngineError.incompletePasscode
         }
 
-        guard applied > 0 else { throw CompleteStyleEngineError.passcodeUnavailable }
+        let rollbackByPath = Dictionary(uniqueKeysWithValues: rollbackFiles.map { ($0.path, $0.data) })
+        var writtenPaths: [String] = []
+        var applied = 0
+
+        do {
+            for digit in (0...9).map(String.init) {
+                guard let image = images[digit] else {
+                    throw CompleteStyleEngineError.incompletePasscode
+                }
+                guard let digitTargets = targets[digit], !digitTargets.isEmpty else {
+                    throw CompleteStyleEngineError.passcodeTargetsIncomplete
+                }
+
+                for path in digitTargets {
+                    let result = laramgr.shared.lara_overwritefile(target: path, data: image)
+                    guard result.ok else {
+                        throw CompleteStyleEngineError.passcodeWriteFailed(result.message)
+                    }
+                    writtenPaths.append(path)
+
+                    guard read(path, maximumSize: 8 * 1024 * 1024) == image else {
+                        throw CompleteStyleEngineError.passcodeVerificationFailed
+                    }
+                    applied += 1
+                }
+            }
+        } catch {
+            rollback(writtenPaths, using: rollbackByPath)
+            throw error
+        }
+
+        guard applied >= 10 else {
+            rollback(writtenPaths, using: rollbackByPath)
+            throw CompleteStyleEngineError.passcodeTargetsIncomplete
+        }
         return applied
     }
 
-    @MainActor
     static func restoreOriginals() throws -> Bool {
+        if let originals = CompletePasscodeOriginalStore.shared.load(), !originals.isEmpty {
+            _ = try restoreSnapshot(originals)
+            CompletePasscodeOriginalStore.shared.clear()
+            return true
+        }
+
         guard let basePath = basePath() else { return false }
         let targets = targetPaths(in: basePath).values.flatMap { $0 }
         guard targets.contains(where: PasscodeThemeManager.shared.hasBackup(targetPath:)) else {
@@ -1172,14 +1292,63 @@ enum CompletePasscodeStyleEngine {
     }
 
     private static func targetPaths(in basePath: String) -> [String: [String]] {
-        guard let enumerator = FileManager.default.enumerator(atPath: basePath) else { return [:] }
-        var result: [String: [String]] = [:]
-        for case let file as String in enumerator where file.lowercased().hasSuffix(".png") {
-            if let digit = digit(in: file.lowercased()) {
-                result[digit, default: []].append("\(basePath)/\(file)")
+        var files: [String] = []
+        if let enumerator = FileManager.default.enumerator(atPath: basePath) {
+            for case let file as String in enumerator {
+                files.append("\(basePath)/\(file)")
             }
         }
-        return result
+
+        if files.isEmpty {
+            files = vfsFiles(in: basePath)
+        }
+
+        var result: [String: [String]] = [:]
+        for path in files where path.lowercased().hasSuffix(".png") {
+            if let digit = digit(in: path.lowercased()) {
+                result[digit, default: []].append(path)
+            }
+        }
+        return result.mapValues { Array(Set($0)).sorted() }
+    }
+
+    private static func hasAllDigits(_ targets: [String: [String]]) -> Bool {
+        (0...9).allSatisfy { !(targets[String($0)] ?? []).isEmpty }
+    }
+
+    private static func vfsFiles(in root: String) -> [String] {
+        let mgr = laramgr.shared
+        guard mgr.vfsready else { return [] }
+
+        var pending: [(path: String, depth: Int)] = [(root, 0)]
+        var visited = Set<String>()
+        var files: [String] = []
+
+        while let current = pending.popLast(),
+              visited.count < 1_024 {
+            guard visited.insert(current.path).inserted,
+                  let entries = mgr.vfslistdir(path: current.path) else { continue }
+
+            for entry in entries where entry.name != "." && entry.name != ".." {
+                let path = "\(current.path)/\(entry.name)"
+                if entry.isDir, current.depth < 6 {
+                    pending.append((path, current.depth + 1))
+                } else if !entry.isDir {
+                    files.append(path)
+                }
+            }
+        }
+        return files
+    }
+
+    private static func rollback(_ paths: [String], using originals: [String: Data]) {
+        for path in paths.reversed() {
+            guard let original = originals[path] else { continue }
+            let result = laramgr.shared.lara_overwritefile(target: path, data: original)
+            if !result.ok {
+                laramgr.shared.logmsg("(styles) passcode rollback failed: \(path) · \(result.message)")
+            }
+        }
     }
 
     private static func read(_ path: String, maximumSize: Int) -> Data? {
@@ -2154,22 +2323,37 @@ private struct CompleteStyleResultView: View {
                     }
 
                     VStack(spacing: 10) {
-                        if result.installedWallpaper {
-                            Button {
-                                manager.openWallpaperPicker()
-                            } label: {
-                                Label("Elegir el fondo", systemImage: "photo.on.rectangle")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
+                        if result.appliedPasscode {
+                            Label(
+                                "Reinicia la interfaz para que iOS cargue los nuevos números del código.",
+                                systemImage: "arrow.clockwise.circle.fill"
+                            )
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
 
                         if result.changedSystemArtwork {
                             Button {
                                 mgr.respring()
                             } label: {
-                                Label("Reiniciar interfaz", systemImage: "arrow.clockwise")
+                                Label(
+                                    result.appliedPasscode ? "Finalizar y reiniciar" : "Reiniciar interfaz",
+                                    systemImage: "arrow.clockwise"
+                                )
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        }
+
+                        if result.installedWallpaper {
+                            Button {
+                                manager.openWallpaperPicker()
+                            } label: {
+                                Label("Elegir el fondo", systemImage: "photo.on.rectangle")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.bordered)
