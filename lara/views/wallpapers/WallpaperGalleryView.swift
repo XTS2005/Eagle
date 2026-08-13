@@ -507,6 +507,7 @@ private struct RemoteAnimatedPreview: UIViewRepresentable {
 struct TendiesInstallResult {
     let installedCount: Int
     let existingCount: Int
+    let installedDestinations: [URL]
 }
 
 private struct TendiesDescriptor {
@@ -578,7 +579,8 @@ enum TendiesInstaller {
             }
             return TendiesInstallResult(
                 installedCount: installed.count,
-                existingCount: existingCount
+                existingCount: existingCount,
+                installedDestinations: installed
             )
         } catch {
             for destination in installed {

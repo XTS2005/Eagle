@@ -57,6 +57,10 @@ final class PasscodeThemeManager: ObservableObject {
         }
     }
 
+    func hasBackup(targetPath: String) -> Bool {
+        fm.fileExists(atPath: backupURLFor(targetPath: targetPath).path)
+    }
+
     func restoreBackup(targetPath: String) throws {
         let backupURL = backupURLFor(targetPath: targetPath)
         guard fm.fileExists(atPath: backupURL.path) else { return }
@@ -108,6 +112,13 @@ final class PasscodeThemeManager: ObservableObject {
 
     func applyImage(data: Data, to targetPath: String) throws {
         backupIfNeeded(targetPath: targetPath)
+        guard hasBackup(targetPath: targetPath) else {
+            throw NSError(
+                domain: "PasscodeTheme",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "No se pudo guardar el número original."]
+            )
+        }
         let overwrite = laramgr.shared.lara_overwritefile(target: targetPath, data: data)
 
         if !overwrite.ok { throw NSError(domain: "PasscodeTheme", code: 2, userInfo: [NSLocalizedDescriptionKey: overwrite.message]) }

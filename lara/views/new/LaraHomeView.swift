@@ -9,39 +9,63 @@ struct LaraHomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     header
 
-                    VStack(spacing: 16) {
-                        NavigationLink(destination: AnimatedWallpapersView()) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        NavigationLink(destination: CompleteStylesView()) {
                             LaraFeatureCard(
-                                title: "Fondos",
-                                subtitle: "Explora animaciones o crea un fondo con tu propio video.",
-                                systemImage: "photo.on.rectangle.angled",
-                                accent: Color(red: 0.34, green: 0.31, blue: 0.88),
-                                artwork: .wallpaper
+                                title: "Estilos",
+                                subtitle: "Un aspecto completo para el fondo, el código y tu tarjeta.",
+                                systemImage: "sparkles",
+                                accent: Color(red: 0.33, green: 0.25, blue: 0.82),
+                                artwork: .styles
                             )
                         }
                         .buttonStyle(.plain)
 
-                        NavigationLink(destination: CardView()) {
-                            LaraFeatureCard(
-                                title: "Tarjetas",
-                                subtitle: "Personaliza el diseño de tus tarjetas de Wallet.",
-                                systemImage: "creditcard.fill",
-                                accent: Color(red: 0.08, green: 0.48, blue: 0.52),
-                                artwork: .card
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Personalizar una parte")
+                                .font(.headline)
+                                .padding(.horizontal, 2)
 
-                        NavigationLink(destination: PasscodeView(mgr: mgr)) {
-                            LaraFeatureCard(
-                                title: "Estilo del código",
-                                subtitle: "Cambia el diseño de los números de la pantalla bloqueada.",
-                                systemImage: "circle.grid.3x3.fill",
-                                accent: Color(red: 0.56, green: 0.28, blue: 0.72),
-                                artwork: .passcode
-                            )
+                            VStack(spacing: 0) {
+                                NavigationLink(destination: AnimatedWallpapersView()) {
+                                    LaraToolRow(
+                                        title: "Fondos",
+                                        subtitle: "Explora o crea",
+                                        systemImage: "photo.on.rectangle.angled",
+                                        accent: Color(red: 0.34, green: 0.31, blue: 0.88)
+                                    )
+                                }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: CardView()) {
+                                    LaraToolRow(
+                                        title: "Tarjetas",
+                                        subtitle: "Diseño de Wallet",
+                                        systemImage: "creditcard.fill",
+                                        accent: Color(red: 0.08, green: 0.48, blue: 0.52)
+                                    )
+                                }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: PasscodeView(mgr: mgr)) {
+                                    LaraToolRow(
+                                        title: "Código",
+                                        subtitle: "Números de desbloqueo",
+                                        systemImage: "circle.grid.3x3.fill",
+                                        accent: Color(red: 0.56, green: 0.28, blue: 0.72)
+                                    )
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
 
                     trustNote
@@ -94,6 +118,7 @@ struct LaraHomeView: View {
 
 private struct LaraFeatureCard: View {
     enum Artwork {
+        case styles
         case wallpaper
         case card
         case passcode
@@ -111,6 +136,8 @@ private struct LaraFeatureCard: View {
                 accent.opacity(0.12)
 
                 switch artwork {
+                case .styles:
+                    stylesArtwork
                 case .wallpaper:
                     wallpaperArtwork
                 case .card:
@@ -154,6 +181,60 @@ private struct LaraFeatureCard: View {
                 .stroke(Color.primary.opacity(0.055), lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var stylesArtwork: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 25, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [accent.opacity(0.72), accent, Color.indigo.opacity(0.88)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 104, height: 138)
+                .overlay(alignment: .top) {
+                    VStack(spacing: 1) {
+                        Text("9:41")
+                            .font(.system(size: 27, weight: .semibold, design: .rounded))
+                        HStack(spacing: 5) {
+                            ForEach(1..<4) { number in
+                                Circle()
+                                    .fill(.white.opacity(0.18))
+                                    .frame(width: 18, height: 18)
+                                    .overlay {
+                                        Text("\(number)")
+                                            .font(.system(size: 6, weight: .bold))
+                                    }
+                            }
+                        }
+                        .padding(.top, 15)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.top, 20)
+                }
+                .rotationEffect(.degrees(-5))
+
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.9), accent, Color.cyan.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 150, height: 94)
+                .overlay(alignment: .topLeading) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.white)
+                        .padding(14)
+                }
+                .rotationEffect(.degrees(5))
+                .offset(x: 72, y: 30)
+                .shadow(color: accent.opacity(0.25), radius: 16, y: 8)
+        }
+        .offset(x: -28)
     }
 
     private var wallpaperArtwork: some View {
@@ -223,5 +304,38 @@ private struct LaraFeatureCard: View {
         .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .rotationEffect(.degrees(2))
         .shadow(color: accent.opacity(0.22), radius: 18, y: 10)
+    }
+}
+
+private struct LaraToolRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(accent)
+                .frame(width: 38, height: 38)
+                .background(accent.opacity(0.11), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 }
