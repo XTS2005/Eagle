@@ -174,76 +174,182 @@ struct PasscodeView: View {
     ]
     
     var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Import Theme")) {
-                    NavigationLink("Explore") {
-                        PasscodeExploreView(mgr: mgr) { url in
-                            importPassthmFile(url: url)
-                        }
-                    }
-                    Button { showFilePicker = true } label: {
-                        Label("Import .passthm / .zip File", systemImage: "square.and.arrow.down")
-                    }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Un código más personal")
+                        .font(.title2.bold())
+                    Text("Elige un estilo completo o cambia cada número por separado. Lara guarda los originales antes de aplicar.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                Section {
-                    if passcodeThemeManager.isApplying {
-                        VStack(spacing: 10) {
-                            ProgressView(value: passcodeThemeManager.progress, total: 1.0)
-                            Text(passcodeThemeManager.message)
-                                .font(.footnote)
+                .padding(.horizontal, 4)
+
+                NavigationLink {
+                    PasscodeExploreView(mgr: mgr) { url in
+                        importPassthmFile(url: url)
+                    }
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "sparkles.rectangle.stack.fill")
+                            .font(.title2)
+                            .foregroundStyle(.purple)
+                            .frame(width: 46, height: 46)
+                            .background(Color.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Explorar estilos")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Diseños creados por la comunidad")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 4)
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 0), GridItem(.flexible(), spacing: 0), GridItem(.flexible(), spacing: 0)], spacing: 0) {
-                        ForEach(Array(passcodeKeyLayout.enumerated()), id: \.offset) { _, keyId in
-                            if let keyId,
-                               let key = passcodeKeyMap[keyId] {
 
-                                PasscodeKeyButton(key: key, imageData: selectedKeys[key.id], onSelect: { showImagePicker = key.id })
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button { showFilePicker = true } label: {
+                    Label("Importar archivo .passthm", systemImage: "square.and.arrow.down")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                if !mgr.sbxready {
+                    LaraAccessView(compact: true)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Vista previa")
+                                .font(.headline)
+                            Text(selectedKeys.isEmpty ? "Elige un estilo para comenzar" : "Toca un número para cambiarlo")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if !selectedKeys.isEmpty {
+                            Text("\(selectedKeys.count)/10")
+                                .font(.caption.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ],
+                        spacing: 12
+                    ) {
+                        ForEach(Array(passcodeKeyLayout.enumerated()), id: \.offset) { _, keyId in
+                            if let keyId, let key = passcodeKeyMap[keyId] {
+                                PasscodeKeyButton(
+                                    key: key,
+                                    imageData: selectedKeys[key.id],
+                                    onSelect: { showImagePicker = key.id }
+                                )
                             } else {
                                 Color.clear
                                     .aspectRatio(1, contentMode: .fit)
-                                    .frame(maxWidth: .infinity)
                             }
                         }
                     }
+                    .padding(.horizontal, 14)
                 }
-                
-                Section(header: Text("Apply")) {
-                    Button("Apply Passcode Theme") {
-                        applyTheme()
+                .padding(18)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .environment(\.colorScheme, .dark)
+
+                if passcodeThemeManager.isApplying {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(passcodeThemeManager.message)
+                                .font(.footnote.weight(.medium))
+                            Spacer()
+                            Text("\(Int(passcodeThemeManager.progress * 100))%")
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        ProgressView(value: passcodeThemeManager.progress, total: 1.0)
                     }
-                    .disabled(selectedKeys.isEmpty || processing || passcodeThemeManager.isApplying)
-                    if !statusMessage.isEmpty {
-                        Text(statusMessage)
-                            .foregroundColor(statusMessage.contains("Error") ? .red : .green)
-                            .font(.footnote)
-                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                
-                Section(header: Text("Danger Zone")) {
-                    Button("Clear All Keys", role: .destructive) {
+
+                if !statusMessage.isEmpty {
+                    Label(
+                        statusMessage,
+                        systemImage: statusMessage.hasPrefix("Error") ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(statusMessage.hasPrefix("Error") ? Color.red : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button {
+                    applyTheme()
+                } label: {
+                    Text("Aplicar estilo")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(
+                    selectedKeys.isEmpty ||
+                    processing ||
+                    passcodeThemeManager.isApplying ||
+                    !mgr.sbxready
+                )
+
+                Menu {
+                    Button(role: .destructive) {
                         selectedKeys.removeAll()
+                    } label: {
+                        Label("Limpiar selección", systemImage: "xmark.circle")
                     }
-                    Button("Restore Original Icons", role: .destructive) { restoreTheme() }
-                    .disabled(processing || passcodeThemeManager.isApplying)
+
+                    Button(role: .destructive) {
+                        restoreTheme()
+                    } label: {
+                        Label("Restaurar números originales", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(processing || passcodeThemeManager.isApplying || !mgr.sbxready)
+                } label: {
+                    Label("Más opciones", systemImage: "ellipsis.circle")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
             }
-            .headerProminence(.increased)
-            .navigationTitle("Passcode Theme")
-            .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $showImagePicker) { keyId in
-                ImagePicker(imageData: $selectedKeys[keyId])
-            }
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: [UTType(filenameExtension: "passthm") ?? .zip, .zip],
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
-            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .padding(.bottom, 24)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle("Estilo del código")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $showImagePicker) { keyId in
+            ImagePicker(imageData: $selectedKeys[keyId])
+        }
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [UTType(filenameExtension: "passthm") ?? .zip, .zip],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
         }
         .task {
             if let url = initialImportURL {
@@ -264,7 +370,7 @@ struct PasscodeView: View {
     
     func importPassthmFile(url: URL) {
         processing = true
-        statusMessage = "Importing theme..."
+        statusMessage = "Importando estilo…"
         
         DispatchQueue.global(qos: .userInitiated).async {
             let accessing = url.startAccessingSecurityScopedResource()
@@ -294,7 +400,7 @@ struct PasscodeView: View {
                         selectedKeys[keyId] = imageData
                     }
                     processing = false
-                    statusMessage = "Imported \(extractedKeys.count) key(s)"
+                    statusMessage = "Se importaron \(extractedKeys.count) números."
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -403,7 +509,7 @@ struct PasscodeView: View {
     
     func applyTheme() {
         guard mgr.sbxready else {
-            statusMessage = "Error: SBX not ready"
+            statusMessage = "Error: prepara el acceso de Lara primero."
             return
         }
 
@@ -414,7 +520,7 @@ struct PasscodeView: View {
             guard let basePath = resolveTelephonyBasePath() else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: TelephonyUI cache not found"
+                    statusMessage = "Error: no se encontró la interfaz del código en este dispositivo."
                 }
                 return
             }
@@ -423,7 +529,7 @@ struct PasscodeView: View {
             guard let enumerator = fm.enumerator(atPath: basePath) else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: failed to enumerate cache"
+                    statusMessage = "Error: no se pudieron localizar los números actuales."
                 }
                 return
             }
@@ -452,7 +558,7 @@ struct PasscodeView: View {
             DispatchQueue.main.async {
                 passcodeThemeManager.isApplying = true
                 passcodeThemeManager.progress = 0
-                passcodeThemeManager.message = "preparing passcode theme..."
+                passcodeThemeManager.message = "Preparando estilo…"
             }
 
             defer {
@@ -470,7 +576,7 @@ struct PasscodeView: View {
 
                     DispatchQueue.main.async {
                         passcodeThemeManager.progress = Double(index) / total
-                        passcodeThemeManager.message = "applying \(keyId)"
+                        passcodeThemeManager.message = "Aplicando número \(keyId)"
                     }
 
                     if matched.isEmpty {
@@ -497,11 +603,11 @@ struct PasscodeView: View {
                 passcodeThemeManager.progress = 1.0
 
                 if failCount == 0 {
-                    passcodeThemeManager.message = "Done"
-                    statusMessage = "applied \(successCount) file(s)"
+                    passcodeThemeManager.message = "Listo"
+                    statusMessage = "El estilo se aplicó correctamente."
                 } else {
-                    passcodeThemeManager.message = "Completed with errors"
-                    statusMessage = "applied \(successCount), failed \(failCount)\n\n\(errors.joined(separator: "\n"))"
+                    passcodeThemeManager.message = "Terminado con errores"
+                    statusMessage = "Error: se aplicaron \(successCount) archivos y fallaron \(failCount).\n\n\(errors.joined(separator: "\n"))"
                 }
             }
         }
@@ -530,7 +636,7 @@ struct PasscodeView: View {
     
     func restoreTheme() {
         guard mgr.sbxready else {
-            statusMessage = "Error: SBX not ready"
+            statusMessage = "Error: prepara el acceso de Lara primero."
             return
         }
         processing = true
@@ -540,7 +646,7 @@ struct PasscodeView: View {
             guard let basePath = resolveTelephonyBasePath() else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: TelephonyUI cache not found"
+                    statusMessage = "Error: no se encontró la interfaz del código en este dispositivo."
                 }
                 return
             }
@@ -551,7 +657,7 @@ struct PasscodeView: View {
                 }
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Originals restored"
+                    statusMessage = "Se restauraron los números originales."
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -572,20 +678,27 @@ struct PasscodeKeyButton: View {
         Button(action: onSelect) {
             GeometryReader { geo in
                 ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.12))
+
                     if let data = imageData,
                        let uiImage = UIImage(data: data) {
                         Image(uiImage: uiImage)
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFit()
                             .frame(
                                 width: geo.size.width,
                                 height: geo.size.width
                             )
-                            .clipped()
+                            .clipShape(Circle())
                     } else {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
+                        Text(key.digit)
+                            .font(.system(size: 30, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white)
                     }
+
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                 }
                 .frame(
                     width: geo.size.width,

@@ -24,6 +24,14 @@ struct LaraMovie: Transferable {
     }
 }
 
+private enum WallpaperMode: String, CaseIterable, Identifiable {
+    case explore
+    case create
+
+    var id: String { rawValue }
+    var title: String { self == .explore ? "Explorar" : "Crear" }
+}
+
 struct AnimatedWallpapersView: View {
     @ObservedObject private var mgr = laramgr.shared
     @StateObject private var installer = AnimatedWallpaperInstaller()
@@ -34,31 +42,36 @@ struct AnimatedWallpapersView: View {
     @State private var autoReverses = false
     @State private var loadingSelection = false
     @State private var message: String?
+    @State private var mode: WallpaperMode = .explore
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                intro
-                preview
-
-                if !mgr.sbxready {
-                    LaraAccessView(compact: true)
+        VStack(spacing: 0) {
+            Picker("Modo", selection: $mode) {
+                ForEach(WallpaperMode.allCases) { option in
+                    Text(option.title).tag(option)
                 }
-
-                if movieURL != nil {
-                    options
-                }
-
-                actionArea
-                attribution
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 40)
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
+
+            if mode == .explore {
+                WallpaperGalleryView()
+            } else {
+                creatorView
+            }
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Fondos animados")
+        .navigationTitle("Fondos")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: mode) { selectedMode in
+            if selectedMode == .explore {
+                player?.pause()
+            } else {
+                player?.play()
+            }
+        }
         .onChange(of: pickerItem) { item in
             guard let item else { return }
             load(item)
@@ -84,6 +97,29 @@ struct AnimatedWallpapersView: View {
         }
         .onChange(of: installer.resultMessage) { result in
             if let result { message = result }
+        }
+    }
+
+    private var creatorView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                intro
+                preview
+
+                if !mgr.sbxready {
+                    LaraAccessView(compact: true)
+                }
+
+                if movieURL != nil {
+                    options
+                }
+
+                actionArea
+                attribution
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 40)
         }
     }
 
@@ -375,8 +411,9 @@ final class AnimatedWallpaperInstaller: ObservableObject {
     }
 }
 
-enum PosterBoardWriter {
-    static func install(descriptor: URL) throws {
+nonisolated enum PosterBoardWriter {
+    @discardableResult
+    static func install(descriptor: URL) throws -> URL {
         let fm = FileManager.default
         guard let containerID = posterBoardContainerID() else {
             throw AnimatedWallpaperError.posterBoardNotFound
@@ -394,10 +431,7 @@ enum PosterBoardWriter {
         }
 
         try fm.createDirectory(at: target, withIntermediateDirectories: true)
-        let destination = target.appendingPathComponent(descriptor.lastPathComponent, isDirectory: true)
-        guard !fm.fileExists(atPath: destination.path) else {
-            throw AnimatedWallpaperError.installationFailed
-        }
+        let destination = target.appendingPathComponent(UUID().uuidString, isDirectory: true)
 
         do {
             try fm.copyItem(at: descriptor, to: destination)
@@ -406,6 +440,7 @@ enum PosterBoardWriter {
                 try? fm.removeItem(at: destination)
                 throw AnimatedWallpaperError.installationFailed
             }
+            return destination
         } catch {
             try? fm.removeItem(at: destination)
             throw error

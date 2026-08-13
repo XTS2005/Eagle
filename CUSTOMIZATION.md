@@ -12,13 +12,16 @@ modified, and pushes to the `upstream` remote are disabled intentionally.
 ## Current experience
 
 The original tab interface is no longer mounted. `LaraHomeView` is the only
-root experience and intentionally exposes two destinations:
+root experience and intentionally exposes three destinations:
 
-- **Animated wallpapers** — imports a video of up to 12 seconds, creates a
-  Pocket Poster-compatible descriptor, and installs it after Lara has explicit
-  sandbox access.
+- **Wallpapers** — browses the official Nugget Wallpapers community and Apple
+  catalogs, imports compatible `.tendies` descriptors, or converts a video of
+  up to 12 seconds into a Pocket Poster-compatible descriptor.
 - **Cards** — keeps Lara's existing Wallet card discovery, backup, overwrite,
   restore, and card-number-suffix engine behind a simpler interface.
+- **Passcode style** — browses the official community passcode catalog, imports
+  `.passthm` files, previews each key, applies individual replacements, and
+  preserves Lara's original restore engine.
 
 Legacy feature views remain in the source tree as dormant implementation
 references, but they are not reachable from the app. This keeps upstream code

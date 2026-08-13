@@ -9,18 +9,40 @@ import Foundation
 import SwiftUI
 import Combine
 
-// just forked the cowabunga theme repo to update JSON structure
-let defaultPasscodeRepoURL = "https://raw.githubusercontent.com/neonmodder123/theme-repo/refs/heads/main/passcode-themes.json"
+let defaultPasscodeRepoURL = "https://raw.githubusercontent.com/SerStars/Nugget-Wallpapers/main/wallpapers-passthemes.json"
 private let passcodeRepoKey = "passcodeThemeRepos"
+private let retiredPasscodeRepoURL = "https://raw.githubusercontent.com/neonmodder123/theme-repo/refs/heads/main/passcode-themes.json"
 
 struct PasscodeGalleryTheme: Identifiable, Decodable, Equatable {
     let name: String
     let description: String
     let url: String
     let preview: String
-    let contact: PasscodeThemeContact
-    let version: String
-    var id: String { name }
+    let authors: String?
+    let contact: PasscodeThemeContact?
+    let version: String?
+    var id: String { url }
+
+    var authorLine: String {
+        if let authors, !authors.isEmpty { return authors }
+        if let contact { return contact.displayName }
+        return "Comunidad Cowabunga"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, description, url, preview, authors, contact, version
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        url = try container.decode(String.self, forKey: .url)
+        preview = try container.decode(String.self, forKey: .preview)
+        authors = try container.decodeIfPresent(String.self, forKey: .authors)
+        contact = try container.decodeIfPresent(PasscodeThemeContact.self, forKey: .contact)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+    }
 }
 
 struct PasscodeThemeContact: Decodable, Equatable {
@@ -126,7 +148,13 @@ final class PasscodeGalleryManager: ObservableObject {
         guard let fileURL = downloadURL(for: theme) else { throw URLError(.badURL) }
         downloading.insert(theme.id)
         defer { downloading.remove(theme.id) }
-        let (data, _) = try await URLSession.shared.data(from: fileURL)
+        let (data, response) = try await URLSession.shared.data(from: fileURL)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        guard data.count <= 50 * 1024 * 1024 else {
+            throw CocoaError(.fileWriteOutOfSpace)
+        }
         let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(theme.name + ".passthm")
         try data.write(to: dest, options: .atomic)
@@ -140,7 +168,7 @@ final class PasscodeGalleryManager: ObservableObject {
         let baseURL = url.deletingLastPathComponent()
 
         if let themes = try? JSONDecoder().decode([PasscodeGalleryTheme].self, from: data) {
-            let name = urlString == defaultPasscodeRepoURL ? "Cowabunga" : (url.deletingPathExtension().lastPathComponent)
+            let name = urlString == defaultPasscodeRepoURL ? "Nugget Wallpapers" : (url.deletingPathExtension().lastPathComponent)
             return PasscodeRepoData(name: name, author: nil, icon: nil, themes: themes, baseURL: baseURL)
         }
 
@@ -158,7 +186,7 @@ final class PasscodeGalleryManager: ObservableObject {
 private func loadPasscodeRepoURLs() -> [String] {
     if let data = UserDefaults.standard.data(forKey: passcodeRepoKey),
        let urls = try? JSONDecoder().decode([String].self, from: data), !urls.isEmpty {
-        var result = urls
+        var result = urls.filter { $0 != retiredPasscodeRepoURL }
         if !result.contains(defaultPasscodeRepoURL) { result.insert(defaultPasscodeRepoURL, at: 0) }
         return result
     }

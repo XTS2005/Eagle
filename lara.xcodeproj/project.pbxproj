@@ -264,9 +264,9 @@
 				CC1C8B352F71DF9C00206982 /* Sources */,
 				CC1C8B362F71DF9C00206982 /* Frameworks */,
 				9F4A1D313C4E567890123456 /* Embed Frameworks */,
-				9F4A1D503C4E567890123456 /* Force Sign Embedded Dylibs */,
 				CC1C8B372F71DF9C00206982 /* Resources */,
 				CC6845A02F86948300B08EB0 /* Embed App Clips */,
+				9F4A1D503C4E567890123456 /* Prepare Bundle for Signing */,
 			);
 			buildRules = (
 			);
@@ -347,7 +347,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		9F4A1D503C4E567890123456 /* Force Sign Embedded Dylibs */ = {
+		9F4A1D503C4E567890123456 /* Prepare Bundle for Signing */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -358,12 +358,12 @@
 				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/libgrabkernel2.dylib",
 				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/libxpf.dylib",
 			);
-			name = "Force Sign Embedded Dylibs";
+			name = "Prepare Bundle for Signing";
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e; if [ -z \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then exit 0; fi; fw=\"$CODESIGNING_FOLDER_PATH/Frameworks\"; for f in \"$fw/libgrabkernel2.dylib\" \"$fw/libxpf.dylib\"; do if [ -f \"$f\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none \"$f\"; fi; done";
+			shellScript = "set -e; if [ -d \"$CODESIGNING_FOLDER_PATH\" ]; then /usr/bin/xattr -cr \"$CODESIGNING_FOLDER_PATH\"; fi; if [ -z \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then exit 0; fi; fw=\"$CODESIGNING_FOLDER_PATH/Frameworks\"; for f in \"$fw/libgrabkernel2.dylib\" \"$fw/libxpf.dylib\"; do if [ -f \"$f\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none \"$f\"; fi; done";
 		};
 /* End PBXShellScriptBuildPhase section */
 

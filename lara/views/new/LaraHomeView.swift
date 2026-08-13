@@ -12,8 +12,8 @@ struct LaraHomeView: View {
                     VStack(spacing: 16) {
                         NavigationLink(destination: AnimatedWallpapersView()) {
                             LaraFeatureCard(
-                                title: "Fondos animados",
-                                subtitle: "Convierte un video en un fondo para la pantalla de bloqueo.",
+                                title: "Fondos",
+                                subtitle: "Explora animaciones o crea un fondo con tu propio video.",
                                 systemImage: "photo.on.rectangle.angled",
                                 accent: Color(red: 0.34, green: 0.31, blue: 0.88),
                                 artwork: .wallpaper
@@ -28,6 +28,17 @@ struct LaraHomeView: View {
                                 systemImage: "creditcard.fill",
                                 accent: Color(red: 0.08, green: 0.48, blue: 0.52),
                                 artwork: .card
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink(destination: PasscodeView(mgr: mgr)) {
+                            LaraFeatureCard(
+                                title: "Estilo del código",
+                                subtitle: "Cambia el diseño de los números de la pantalla bloqueada.",
+                                systemImage: "circle.grid.3x3.fill",
+                                accent: Color(red: 0.56, green: 0.28, blue: 0.72),
+                                artwork: .passcode
                             )
                         }
                         .buttonStyle(.plain)
@@ -85,6 +96,7 @@ private struct LaraFeatureCard: View {
     enum Artwork {
         case wallpaper
         case card
+        case passcode
     }
 
     let title: String
@@ -103,6 +115,8 @@ private struct LaraFeatureCard: View {
                     wallpaperArtwork
                 case .card:
                     cardArtwork
+                case .passcode:
+                    passcodeArtwork
                 }
             }
             .frame(height: 154)
@@ -185,5 +199,29 @@ private struct LaraFeatureCard: View {
             }
             .rotationEffect(.degrees(-3))
             .shadow(color: accent.opacity(0.25), radius: 18, y: 10)
+    }
+
+    private var passcodeArtwork: some View {
+        VStack(spacing: 9) {
+            ForEach(0..<3, id: \.self) { row in
+                HStack(spacing: 14) {
+                    ForEach(1..<4, id: \.self) { column in
+                        let number = row * 3 + column
+                        Circle()
+                            .fill(accent.opacity(number.isMultiple(of: 2) ? 0.82 : 1))
+                            .frame(width: 35, height: 35)
+                            .overlay {
+                                Text("\(number)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                            }
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .rotationEffect(.degrees(2))
+        .shadow(color: accent.opacity(0.22), radius: 18, y: 10)
     }
 }
