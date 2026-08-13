@@ -5,6 +5,7 @@ import AVFoundation
 import Combine
 import CoreTransferable
 import UniformTypeIdentifiers
+import CryptoKit
 
 struct LaraMovie: Transferable {
     let url: URL
@@ -300,6 +301,8 @@ enum AnimatedWallpaperError: LocalizedError {
     case posterBoardNotFound
     case posterBoardUnavailable
     case installationFailed
+    case invalidDescriptor
+    case descriptorAlreadyExists
 
     var errorDescription: String? {
         switch self {
@@ -317,6 +320,10 @@ enum AnimatedWallpaperError: LocalizedError {
             return "La colección de fondos todavía no está preparada en este dispositivo."
         case .installationFailed:
             return "El fondo no pudo instalarse. No se modificó la colección existente."
+        case .invalidDescriptor:
+            return "El paquete no contiene todos los archivos que PosterBoard necesita."
+        case .descriptorAlreadyExists:
+            return "Este fondo ya existe, pero su copia actual no es válida."
         }
     }
 }
@@ -370,14 +377,15 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                     self.progressLabel = "Agregando a Fondos"
                 }
 
-                try PosterBoardWriter.install(descriptor: build.descriptorURL)
+                _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
 
                 DispatchQueue.main.async {
+                    _ = PosterBoardWriter.refreshCollections()
                     self.progress = 1
                     self.progressLabel = "Listo"
                     self.isWorking = false
                     self.didInstall = true
-                    self.resultMessage = "El fondo se agregó correctamente. Ahora puedes seleccionarlo en la colección de Fondos de iOS."
+                    self.resultMessage = "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -411,40 +419,127 @@ final class AnimatedWallpaperInstaller: ObservableObject {
     }
 }
 
+struct PosterBoardInstallResult {
+    let destination: URL
+    let wasCreated: Bool
+}
+
 nonisolated enum PosterBoardWriter {
+    static let collectionsExtension = "com.apple.WallpaperKit.CollectionsPoster"
+    static let mercuryExtension = "com.apple.MercuryPoster"
+    static let photosExtension = "com.apple.PhotosUIPrivate.PhotosPosterProvider"
+
     @discardableResult
-    static func install(descriptor: URL) throws -> URL {
+    static func install(
+        descriptor: URL,
+        extensionIdentifier: String = collectionsExtension,
+        preserveDescriptorName: Bool = false
+    ) throws -> PosterBoardInstallResult {
         let fm = FileManager.default
         guard let containerID = posterBoardContainerID() else {
             throw AnimatedWallpaperError.posterBoardNotFound
         }
+
+        let sourceFingerprint = try descriptorFingerprint(at: descriptor)
 
         let version = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17 ? "61" : "59"
         let target = URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application")
             .appendingPathComponent(containerID, isDirectory: true)
             .appendingPathComponent("Library/Application Support/PRBPosterExtensionDataStore", isDirectory: true)
             .appendingPathComponent(version, isDirectory: true)
-            .appendingPathComponent("Extensions/com.apple.WallpaperKit.CollectionsPoster/descriptors", isDirectory: true)
+            .appendingPathComponent("Extensions", isDirectory: true)
+            .appendingPathComponent(extensionIdentifier, isDirectory: true)
+            .appendingPathComponent("descriptors", isDirectory: true)
 
         guard fm.fileExists(atPath: target.deletingLastPathComponent().path) else {
             throw AnimatedWallpaperError.posterBoardUnavailable
         }
 
         try fm.createDirectory(at: target, withIntermediateDirectories: true)
-        let destination = target.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let destinationName = preserveDescriptorName
+            ? descriptor.lastPathComponent
+            : UUID().uuidString.uppercased()
+        let destination = target.appendingPathComponent(destinationName, isDirectory: true)
+
+        if fm.fileExists(atPath: destination.path) {
+            let existingFingerprint = try descriptorFingerprint(at: destination)
+            guard existingFingerprint == sourceFingerprint else {
+                throw AnimatedWallpaperError.descriptorAlreadyExists
+            }
+            return PosterBoardInstallResult(destination: destination, wasCreated: false)
+        }
 
         do {
             try fm.copyItem(at: descriptor, to: destination)
-            let marker = destination.appendingPathComponent("com.apple.posterkit.provider.descriptor.identifier")
-            guard fm.fileExists(atPath: marker.path) else {
-                try? fm.removeItem(at: destination)
-                throw AnimatedWallpaperError.installationFailed
+            let copiedFingerprint = try descriptorFingerprint(at: destination)
+            guard copiedFingerprint == sourceFingerprint else {
+                throw AnimatedWallpaperError.invalidDescriptor
             }
-            return destination
+            return PosterBoardInstallResult(destination: destination, wasCreated: true)
         } catch {
             try? fm.removeItem(at: destination)
             throw error
         }
+    }
+
+    @MainActor
+    static func refreshCollections() -> Bool {
+        guard #available(iOS 18.0, *),
+              let language = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first,
+              let settingsUtilities = objc_getClass("IPSettingsUtilities") as? NSObject else {
+            return false
+        }
+        return settingsUtilities.perform(
+            NSSelectorFromString("setLanguage:"),
+            with: language
+        ) != nil
+    }
+
+    private static func descriptorFingerprint(at descriptor: URL) throws -> DescriptorFingerprint {
+        let fm = FileManager.default
+        let requiredFiles = [
+            "com.apple.posterkit.provider.descriptor.identifier",
+            "com.apple.posterkit.role.identifier",
+            "providerInfo.plist"
+        ]
+        guard requiredFiles.allSatisfy({
+            fm.fileExists(atPath: descriptor.appendingPathComponent($0).path)
+        }),
+        fm.fileExists(atPath: descriptor.appendingPathComponent("versions", isDirectory: true).path),
+        let enumerator = fm.enumerator(
+            at: descriptor,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            throw AnimatedWallpaperError.invalidDescriptor
+        }
+
+        var files: [DescriptorFileFingerprint] = []
+        for case let file as URL in enumerator {
+            let values = try file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values.isRegularFile == true else { continue }
+            let relativePath = String(file.path.dropFirst(descriptor.path.count + 1))
+            files.append(DescriptorFileFingerprint(
+                relativePath: relativePath,
+                byteCount: UInt64(max(values.fileSize ?? 0, 0)),
+                sha256: try sha256(of: file)
+            ))
+        }
+        files.sort { $0.relativePath < $1.relativePath }
+        guard files.count >= 4, files.reduce(UInt64(0), { $0 + $1.byteCount }) > 64 else {
+            throw AnimatedWallpaperError.invalidDescriptor
+        }
+        return DescriptorFingerprint(files: files)
+    }
+
+    private static func sha256(of file: URL) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try handle.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return Data(hasher.finalize())
     }
 
     private static func posterBoardContainerID() -> String? {
@@ -463,6 +558,16 @@ nonisolated enum PosterBoardWriter {
             }
         }
         return nil
+    }
+
+    private struct DescriptorFingerprint: Equatable {
+        let files: [DescriptorFileFingerprint]
+    }
+
+    private struct DescriptorFileFingerprint: Equatable {
+        let relativePath: String
+        let byteCount: UInt64
+        let sha256: Data
     }
 }
 
@@ -531,16 +636,16 @@ enum AnimatedWallpaperBuilder {
                             "backgroundAnimationFileName": backgroundName,
                             "floatingAnimationFileNameKey": floatingName,
                             "identifier": identifier,
-                            "name": "Lara Motion",
+                            "name": "Lavender",
                             "type": "LayeredAnimation"
                         ]
                     ]
                 ],
                 "contentVersion": 2.01,
-                "family": "Lara Motion",
+                "family": "Marble",
                 "identifier": identifier,
                 "logicalScreenClass": "810w-1080h@2x~ipad",
-                "name": "Lara Motion",
+                "name": "Lavender",
                 "preferredProminentColor": ["dark": "#000000", "default": "#FFFFFF"],
                 "version": 1
             ]

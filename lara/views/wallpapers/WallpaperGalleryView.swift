@@ -61,6 +61,7 @@ enum CommunityWallpaperError: LocalizedError {
     case noDescriptors
     case tooManyDescriptors
     case requiresIOS26
+    case unsupportedExtension
 
     var errorDescription: String? {
         switch self {
@@ -76,6 +77,8 @@ enum CommunityWallpaperError: LocalizedError {
             return "El paquete contiene demasiados fondos para una sola instalación."
         case .requiresIOS26:
             return "Este fondo requiere iOS 26 por las animaciones que utiliza."
+        case .unsupportedExtension:
+            return "Este paquete usa una categoría de fondos que Lara todavía no reconoce."
         }
     }
 }
@@ -161,13 +164,18 @@ final class WallpaperCatalogManager: ObservableObject {
 
         do {
             let data = try await NuggetWallpaperService.download(wallpaper)
-            let count = try await Task.detached(priority: .userInitiated) {
+            let result = try await Task.detached(priority: .userInitiated) {
                 try TendiesInstaller.install(data: data)
             }.value
+            _ = PosterBoardWriter.refreshCollections()
             didInstall = true
-            resultMessage = count == 1
-                ? "\(wallpaper.name) se agregó a Fondos."
-                : "Se agregaron \(count) fondos de \(wallpaper.name)."
+            if result.installedCount == 0, result.existingCount > 0 {
+                resultMessage = "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
+            } else if result.installedCount == 1 {
+                resultMessage = "\(wallpaper.name) se verificó y se agregó a Fondos."
+            } else {
+                resultMessage = "Se verificaron y agregaron \(result.installedCount) fondos de \(wallpaper.name)."
+            }
         } catch {
             didInstall = false
             resultMessage = error.localizedDescription
@@ -496,12 +504,23 @@ private struct RemoteAnimatedPreview: UIViewRepresentable {
     }
 }
 
+struct TendiesInstallResult {
+    let installedCount: Int
+    let existingCount: Int
+}
+
+private struct TendiesDescriptor {
+    let url: URL
+    let extensionIdentifier: String
+    let preservesIdentity: Bool
+}
+
 enum TendiesInstaller {
     static let maximumCompressedSize = 120 * 1024 * 1024
     private static let maximumExpandedSize: UInt64 = 1_200 * 1024 * 1024
     private static let maximumDescriptors = 64
 
-    static func install(data: Data) throws -> Int {
+    static func install(data: Data) throws -> TendiesInstallResult {
         guard data.count <= maximumCompressedSize else {
             throw CommunityWallpaperError.packageTooLarge
         }
@@ -530,12 +549,30 @@ enum TendiesInstaller {
         }
 
         var installed: [URL] = []
+        var existingCount = 0
         do {
             for descriptor in descriptors {
-                try randomize(descriptor: descriptor)
-                installed.append(try PosterBoardWriter.install(descriptor: descriptor))
+                if !descriptor.preservesIdentity {
+                    try randomize(
+                        descriptor: descriptor.url,
+                        normalizeCollections: descriptor.extensionIdentifier == PosterBoardWriter.collectionsExtension
+                    )
+                }
+                let result = try PosterBoardWriter.install(
+                    descriptor: descriptor.url,
+                    extensionIdentifier: descriptor.extensionIdentifier,
+                    preserveDescriptorName: descriptor.preservesIdentity
+                )
+                if result.wasCreated {
+                    installed.append(result.destination)
+                } else {
+                    existingCount += 1
+                }
             }
-            return installed.count
+            return TendiesInstallResult(
+                installedCount: installed.count,
+                existingCount: existingCount
+            )
         } catch {
             for destination in installed {
                 try? fm.removeItem(at: destination)
@@ -572,7 +609,7 @@ enum TendiesInstaller {
         }
     }
 
-    private static func findDescriptors(in root: URL) throws -> [URL] {
+    private static func findDescriptors(in root: URL) throws -> [TendiesDescriptor] {
         let markerName = "com.apple.posterkit.provider.descriptor.identifier"
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
@@ -583,18 +620,59 @@ enum TendiesInstaller {
             throw CommunityWallpaperError.invalidPackage
         }
 
-        var descriptors: [URL] = []
+        var descriptors: [TendiesDescriptor] = []
         for case let file as URL in enumerator where file.lastPathComponent == markerName {
             let descriptor = file.deletingLastPathComponent()
             let versions = descriptor.appendingPathComponent("versions", isDirectory: true)
-            if fm.fileExists(atPath: versions.path), !descriptors.contains(descriptor) {
-                descriptors.append(descriptor)
+            guard fm.fileExists(atPath: versions.path) else { continue }
+
+            let relativeComponents = descriptor.pathComponents.dropFirst(root.pathComponents.count)
+            let lowerComponents = relativeComponents.map { $0.lowercased() }
+            let preservesIdentity = lowerComponents.contains("container")
+            let extensionIdentifier = try posterExtension(for: Array(relativeComponents))
+
+            if !descriptors.contains(where: { $0.url == descriptor }) {
+                descriptors.append(TendiesDescriptor(
+                    url: descriptor,
+                    extensionIdentifier: extensionIdentifier,
+                    preservesIdentity: preservesIdentity
+                ))
             }
         }
         return descriptors
     }
 
-    private static func randomize(descriptor: URL) throws {
+    private static func posterExtension(for pathComponents: [String]) throws -> String {
+        if let extensionsIndex = pathComponents.firstIndex(where: { $0.caseInsensitiveCompare("Extensions") == .orderedSame }),
+           pathComponents.indices.contains(extensionsIndex + 1) {
+            let identifier = pathComponents[extensionsIndex + 1]
+            guard [
+                PosterBoardWriter.collectionsExtension,
+                PosterBoardWriter.mercuryExtension,
+                PosterBoardWriter.photosExtension
+            ].contains(identifier) else {
+                throw CommunityWallpaperError.unsupportedExtension
+            }
+            return identifier
+        }
+
+        let descriptorFolder = pathComponents
+            .dropLast()
+            .last(where: { $0.lowercased().contains("descriptor") })?
+            .lowercased() ?? "descriptors"
+        if descriptorFolder.contains("mercury") {
+            return PosterBoardWriter.mercuryExtension
+        }
+        if descriptorFolder.contains("video") || descriptorFolder.contains("photos") {
+            return PosterBoardWriter.photosExtension
+        }
+        return PosterBoardWriter.collectionsExtension
+    }
+
+    private static func randomize(
+        descriptor: URL,
+        normalizeCollections: Bool
+    ) throws {
         let identifier = Int.random(in: 10_000...99_999)
         let fm = FileManager.default
         try Data("\(identifier)".utf8).write(
@@ -617,6 +695,18 @@ enum TendiesInstaller {
             case "Wallpaper.plist":
                 try updatePlist(at: file) { plist in
                     plist["identifier"] = identifier
+                    if normalizeCollections {
+                        plist["family"] = "Marble"
+                        plist["name"] = "Lavender"
+                        if var assets = plist["assets"] as? [String: Any],
+                           var lockAndHome = assets["lockAndHome"] as? [String: Any],
+                           var defaultAsset = lockAndHome["default"] as? [String: Any] {
+                            defaultAsset["name"] = "Lavender"
+                            lockAndHome["default"] = defaultAsset
+                            assets["lockAndHome"] = lockAndHome
+                            plist["assets"] = assets
+                        }
+                    }
                 }
             default:
                 continue
