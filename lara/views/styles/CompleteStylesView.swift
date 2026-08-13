@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import CryptoKit
 import UIKit
 
 private let completeStyleRepositoryBase = URL(
@@ -215,6 +216,47 @@ struct CompleteStylePack: Identifiable, Hashable, Sendable {
     ]
 }
 
+struct CompleteStyleSelection: Sendable {
+    let title: String
+    let wallpaperPack: CompleteStylePack?
+    let passcodePack: CompleteStylePack?
+    let cardPack: CompleteStylePack?
+
+    var selectedCount: Int {
+        [wallpaperPack, passcodePack, cardPack].compactMap { $0 }.count
+    }
+
+    var visualPack: CompleteStylePack? {
+        wallpaperPack ?? cardPack ?? passcodePack
+    }
+
+    var uniformPackID: String? {
+        let identifiers = Set([wallpaperPack, passcodePack, cardPack].compactMap { $0?.id })
+        return identifiers.count == 1 ? identifiers.first : nil
+    }
+}
+
+struct CompleteStyleFileSnapshot: Codable, Sendable {
+    let path: String
+    let data: Data
+}
+
+struct CompleteStyleUndoSnapshot: Codable, Sendable {
+    let createdAt: Date
+    let previousActiveName: String?
+    let previousActivePackID: String?
+    let previousVisualPackID: String?
+    var passcodeFiles: [CompleteStyleFileSnapshot]
+    var cardFile: CompleteStyleFileSnapshot?
+    var installedWallpaperPaths: [String]
+    var changedComponents: [String]
+}
+
+private struct CompleteStyleCachedResource: Sendable {
+    let data: Data
+    let cameFromCache: Bool
+}
+
 enum CompleteStyleResultState: String {
     case applied
     case skipped
@@ -269,6 +311,10 @@ private enum CompleteStyleEngineError: LocalizedError {
     case cardImageFailed
     case cardBackupFailed
     case cardWriteFailed(String)
+    case undoPreparationFailed(String)
+    case undoWriteFailed(String)
+    case undoUnavailable
+    case cacheWriteFailed
     case nothingToRestore
 
     var errorDescription: String? {
@@ -287,9 +333,168 @@ private enum CompleteStyleEngineError: LocalizedError {
             return "No se pudo conservar la tarjeta original; Lara no realizó el cambio."
         case .cardWriteFailed(let message):
             return "No se pudo actualizar la tarjeta: \(message)"
+        case .undoPreparationFailed(let component):
+            return "No se pudo preparar Deshacer para \(component); Lara no realizó ese cambio."
+        case .undoWriteFailed(let message):
+            return "No se pudo recuperar uno de los archivos anteriores: \(message)"
+        case .undoUnavailable:
+            return "No hay un cambio reciente que Lara pueda deshacer."
+        case .cacheWriteFailed:
+            return "El recurso se descargó, pero Lara no pudo guardarlo de forma segura."
         case .nothingToRestore:
             return "Todavía no hay cambios de Estilos para restaurar."
         }
+    }
+}
+
+@MainActor
+private final class CompleteStyleResourceCache {
+    static let shared = CompleteStyleResourceCache()
+
+    private let fm = FileManager.default
+    private let directory: URL
+
+    private init() {
+        directory = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LaraCompleteStyles", isDirectory: true)
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    func resource(
+        at url: URL,
+        maximumSize: Int,
+        forceRefresh: Bool = false
+    ) async throws -> CompleteStyleCachedResource {
+        let paths = cachePaths(for: url)
+        if !forceRefresh,
+           let cached = verifiedCachedData(dataURL: paths.data, digestURL: paths.digest),
+           !cached.isEmpty,
+           cached.count <= maximumSize {
+            return CompleteStyleCachedResource(data: cached, cameFromCache: true)
+        }
+
+        remove(url)
+        var lastError: Error = CompleteStyleEngineError.badDownload
+
+        for attempt in 0..<2 {
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 120
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse,
+                      http.statusCode == 200,
+                      !data.isEmpty,
+                      data.count <= maximumSize else {
+                    throw CompleteStyleEngineError.badDownload
+                }
+
+                try store(data, dataURL: paths.data, digestURL: paths.digest)
+                return CompleteStyleCachedResource(data: data, cameFromCache: false)
+            } catch {
+                lastError = error
+                if attempt == 0 {
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                }
+            }
+        }
+
+        throw lastError
+    }
+
+    func remove(_ url: URL) {
+        let paths = cachePaths(for: url)
+        try? fm.removeItem(at: paths.data)
+        try? fm.removeItem(at: paths.digest)
+    }
+
+    func clear() {
+        try? fm.removeItem(at: directory)
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    private func cachePaths(for url: URL) -> (data: URL, digest: URL) {
+        let key = SHA256.hash(data: Data(url.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return (
+            directory.appendingPathComponent("\(key).resource"),
+            directory.appendingPathComponent("\(key).sha256")
+        )
+    }
+
+    private func verifiedCachedData(dataURL: URL, digestURL: URL) -> Data? {
+        guard let data = try? Data(contentsOf: dataURL, options: .mappedIfSafe),
+              let expected = try? String(contentsOf: digestURL, encoding: .utf8),
+              digest(for: data) == expected else {
+            return nil
+        }
+        return data
+    }
+
+    private func store(_ data: Data, dataURL: URL, digestURL: URL) throws {
+        do {
+            try data.write(to: dataURL, options: .atomic)
+            try digest(for: data).write(to: digestURL, atomically: true, encoding: .utf8)
+        } catch {
+            try? fm.removeItem(at: dataURL)
+            try? fm.removeItem(at: digestURL)
+            throw CompleteStyleEngineError.cacheWriteFailed
+        }
+    }
+
+    private func digest(for data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+@MainActor
+private final class CompleteStyleUndoStore {
+    static let shared = CompleteStyleUndoStore()
+
+    private let fm = FileManager.default
+    private let finalURL: URL
+    private let pendingURL: URL
+
+    private init() {
+        let directory = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LaraCompleteStyles", isDirectory: true)
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        finalURL = directory.appendingPathComponent("LastChange.plist")
+        pendingURL = directory.appendingPathComponent("PendingChange.plist")
+    }
+
+    var hasSnapshot: Bool {
+        fm.fileExists(atPath: finalURL.path)
+    }
+
+    func load() -> CompleteStyleUndoSnapshot? {
+        guard let data = try? Data(contentsOf: finalURL) else { return nil }
+        return try? PropertyListDecoder().decode(CompleteStyleUndoSnapshot.self, from: data)
+    }
+
+    func begin(_ snapshot: CompleteStyleUndoSnapshot) throws {
+        try write(snapshot, to: pendingURL)
+    }
+
+    func commit(_ snapshot: CompleteStyleUndoSnapshot) throws {
+        try write(snapshot, to: finalURL)
+        try? fm.removeItem(at: pendingURL)
+    }
+
+    func discardPending() {
+        try? fm.removeItem(at: pendingURL)
+    }
+
+    func clear() {
+        try? fm.removeItem(at: finalURL)
+        try? fm.removeItem(at: pendingURL)
+    }
+
+    private func write(_ snapshot: CompleteStyleUndoSnapshot, to url: URL) throws {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        try encoder.encode(snapshot).write(to: url, options: .atomic)
     }
 }
 
@@ -304,17 +509,38 @@ final class CompleteStyleManager: ObservableObject {
     @Published private(set) var cardAvailable = false
     @Published var lastResult: CompleteStyleRunResult?
     @Published private(set) var activePackID: String?
+    @Published private(set) var activeStyleName: String?
+    @Published private(set) var activeVisualPackID: String?
+    @Published private(set) var canUndo = false
 
     private let activePackKey = "lara.completeStyles.activePack"
+    private let activeNameKey = "lara.completeStyles.activeName"
+    private let activeVisualPackKey = "lara.completeStyles.activeVisualPack"
     private let wallpaperPathsKey = "lara.completeStyles.wallpaperPaths"
 
     private init() {
         activePackID = UserDefaults.standard.string(forKey: activePackKey)
+        activeStyleName = UserDefaults.standard.string(forKey: activeNameKey)
+        activeVisualPackID = UserDefaults.standard.string(forKey: activeVisualPackKey)
+        if activeStyleName == nil,
+           let activePackID,
+           let migrated = CompleteStylePack.all.first(where: { $0.id == activePackID }) {
+            activeStyleName = migrated.name
+            activeVisualPackID = migrated.id
+        }
+        canUndo = CompleteStyleUndoStore.shared.hasSnapshot
     }
 
     var activePack: CompleteStylePack? {
         CompleteStylePack.all.first { $0.id == activePackID }
     }
+
+    var activeVisualPack: CompleteStylePack? {
+        CompleteStylePack.all.first { $0.id == activeVisualPackID }
+            ?? activePack
+    }
+
+    var hasActiveStyle: Bool { activeStyleName != nil }
 
     func refreshCompatibility() {
         guard laramgr.shared.sbxready else {
@@ -332,6 +558,15 @@ final class CompleteStyleManager: ObservableObject {
         passcode: Bool,
         card: Bool
     ) {
+        apply(selection: CompleteStyleSelection(
+            title: pack.name,
+            wallpaperPack: wallpaper ? pack : nil,
+            passcodePack: passcode ? pack : nil,
+            cardPack: card ? pack : nil
+        ))
+    }
+
+    func apply(selection: CompleteStyleSelection) {
         guard !isWorking else { return }
         guard laramgr.shared.sbxready else {
             lastResult = CompleteStyleRunResult(
@@ -342,7 +577,7 @@ final class CompleteStyleManager: ObservableObject {
             return
         }
 
-        let selectedCount = [wallpaper, passcode, card].filter { $0 }.count
+        let selectedCount = selection.selectedCount
         guard selectedCount > 0 else {
             lastResult = CompleteStyleRunResult(
                 title: "Elige al menos una parte",
@@ -361,6 +596,17 @@ final class CompleteStyleManager: ObservableObject {
             var completed = 0
             var results: [CompleteStyleComponentResult] = []
             var installedWallpaperPaths: [String] = []
+            var undoSaved = true
+            var undoSnapshot = CompleteStyleUndoSnapshot(
+                createdAt: Date(),
+                previousActiveName: activeStyleName,
+                previousActivePackID: activePackID,
+                previousVisualPackID: activeVisualPackID,
+                passcodeFiles: [],
+                cardFile: nil,
+                installedWallpaperPaths: [],
+                changedComponents: []
+            )
 
             @MainActor func advance(_ nextStage: String) {
                 completed += 1
@@ -368,19 +614,57 @@ final class CompleteStyleManager: ObservableObject {
                 stage = nextStage
             }
 
-            if passcode {
+            @MainActor func persistUndoProgress() {
+                do {
+                    try CompleteStyleUndoStore.shared.commit(undoSnapshot)
+                    canUndo = true
+                    undoSaved = true
+                } catch {
+                    CompleteStyleUndoStore.shared.clear()
+                    canUndo = false
+                    undoSaved = false
+                }
+            }
+
+            do {
+                stage = "Preparando Deshacer"
+                if selection.passcodePack != nil,
+                   CompletePasscodeStyleEngine.basePath() != nil {
+                    undoSnapshot.passcodeFiles = try CompletePasscodeStyleEngine.snapshot()
+                }
+                if selection.cardPack != nil,
+                   CompleteCardStyleEngine.hasCompatibleCard() {
+                    undoSnapshot.cardFile = try CompleteCardStyleEngine.snapshot()
+                }
+                try CompleteStyleUndoStore.shared.begin(undoSnapshot)
+            } catch {
+                CompleteStyleUndoStore.shared.discardPending()
+                lastResult = CompleteStyleRunResult(
+                    title: "No se realizó ningún cambio",
+                    message: "Lara no pudo guardar el estado actual para Deshacer. Tus archivos permanecen intactos.",
+                    components: []
+                )
+                progress = 0
+                stage = "Sin cambios"
+                isWorking = false
+                return
+            }
+
+            if let pack = selection.passcodePack {
                 stage = "Preparando \(pack.passcodeName)"
                 do {
                     guard CompletePasscodeStyleEngine.basePath() != nil else {
                         throw CompleteStyleEngineError.passcodeUnavailable
                     }
-                    let data = try await download(pack.passcodeURL, maximumSize: 50 * 1024 * 1024)
-                    let images = try CompletePasscodeStyleEngine.images(from: data)
+                    let prepared = try await passcodeImages(for: pack)
+                    let images = prepared.images
                     let count = try CompletePasscodeStyleEngine.apply(images: images)
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.passcode.rawValue)
+                    persistUndoProgress()
                     results.append(.init(
                         component: .passcode,
                         state: .applied,
-                        detail: "\(pack.passcodeName), \(count) archivos verificados"
+                        detail: "\(pack.passcodeName), \(count) archivos verificados\(prepared.cameFromCache ? " · guardado" : "")"
                     ))
                 } catch CompleteStyleEngineError.passcodeUnavailable {
                     results.append(.init(
@@ -398,10 +682,12 @@ final class CompleteStyleManager: ObservableObject {
                 advance("Código terminado")
             }
 
-            if card {
+            if let pack = selection.cardPack {
                 stage = "Diseñando la tarjeta"
                 do {
                     try CompleteCardStyleEngine.apply(pack: pack)
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.card.rawValue)
+                    persistUndoProgress()
                     results.append(.init(
                         component: .card,
                         state: .applied,
@@ -423,20 +709,20 @@ final class CompleteStyleManager: ObservableObject {
                 advance("Tarjeta terminada")
             }
 
-            if wallpaper {
+            if let pack = selection.wallpaperPack {
                 stage = "Instalando \(pack.wallpaperName)"
                 do {
-                    let data = try await download(
-                        pack.wallpaperURL,
-                        maximumSize: TendiesInstaller.maximumCompressedSize
-                    )
-                    let install = try TendiesInstaller.install(data: data)
+                    let prepared = try await installWallpaper(pack)
+                    let install = prepared.result
                     installedWallpaperPaths = install.installedDestinations.map(\.path)
+                    undoSnapshot.installedWallpaperPaths = installedWallpaperPaths
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.wallpaper.rawValue)
+                    persistUndoProgress()
                     results.append(.init(
                         component: .wallpaper,
                         state: .applied,
                         detail: install.installedCount > 0
-                            ? "\(pack.wallpaperName) agregado a Fondos"
+                            ? "\(pack.wallpaperName) agregado a Fondos\(prepared.cameFromCache ? " · guardado" : "")"
                             : "\(pack.wallpaperName) ya estaba instalado"
                     ))
                 } catch {
@@ -452,12 +738,18 @@ final class CompleteStyleManager: ObservableObject {
             let applied = results.filter { $0.state == .applied }.count
             let failed = results.filter { $0.state == .failed }.count
             if applied > 0 {
-                activePackID = pack.id
-                UserDefaults.standard.set(pack.id, forKey: activePackKey)
+                persistUndoProgress()
+                setActiveStyle(
+                    name: selection.title,
+                    packID: selection.uniformPackID,
+                    visualPackID: selection.visualPack?.id
+                )
                 rememberWallpaperPaths(installedWallpaperPaths)
+            } else {
+                CompleteStyleUndoStore.shared.discardPending()
             }
 
-            let message: String
+            var message: String
             if applied == selectedCount {
                 message = "Las partes elegidas se aplicaron y verificaron correctamente."
             } else if applied > 0 {
@@ -467,9 +759,12 @@ final class CompleteStyleManager: ObservableObject {
             } else {
                 message = "No se pudo aplicar ninguna de las partes elegidas."
             }
+            if applied > 0, !undoSaved {
+                message += " Los originales siguen protegidos, pero Deshacer no está disponible para esta acción."
+            }
 
             lastResult = CompleteStyleRunResult(
-                title: applied > 0 ? "\(pack.name) está listo" : "No se aplicó el estilo",
+                title: applied > 0 ? "\(selection.title) está listo" : "No se aplicó el estilo",
                 message: message,
                 components: results
             )
@@ -481,6 +776,105 @@ final class CompleteStyleManager: ObservableObject {
             if results.contains(where: { $0.component == .wallpaper && $0.state == .applied }) {
                 _ = PosterBoardWriter.refreshCollections()
             }
+        }
+    }
+
+    func undoLastStyle() {
+        guard !isWorking else { return }
+        guard laramgr.shared.sbxready else {
+            lastResult = CompleteStyleRunResult(
+                title: "Lara necesita acceso",
+                message: "Prepara el acceso antes de deshacer el último estilo.",
+                components: []
+            )
+            return
+        }
+        guard let snapshot = CompleteStyleUndoStore.shared.load() else {
+            canUndo = false
+            lastResult = CompleteStyleRunResult(
+                title: "Nada que deshacer",
+                message: CompleteStyleEngineError.undoUnavailable.localizedDescription,
+                components: []
+            )
+            return
+        }
+
+        isWorking = true
+        progress = 0
+        stage = "Recuperando el estilo anterior"
+        lastResult = nil
+
+        Task {
+            let changed = Set(snapshot.changedComponents)
+            var results: [CompleteStyleComponentResult] = []
+
+            if changed.contains(CompleteStyleComponent.passcode.rawValue) {
+                do {
+                    let count = try CompletePasscodeStyleEngine.restoreSnapshot(snapshot.passcodeFiles)
+                    results.append(.init(
+                        component: .passcode,
+                        state: .applied,
+                        detail: "Se recuperaron \(count) archivos anteriores"
+                    ))
+                } catch {
+                    results.append(.init(component: .passcode, state: .failed, detail: error.localizedDescription))
+                }
+            }
+            progress = 0.34
+
+            if changed.contains(CompleteStyleComponent.card.rawValue) {
+                do {
+                    guard let cardFile = snapshot.cardFile else {
+                        throw CompleteStyleEngineError.undoPreparationFailed("la tarjeta")
+                    }
+                    try CompleteCardStyleEngine.restoreSnapshot(cardFile)
+                    results.append(.init(
+                        component: .card,
+                        state: .applied,
+                        detail: "Se recuperó el diseño anterior"
+                    ))
+                } catch {
+                    results.append(.init(component: .card, state: .failed, detail: error.localizedDescription))
+                }
+            }
+            progress = 0.67
+
+            if changed.contains(CompleteStyleComponent.wallpaper.rawValue) {
+                let removed = CompleteWallpaperStyleEngine.removeTrackedDescriptors(
+                    paths: snapshot.installedWallpaperPaths
+                )
+                forgetWallpaperPaths(snapshot.installedWallpaperPaths)
+                results.append(.init(
+                    component: .wallpaper,
+                    state: removed > 0 ? .applied : .skipped,
+                    detail: removed > 0
+                        ? "Se retiró el fondo del último cambio"
+                        : "Ese fondo ya existía; no fue necesario retirarlo"
+                ))
+            }
+
+            let failed = results.contains { $0.state == .failed }
+            if !failed {
+                setActiveStyle(
+                    name: snapshot.previousActiveName,
+                    packID: snapshot.previousActivePackID,
+                    visualPackID: snapshot.previousVisualPackID
+                )
+                CompleteStyleUndoStore.shared.clear()
+                canUndo = false
+            }
+
+            progress = 1
+            stage = failed ? "Deshacer incompleto" : "Cambio deshecho"
+            isWorking = false
+            lastResult = CompleteStyleRunResult(
+                title: failed ? "No se pudo deshacer todo" : "Volviste al estilo anterior",
+                message: failed
+                    ? "Algunas partes necesitan otro intento. Lara conservó la instantánea."
+                    : "Lara recuperó el estado exacto que existía antes del último cambio.",
+                components: results
+            )
+            _ = PosterBoardWriter.refreshCollections()
         }
     }
 
@@ -535,8 +929,9 @@ final class CompleteStyleManager: ObservableObject {
                 detail: removed > 0 ? "Se retiraron \(removed) fondos agregados por Estilos" : "No había fondos registrados"
             ))
             UserDefaults.standard.removeObject(forKey: wallpaperPathsKey)
-            UserDefaults.standard.removeObject(forKey: activePackKey)
-            activePackID = nil
+            setActiveStyle(name: nil, packID: nil, visualPackID: nil)
+            CompleteStyleUndoStore.shared.clear()
+            canUndo = false
 
             progress = 1
             stage = "Originales restaurados"
@@ -558,16 +953,67 @@ final class CompleteStyleManager: ObservableObject {
         _ = "com.apple.PosterBoard".withCString { launch_app($0) }
     }
 
-    private func download(_ url: URL, maximumSize: Int) async throws -> Data {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 120
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse,
-              http.statusCode == 200,
-              data.count <= maximumSize else {
-            throw CompleteStyleEngineError.badDownload
+    func clearDownloadedStyles() {
+        CompleteStyleResourceCache.shared.clear()
+    }
+
+    private func passcodeImages(
+        for pack: CompleteStylePack
+    ) async throws -> (images: [String: Data], cameFromCache: Bool) {
+        let cache = CompleteStyleResourceCache.shared
+        let first = try await cache.resource(
+            at: pack.passcodeURL,
+            maximumSize: 50 * 1024 * 1024
+        )
+        do {
+            return (try CompletePasscodeStyleEngine.images(from: first.data), first.cameFromCache)
+        } catch where first.cameFromCache {
+            cache.remove(pack.passcodeURL)
+            let refreshed = try await cache.resource(
+                at: pack.passcodeURL,
+                maximumSize: 50 * 1024 * 1024,
+                forceRefresh: true
+            )
+            return (try CompletePasscodeStyleEngine.images(from: refreshed.data), false)
         }
-        return data
+    }
+
+    private func installWallpaper(
+        _ pack: CompleteStylePack
+    ) async throws -> (result: TendiesInstallResult, cameFromCache: Bool) {
+        let cache = CompleteStyleResourceCache.shared
+        let first = try await cache.resource(
+            at: pack.wallpaperURL,
+            maximumSize: TendiesInstaller.maximumCompressedSize
+        )
+        do {
+            return (try TendiesInstaller.install(data: first.data), first.cameFromCache)
+        } catch where first.cameFromCache {
+            cache.remove(pack.wallpaperURL)
+            let refreshed = try await cache.resource(
+                at: pack.wallpaperURL,
+                maximumSize: TendiesInstaller.maximumCompressedSize,
+                forceRefresh: true
+            )
+            return (try TendiesInstaller.install(data: refreshed.data), false)
+        }
+    }
+
+    private func setActiveStyle(name: String?, packID: String?, visualPackID: String?) {
+        activeStyleName = name
+        activePackID = packID
+        activeVisualPackID = visualPackID
+        setDefault(name, forKey: activeNameKey)
+        setDefault(packID, forKey: activePackKey)
+        setDefault(visualPackID, forKey: activeVisualPackKey)
+    }
+
+    private func setDefault(_ value: String?, forKey key: String) {
+        if let value {
+            UserDefaults.standard.set(value, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     private func rememberWallpaperPaths(_ paths: [String]) {
@@ -576,6 +1022,13 @@ final class CompleteStyleManager: ObservableObject {
         for path in paths where !stored.contains(path) {
             stored.append(path)
         }
+        UserDefaults.standard.set(stored, forKey: wallpaperPathsKey)
+    }
+
+    private func forgetWallpaperPaths(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        var stored = UserDefaults.standard.stringArray(forKey: wallpaperPathsKey) ?? []
+        stored.removeAll { paths.contains($0) }
         UserDefaults.standard.set(stored, forKey: wallpaperPathsKey)
     }
 }
@@ -610,6 +1063,38 @@ private enum CompletePasscodeStyleEngine {
 
         guard result.count == 10 else { throw CompleteStyleEngineError.incompletePasscode }
         return result
+    }
+
+    static func snapshot() throws -> [CompleteStyleFileSnapshot] {
+        guard let basePath = basePath() else {
+            throw CompleteStyleEngineError.passcodeUnavailable
+        }
+        let paths = targetPaths(in: basePath).values.flatMap { $0 }
+        guard !paths.isEmpty else {
+            throw CompleteStyleEngineError.undoPreparationFailed("el código")
+        }
+
+        return try paths.map { path in
+            guard let data = read(path, maximumSize: 8 * 1024 * 1024) else {
+                throw CompleteStyleEngineError.undoPreparationFailed("el código")
+            }
+            return CompleteStyleFileSnapshot(path: path, data: data)
+        }
+    }
+
+    static func restoreSnapshot(_ files: [CompleteStyleFileSnapshot]) throws -> Int {
+        guard !files.isEmpty else {
+            throw CompleteStyleEngineError.undoPreparationFailed("el código")
+        }
+        var restored = 0
+        for file in files {
+            let result = laramgr.shared.lara_overwritefile(target: file.path, data: file.data)
+            guard result.ok else {
+                throw CompleteStyleEngineError.undoWriteFailed(result.message)
+            }
+            restored += 1
+        }
+        return restored
     }
 
     @MainActor
@@ -652,6 +1137,15 @@ private enum CompletePasscodeStyleEngine {
         return result
     }
 
+    private static func read(_ path: String, maximumSize: Int) -> Data? {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe) {
+            return data.count <= maximumSize ? data : nil
+        }
+        return laramgr.shared.vfsready
+            ? laramgr.shared.vfsread(path: path, maxSize: maximumSize)
+            : nil
+    }
+
     private static func digit(in lower: String) -> String? {
         for value in 0...9 {
             if lower.contains("other-2-\(value)--dark") ||
@@ -670,7 +1164,7 @@ private enum CompletePasscodeStyleEngine {
 }
 
 @MainActor
-private enum CompleteCardStyleEngine {
+enum CompleteCardStyleEngine {
     private struct CardTarget {
         let imagePath: String
         let directoryPath: String
@@ -684,6 +1178,28 @@ private enum CompleteCardStyleEngine {
 
     static func hasCompatibleCard() -> Bool {
         firstCard() != nil
+    }
+
+    static func snapshot() throws -> CompleteStyleFileSnapshot {
+        guard let card = firstCard() else { throw CompleteStyleEngineError.cardUnavailable }
+        guard let data = read(card.imagePath, maximumSize: 20 * 1024 * 1024) else {
+            throw CompleteStyleEngineError.undoPreparationFailed("la tarjeta")
+        }
+        return CompleteStyleFileSnapshot(path: card.imagePath, data: data)
+    }
+
+    static func restoreSnapshot(_ file: CompleteStyleFileSnapshot) throws {
+        let result = laramgr.shared.lara_overwritefile(target: file.path, data: file.data)
+        guard result.ok else { throw CompleteStyleEngineError.cardWriteFailed(result.message) }
+        clearCache(for: CardTarget(
+            imagePath: file.path,
+            directoryPath: URL(fileURLWithPath: file.path).deletingLastPathComponent().path
+        ))
+    }
+
+    static func previewImage(pack: CompleteStylePack) -> UIImage? {
+        guard let data = renderCard(pack: pack) else { return nil }
+        return UIImage(data: data)
     }
 
     static func apply(pack: CompleteStylePack) throws {
@@ -928,6 +1444,7 @@ struct CompleteStylesView: View {
     @ObservedObject private var manager = CompleteStyleManager.shared
     @ObservedObject private var mgr = laramgr.shared
     @State private var confirmRestore = false
+    @State private var showAdvanced = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -945,8 +1462,9 @@ struct CompleteStylesView: View {
                     }
                 }
 
-                if let active = manager.activePack {
-                    activeStyle(active)
+                if manager.hasActiveStyle,
+                   let visual = manager.activeVisualPack {
+                    activeStyle(visual, name: manager.activeStyleName ?? visual.name)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -970,6 +1488,40 @@ struct CompleteStylesView: View {
                         .buttonStyle(.plain)
                     }
                 }
+
+                DisclosureGroup(isExpanded: $showAdvanced) {
+                    NavigationLink {
+                        CompleteStyleMixerView()
+                    } label: {
+                        HStack(spacing: 13) {
+                            Image(systemName: "slider.horizontal.2.square")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.indigo)
+                                .frame(width: 42, height: 42)
+                                .background(Color.indigo.opacity(0.11), in: RoundedRectangle(cornerRadius: 12))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Crear combinación")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text("Mezcla fondo, código y tarjeta")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.top, 12)
+                    }
+                    .buttonStyle(.plain)
+                } label: {
+                    Label("Crear algo propio", systemImage: "wand.and.sparkles")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                 Text("Los fondos y números provienen de la colección abierta de Nugget Wallpapers. Los diseños de tarjeta se generan en el dispositivo y Lara conserva los originales.")
                     .font(.footnote)
@@ -1013,7 +1565,7 @@ struct CompleteStylesView: View {
         }
     }
 
-    private func activeStyle(_ pack: CompleteStylePack) -> some View {
+    private func activeStyle(_ pack: CompleteStylePack, name: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: pack.symbol)
                 .font(.title2.weight(.semibold))
@@ -1032,13 +1584,27 @@ struct CompleteStylesView: View {
                 Text("Estilo actual")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(pack.name)
+                Text(name)
                     .font(.headline)
             }
             Spacer()
-            Button("Restaurar") { confirmRestore = true }
-                .font(.subheadline.weight(.semibold))
-                .disabled(manager.isWorking || !mgr.sbxready)
+            if manager.canUndo {
+                Button("Deshacer") { manager.undoLastStyle() }
+                    .font(.subheadline.weight(.semibold))
+                    .disabled(manager.isWorking || !mgr.sbxready)
+            }
+            Menu {
+                Button(role: .destructive) { confirmRestore = true } label: {
+                    Label("Restaurar originales", systemImage: "arrow.uturn.backward")
+                }
+                Button { manager.clearDownloadedStyles() } label: {
+                    Label("Vaciar descargas", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+            }
+            .disabled(manager.isWorking)
         }
         .padding(15)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -1124,11 +1690,22 @@ private struct CompleteStyleDetailView: View {
     @State private var includePasscode = true
     @State private var includeCard = true
     @State private var showOptions = false
+    @State private var showLivePreview = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 CompleteStylePreview(pack: pack)
+
+                Button {
+                    showLivePreview = true
+                } label: {
+                    Label("Ver vista previa real", systemImage: "eye.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(!(includeWallpaper || includePasscode || includeCard))
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(pack.name)
@@ -1237,6 +1814,21 @@ private struct CompleteStyleDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { manager.refreshCompatibility() }
         .onChange(of: mgr.sbxready) { _ in manager.refreshCompatibility() }
+        .fullScreenCover(isPresented: $showLivePreview) {
+            CompleteStyleLivePreviewView(
+                title: pack.name,
+                wallpaperPack: includeWallpaper ? pack : nil,
+                passcodePack: includePasscode ? pack : nil,
+                cardPack: includeCard ? pack : nil
+            ) {
+                manager.apply(
+                    pack: pack,
+                    wallpaper: includeWallpaper,
+                    passcode: includePasscode,
+                    card: includeCard
+                )
+            }
+        }
     }
 
     private var componentSummary: some View {
@@ -1483,6 +2075,21 @@ private struct CompleteStyleResultView: View {
                                 mgr.respring()
                             } label: {
                                 Label("Reiniciar interfaz", systemImage: "arrow.clockwise")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                        }
+
+                        if manager.canUndo,
+                           result.components.contains(where: { $0.state == .applied }) {
+                            Button {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    manager.undoLastStyle()
+                                }
+                            } label: {
+                                Label("Deshacer este cambio", systemImage: "arrow.uturn.backward")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.bordered)
