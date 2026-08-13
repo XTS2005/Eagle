@@ -1033,7 +1033,7 @@ final class CompleteStyleManager: ObservableObject {
     }
 }
 
-private enum CompletePasscodeStyleEngine {
+enum CompletePasscodeStyleEngine {
     private static let telephonyOptions = (8...15).reversed().map { "TelephonyUI-\($0)" }
 
     static func basePath() -> String? {
@@ -1080,6 +1080,19 @@ private enum CompletePasscodeStyleEngine {
             }
             return CompleteStyleFileSnapshot(path: path, data: data)
         }
+    }
+
+    static func currentPreviewImages() -> [String: UIImage] {
+        guard let basePath = basePath() else { return [:] }
+        let targets = targetPaths(in: basePath)
+        var result: [String: UIImage] = [:]
+        for digit in (0...9).map(String.init) {
+            guard let path = targets[digit]?.first,
+                  let data = read(path, maximumSize: 8 * 1024 * 1024),
+                  let image = UIImage(data: data) else { continue }
+            result[digit] = image
+        }
+        return result
     }
 
     static func restoreSnapshot(_ files: [CompleteStyleFileSnapshot]) throws -> Int {
@@ -1199,6 +1212,14 @@ enum CompleteCardStyleEngine {
 
     static func previewImage(pack: CompleteStylePack) -> UIImage? {
         guard let data = renderCard(pack: pack) else { return nil }
+        return UIImage(data: data)
+    }
+
+    static func currentPreviewImage() -> UIImage? {
+        guard let card = firstCard(),
+              let data = read(card.imagePath, maximumSize: 20 * 1024 * 1024) else {
+            return nil
+        }
         return UIImage(data: data)
     }
 
@@ -1466,6 +1487,46 @@ struct CompleteStylesView: View {
                    let visual = manager.activeVisualPack {
                     activeStyle(visual, name: manager.activeStyleName ?? visual.name)
                 }
+
+                NavigationLink {
+                    LaraMatchView()
+                } label: {
+                    HStack(spacing: 15) {
+                        ZStack {
+                            LinearGradient(
+                                colors: [.indigo, .purple, .pink],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            Image(systemName: "camera.filters")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Lara Match")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Crea un estilo desde una foto o video")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(15)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 21, style: .continuous)
+                            .strokeBorder(Color.purple.opacity(0.12), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Colección Lara")
