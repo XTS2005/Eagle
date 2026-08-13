@@ -543,6 +543,7 @@ enum TendiesInstaller {
 
         try extract(archive, to: root)
         let descriptors = try findDescriptors(in: root)
+        globallogger.log("(wallpaper) found \(descriptors.count) installable descriptor(s)")
         guard !descriptors.isEmpty else { throw CommunityWallpaperError.noDescriptors }
         guard descriptors.count <= maximumDescriptors else {
             throw CommunityWallpaperError.tooManyDescriptors
@@ -552,6 +553,9 @@ enum TendiesInstaller {
         var existingCount = 0
         do {
             for descriptor in descriptors {
+                globallogger.log(
+                    "(wallpaper) preparing \(descriptor.url.lastPathComponent) for \(descriptor.extensionIdentifier)"
+                )
                 if !descriptor.preservesIdentity {
                     try randomize(
                         descriptor: descriptor.url,
@@ -562,6 +566,9 @@ enum TendiesInstaller {
                     descriptor: descriptor.url,
                     extensionIdentifier: descriptor.extensionIdentifier,
                     preserveDescriptorName: descriptor.preservesIdentity
+                )
+                globallogger.log(
+                    "(wallpaper) verified descriptor at \(result.destination.lastPathComponent), created=\(result.wasCreated)"
                 )
                 if result.wasCreated {
                     installed.append(result.destination)
@@ -583,29 +590,33 @@ enum TendiesInstaller {
 
     private static func extract(_ archive: ZipArchive, to root: URL) throws {
         let fm = FileManager.default
-        let rawRootPath = root.standardizedFileURL.path
-        let rootPath = rawRootPath.count > 1 && rawRootPath.hasSuffix("/")
-            ? String(rawRootPath.dropLast())
-            : rawRootPath
-        let safeRoot = rootPath + "/"
+        var extractedFiles = 0
 
         for entry in archive.entries {
             let normalized = entry.path.replacingOccurrences(of: "\\", with: "/")
-            let components = normalized.split(separator: "/", omittingEmptySubsequences: true)
-            if components.contains("__MACOSX") || components.last?.hasPrefix("._") == true {
+            let archiveComponents = normalized.split(separator: "/", omittingEmptySubsequences: true)
+            if archiveComponents.contains(where: { $0.caseInsensitiveCompare("__MACOSX") == .orderedSame }) ||
+                archiveComponents.last?.hasPrefix("._") == true ||
+                archiveComponents.last == ".DS_Store" {
                 continue
             }
+
+            // Build the destination one validated relative component at a time.
+            // A second string-prefix check used to reject every valid entry on
+            // device because iOS represented the temporary container through
+            // different /var and /private/var aliases.
+            let components = archiveComponents.filter { $0 != "." }
             guard !components.isEmpty,
                   !normalized.hasPrefix("/"),
+                  !normalized.contains("\0"),
                   !components.contains("..") else {
                 laramgr.shared.logmsg("(wallpaper) ignored unsafe archive entry: \(entry.path)")
                 continue
             }
 
-            let output = root.appendingPathComponent(normalized).standardizedFileURL
-            guard output.path == rootPath || output.path.hasPrefix(safeRoot) else {
-                laramgr.shared.logmsg("(wallpaper) ignored archive entry outside temporary folder: \(entry.path)")
-                continue
+            var output = root
+            for component in components {
+                output.appendPathComponent(String(component), isDirectory: false)
             }
 
             if entry.isDirectory {
@@ -613,8 +624,11 @@ enum TendiesInstaller {
             } else {
                 try fm.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try archive.extract(entry).write(to: output, options: .atomic)
+                extractedFiles += 1
             }
         }
+
+        laramgr.shared.logmsg("(wallpaper) extracted \(extractedFiles) files into the temporary package")
     }
 
     private static func findDescriptors(in root: URL) throws -> [TendiesDescriptor] {
