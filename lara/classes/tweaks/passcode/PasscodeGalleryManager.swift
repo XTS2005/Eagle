@@ -26,7 +26,7 @@ struct PasscodeGalleryTheme: Identifiable, Decodable, Equatable {
     var authorLine: String {
         if let authors, !authors.isEmpty { return authors }
         if let contact { return contact.displayName }
-        return "Comunidad Cowabunga"
+        return LaraL10n.text(en: "Cowabunga community", es: "Comunidad Cowabunga")
     }
 
     private enum CodingKeys: String, CodingKey {

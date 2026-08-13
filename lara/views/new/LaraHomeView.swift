@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LaraHomeView: View {
     @ObservedObject private var mgr = laramgr.shared
+    @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
 
     var body: some View {
         NavigationStack {
@@ -83,13 +84,57 @@ struct LaraHomeView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Lara")
+                Text("Eagle")
                     .font(.system(size: 38, weight: .bold, design: .rounded))
                 Spacer()
-                Circle()
-                    .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.25))
-                    .frame(width: 9, height: 9)
-                    .accessibilityLabel(mgr.sbxready ? "Lara lista" : "Lara sin preparar")
+                Menu {
+                    Picker("Language", selection: $language) {
+                        ForEach(LaraLanguage.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "globe")
+                        Text(language.shortName)
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 11)
+                    .frame(height: 34)
+                    .background(
+                        Color(uiColor: .secondarySystemGroupedBackground),
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                    }
+                }
+                .accessibilityLabel("Language")
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
+                        .frame(width: 8, height: 8)
+                    Text(mgr.sbxready
+                        ? LaraL10n.text(en: "Ready", es: "Lista")
+                        : LaraL10n.text(en: "Setup", es: "Preparar"))
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                }
+                .accessibilityLabel(
+                    mgr.sbxready
+                        ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
+                        : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
+                )
             }
 
             Text("Personaliza lo que realmente ves.")
@@ -106,7 +151,7 @@ struct LaraHomeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Tú mantienes el control")
                     .font(.subheadline.weight(.semibold))
-                Text("Lara solicita acceso solo cuando eliges aplicar un cambio.")
+                Text("Eagle solicita acceso solo cuando eliges aplicar un cambio.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -124,8 +169,8 @@ private struct LaraFeatureCard: View {
         case passcode
     }
 
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let systemImage: String
     let accent: Color
     let artwork: Artwork
@@ -308,8 +353,8 @@ private struct LaraFeatureCard: View {
 }
 
 private struct LaraToolRow: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let systemImage: String
     let accent: Color
 

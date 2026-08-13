@@ -9,6 +9,13 @@ import UIKit
 private enum LaraMatchSourceKind: String, Codable, Sendable {
     case photo = "Foto"
     case video = "Video"
+
+    var localizedTitle: String {
+        switch self {
+        case .photo: return LaraL10n.text(en: "Photo", es: "Foto")
+        case .video: return LaraL10n.text(en: "Video", es: "Video")
+        }
+    }
 }
 
 private struct LaraMatchStoredTone: Codable, Sendable {
@@ -46,7 +53,7 @@ private struct LaraMatchAnalysis {
     var cardPack: CompleteStylePack {
         CompleteStylePack(
             id: matchedPack.id,
-            name: "Lara Match",
+            name: "Eagle Match",
             tagline: "Creado desde tus colores.",
             summary: "Una combinación generada localmente a partir de tu imagen.",
             symbol: "camera.filters",
@@ -72,11 +79,11 @@ private enum LaraMatchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedSelection:
-            return "Lara no pudo leer esa foto o video. Prueba con otro elemento."
+            return LaraL10n.text(en: "Eagle could not read that photo or video. Try another item.", es: "Eagle no pudo leer esa foto o video. Prueba con otro elemento.")
         case .videoFrameFailed:
-            return "No se pudo obtener un fotograma del video."
+            return LaraL10n.text(en: "A frame could not be extracted from the video.", es: "No se pudo obtener un fotograma del video.")
         case .paletteFailed:
-            return "La imagen no contiene suficiente información de color."
+            return LaraL10n.text(en: "The image does not contain enough color information.", es: "La imagen no contiene suficiente información de color.")
         }
     }
 }
@@ -89,7 +96,7 @@ private struct LaraMatchMovie: Transferable {
             SentTransferredFile(movie.url)
         } importing: { received in
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("LaraMatch-\(UUID().uuidString).mov")
+                .appendingPathComponent("EagleMatch-\(UUID().uuidString).mov")
             try FileManager.default.copyItem(at: received.file, to: destination)
             return LaraMatchMovie(url: destination)
         }
@@ -118,7 +125,10 @@ private final class LaraMatchStore: ObservableObject {
         let match = LaraSavedMatch(
             id: UUID(),
             createdAt: Date(),
-            name: "Match · \(analysis.matchedPack.name)",
+            name: LaraL10n.text(
+                en: "Match · \(analysis.matchedPack.localizedName)",
+                es: "Match · \(analysis.matchedPack.localizedName)"
+            ),
             sourceKind: analysis.sourceKind,
             matchedPackID: analysis.matchedPack.id,
             tones: analysis.tones.map(LaraMatchStoredTone.init),
@@ -352,13 +362,13 @@ struct LaraMatchView: View {
                             Divider().padding(.leading, 52)
                             matchToggle(
                                 .card,
-                                detail: "Paleta creada por Lara",
+                                detail: LaraL10n.text(en: "Palette created by Eagle", es: "Paleta creada por Eagle"),
                                 isOn: $includeCard
                             )
                         }
                         .padding(.top, 8)
                     } label: {
-                        Label("Qué aplicará Lara", systemImage: "checklist")
+                        Label("Qué aplicará Eagle", systemImage: "checklist")
                             .font(.subheadline.weight(.semibold))
                     }
                     .padding(16)
@@ -383,7 +393,7 @@ struct LaraMatchView: View {
                 savedMatches
 
                 Label(
-                    "El análisis ocurre en tu iPhone. Lara no sube tu foto ni tu video.",
+                    "El análisis ocurre en tu iPhone. Eagle no sube tu foto ni tu video.",
                     systemImage: "hand.raised.fill"
                 )
                 .font(.footnote)
@@ -394,7 +404,7 @@ struct LaraMatchView: View {
             .padding(.bottom, 40)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Lara Match")
+        .navigationTitle("Eagle Match")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if analysis != nil {
@@ -417,7 +427,7 @@ struct LaraMatchView: View {
         .fullScreenCover(isPresented: $showPreview) {
             if let analysis {
                 CompleteStyleLivePreviewView(
-                    title: "Lara Match",
+                    title: "Eagle Match",
                     wallpaperPack: includeWallpaper ? analysis.matchedPack : nil,
                     passcodePack: includePasscode ? analysis.matchedPack : nil,
                     cardPack: includeCard ? analysis.cardPack : nil
@@ -429,13 +439,13 @@ struct LaraMatchView: View {
         .fullScreenCover(isPresented: $showComparison) {
             if let analysis {
                 CompleteStyleComparisonView(
-                    title: "Lara Match",
+                    title: "Eagle Match",
                     proposedCardPack: analysis.cardPack,
                     proposedPasscodePack: analysis.matchedPack
                 )
             }
         }
-        .alert("Lara Match", isPresented: Binding(
+        .alert("Eagle Match", isPresented: Binding(
             get: { errorMessage != nil || savedMessage != nil },
             set: { presented in
                 if !presented {
@@ -457,7 +467,7 @@ struct LaraMatchView: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Tu imagen se convierte en un estilo")
                 .font(.title2.bold())
-            Text("Lara encuentra una paleta, genera la tarjeta y selecciona el fondo y los números que mejor combinan.")
+            Text("Eagle encuentra una paleta, genera la tarjeta y selecciona el fondo y los números que mejor combinan.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -482,7 +492,9 @@ struct LaraMatchView: View {
                     }
                 }
                 VStack(spacing: 4) {
-                    Text(isProcessing ? "Analizando colores…" : "Elegir foto o video")
+                    Text(isProcessing
+                        ? LaraL10n.text(en: "Analyzing colors…", es: "Analizando colores…")
+                        : LaraL10n.text(en: "Choose photo or video", es: "Elegir foto o video"))
                         .font(.headline)
                     Text("También puedes usar un fotograma de video")
                         .font(.subheadline)
@@ -516,9 +528,12 @@ struct LaraMatchView: View {
                 endPoint: .bottom
             )
             VStack(alignment: .leading, spacing: 4) {
-                Label(analysis.sourceKind.rawValue, systemImage: analysis.sourceKind == .video ? "video.fill" : "photo.fill")
+                Label(analysis.sourceKind.localizedTitle, systemImage: analysis.sourceKind == .video ? "video.fill" : "photo.fill")
                     .font(.caption.weight(.semibold))
-                Text("Match con \(analysis.matchedPack.name)")
+                Text(LaraL10n.text(
+                    en: "Match with \(analysis.matchedPack.localizedName)",
+                    es: "Match con \(analysis.matchedPack.localizedName)"
+                ))
                     .font(.title2.bold())
             }
             .foregroundStyle(.white)
@@ -554,7 +569,7 @@ struct LaraMatchView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(analysis.matchedPack.name)
+                Text(analysis.matchedPack.localizedName)
                     .font(.caption.weight(.bold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -563,7 +578,11 @@ struct LaraMatchView: View {
 
             matchSummaryRow(.wallpaper, value: analysis.matchedPack.wallpaperName, color: analysis.tones[2].color)
             matchSummaryRow(.passcode, value: analysis.matchedPack.passcodeName, color: analysis.tones[1].color)
-            matchSummaryRow(.card, value: "Paleta personalizada", color: analysis.tones[0].color)
+            matchSummaryRow(
+                .card,
+                value: LaraL10n.text(en: "Custom palette", es: "Paleta personalizada"),
+                color: analysis.tones[0].color
+            )
         }
         .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -586,7 +605,7 @@ struct LaraMatchView: View {
             .controlSize(.large)
 
             Button { apply(analysis) } label: {
-                Label("Aplicar Lara Match", systemImage: "wand.and.sparkles")
+                Label("Aplicar Eagle Match", systemImage: "wand.and.sparkles")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -601,7 +620,10 @@ struct LaraMatchView: View {
             Button {
                 do {
                     try store.save(analysis)
-                    savedMessage = "Match guardado. Puedes recuperarlo desde Mis Matches."
+                    savedMessage = LaraL10n.text(
+                        en: "Match saved. You can find it under My Matches.",
+                        es: "Match guardado. Puedes recuperarlo desde Mis Matches."
+                    )
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -659,7 +681,7 @@ struct LaraMatchView: View {
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
-            Text(match.name)
+            Text(savedMatchName(match))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
             Text(match.createdAt, style: .date)
@@ -686,6 +708,13 @@ struct LaraMatchView: View {
         .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func savedMatchName(_ match: LaraSavedMatch) -> String {
+        guard let pack = CompleteStylePack.all.first(where: { $0.id == match.matchedPackID }) else {
+            return match.name
+        }
+        return "Match · \(pack.localizedName)"
     }
 
     private func matchToggle(
@@ -727,7 +756,7 @@ struct LaraMatchView: View {
 
     private func apply(_ analysis: LaraMatchAnalysis) {
         manager.apply(selection: CompleteStyleSelection(
-            title: "Lara Match",
+            title: "Eagle Match",
             wallpaperPack: includeWallpaper ? analysis.matchedPack : nil,
             passcodePack: includePasscode ? analysis.matchedPack : nil,
             cardPack: includeCard ? analysis.cardPack : nil
@@ -820,10 +849,10 @@ struct CompleteStyleComparisonView: View {
                         Text("Código")
                             .font(.headline)
                         HStack(alignment: .top, spacing: 12) {
-                            comparisonPasscodeCard(title: "Actual") {
+                            comparisonPasscodeCard(title: LaraL10n.text(en: "Current", es: "Actual")) {
                                 CurrentPasscodeGrid(images: currentDigits)
                             }
-                            comparisonPasscodeCard(title: "Nuevo") {
+                            comparisonPasscodeCard(title: LaraL10n.text(en: "New", es: "Nuevo")) {
                                 AsyncImage(url: proposedPasscodePack.passcodePreviewURL) { phase in
                                     if case .success(let image) = phase {
                                         image.resizable().scaledToFit()
@@ -837,8 +866,8 @@ struct CompleteStyleComparisonView: View {
 
                     Label(
                         mgr.sbxready
-                            ? "La comparación usa los archivos actuales del dispositivo."
-                            : "Prepara el acceso de Lara para poder leer el diseño actual.",
+                            ? LaraL10n.text(en: "The comparison uses the device's current files.", es: "La comparación usa los archivos actuales del dispositivo.")
+                            : LaraL10n.text(en: "Prepare Eagle so it can read the current design.", es: "Prepara el acceso de Eagle para poder leer el diseño actual."),
                         systemImage: mgr.sbxready ? "checkmark.shield.fill" : "lock.fill"
                     )
                     .font(.footnote)

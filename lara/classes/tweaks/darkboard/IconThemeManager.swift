@@ -806,7 +806,7 @@ struct IconThemeFixupView: View {
                 Text(manager.isFixingUp ? "Fixing apps..." : "Fixup complete")
                     .font(.title2.bold())
 
-                Text(manager.fixupMessage.isEmpty ? "Reopen lara after respring and initialize SBX so icon backups can be restored." : manager.fixupMessage)
+                Text(manager.fixupMessage.isEmpty ? "Reopen Eagle after respring and initialize SBX so icon backups can be restored." : manager.fixupMessage)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)

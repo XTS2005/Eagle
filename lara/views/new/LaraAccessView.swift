@@ -29,7 +29,10 @@ struct LaraAccessView: View {
         }
         .onChange(of: mgr.dsprogress) { progress in
             if mgr.dsrunning {
-                state = .preparing("Preparando el dispositivo", progress)
+                state = .preparing(LaraL10n.text(
+                    en: "Preparing device",
+                    es: "Preparando el dispositivo"
+                ), progress)
             }
         }
     }
@@ -38,7 +41,7 @@ struct LaraAccessView: View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.shield.fill")
                 .foregroundStyle(.green)
-            Text("Lara está lista")
+            Text("Eagle está lista")
                 .font(.subheadline.weight(.semibold))
             Spacer()
         }
@@ -57,7 +60,7 @@ struct LaraAccessView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Preparar acceso")
                         .font(.headline)
-                    Text("Lara necesita acceso temporal para realizar este cambio. Nada se aplica sin tu confirmación.")
+                    Text("Eagle necesita acceso temporal para realizar este cambio. Nada se aplica sin tu confirmación.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -96,7 +99,7 @@ struct LaraAccessView: View {
             .disabled(isBusy || isunsupported())
 
             if isunsupported() {
-                Text("Este dispositivo o esta versión de iOS no es compatible con el motor actual de Lara.")
+                Text("Este dispositivo o esta versión de iOS no es compatible con el motor actual de Eagle.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -111,14 +114,17 @@ struct LaraAccessView: View {
     }
 
     private var buttonTitle: String {
-        if isBusy { return "Preparando…" }
-        if case .failed = state { return "Intentar otra vez" }
-        return "Continuar"
+        if isBusy { return LaraL10n.text(en: "Preparing…", es: "Preparando…") }
+        if case .failed = state { return LaraL10n.text(en: "Try again", es: "Intentar otra vez") }
+        return LaraL10n.text(en: "Continue", es: "Continuar")
     }
 
     private func prepare() {
         guard !isBusy, !isunsupported() else { return }
-        state = .preparing("Comprobando compatibilidad", nil)
+        state = .preparing(LaraL10n.text(
+            en: "Checking compatibility",
+            es: "Comprobando compatibilidad"
+        ), nil)
         offsets_init()
 
         if mgr.dsready {
@@ -128,7 +134,10 @@ struct LaraAccessView: View {
 
         mgr.run { success in
             guard success else {
-                state = .failed("No se pudo preparar el dispositivo. Puedes intentarlo de nuevo.")
+                state = .failed(LaraL10n.text(
+                    en: "The device could not be prepared. You can try again.",
+                    es: "No se pudo preparar el dispositivo. Puedes intentarlo de nuevo."
+                ))
                 return
             }
             resolveOffsetsAndOpenSandbox()
@@ -141,7 +150,10 @@ struct LaraAccessView: View {
             return
         }
 
-        state = .preparing("Obteniendo compatibilidad para tu iPhone", nil)
+        state = .preparing(LaraL10n.text(
+            en: "Getting compatibility data for your iPhone",
+            es: "Obteniendo compatibilidad para tu iPhone"
+        ), nil)
         DispatchQueue.global(qos: .userInitiated).async {
             let fetched = fetchkcache()
             let loaded = fetched && dlkcache()
@@ -150,20 +162,29 @@ struct LaraAccessView: View {
                 if loaded {
                     openSandbox()
                 } else {
-                    state = .failed("No fue posible preparar los datos de compatibilidad.")
+                    state = .failed(LaraL10n.text(
+                        en: "Compatibility data could not be prepared.",
+                        es: "No fue posible preparar los datos de compatibilidad."
+                    ))
                 }
             }
         }
     }
 
     private func openSandbox() {
-        state = .preparing("Abriendo acceso temporal", nil)
+        state = .preparing(LaraL10n.text(
+            en: "Opening temporary access",
+            es: "Abriendo acceso temporal"
+        ), nil)
         mgr.sbxescape { success in
             if success {
                 state = .ready
                 onReady?()
             } else {
-                state = .failed("El acceso temporal no pudo iniciarse.")
+                state = .failed(LaraL10n.text(
+                    en: "Temporary access could not be started.",
+                    es: "El acceso temporal no pudo iniciarse."
+                ))
             }
         }
     }

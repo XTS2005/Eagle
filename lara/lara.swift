@@ -16,6 +16,7 @@ struct LaraCustomApp: App {
     @StateObject private var mgr = laramgr.shared
     @Environment(\.scenePhase) var scenephase
     @AppStorage("keepAlive") private var keepalive: Bool = false
+    @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
     
     init() {
         #if DEBUG
@@ -38,6 +39,7 @@ struct LaraCustomApp: App {
         WindowGroup {
             LaraHomeView()
             .environmentObject(mgr)
+            .environment(\.locale, language.locale)
             .overlay {
                 if mgr.showrespring {
                     respringview()

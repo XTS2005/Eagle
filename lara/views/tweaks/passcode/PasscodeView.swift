@@ -116,7 +116,10 @@ final class PasscodeThemeManager: ObservableObject {
             throw NSError(
                 domain: "PasscodeTheme",
                 code: 4,
-                userInfo: [NSLocalizedDescriptionKey: "No se pudo guardar el número original."]
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The original digit could not be saved.",
+                    es: "No se pudo guardar el número original."
+                )]
             )
         }
         let overwrite = laramgr.shared.lara_overwritefile(target: targetPath, data: data)
@@ -190,7 +193,7 @@ struct PasscodeView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Un código más personal")
                         .font(.title2.bold())
-                    Text("Elige un estilo completo o cambia cada número por separado. Lara guarda los originales antes de aplicar.")
+                    Text("Elige un estilo completo o cambia cada número por separado. Eagle guarda los originales antes de aplicar.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -244,7 +247,9 @@ struct PasscodeView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Vista previa")
                                 .font(.headline)
-                            Text(selectedKeys.isEmpty ? "Elige un estilo para comenzar" : "Toca un número para cambiarlo")
+                            Text(selectedKeys.isEmpty
+                                ? LaraL10n.text(en: "Choose a style to begin", es: "Elige un estilo para comenzar")
+                                : LaraL10n.text(en: "Tap a digit to change it", es: "Toca un número para cambiarlo"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -381,7 +386,7 @@ struct PasscodeView: View {
     
     func importPassthmFile(url: URL) {
         processing = true
-        statusMessage = "Importando estilo…"
+        statusMessage = LaraL10n.text(en: "Importing style…", es: "Importando estilo…")
         
         DispatchQueue.global(qos: .userInitiated).async {
             let accessing = url.startAccessingSecurityScopedResource()
@@ -411,7 +416,10 @@ struct PasscodeView: View {
                         selectedKeys[keyId] = imageData
                     }
                     processing = false
-                    statusMessage = "Se importaron \(extractedKeys.count) números."
+                    statusMessage = LaraL10n.text(
+                        en: "Imported \(extractedKeys.count) digits.",
+                        es: "Se importaron \(extractedKeys.count) números."
+                    )
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -520,7 +528,7 @@ struct PasscodeView: View {
     
     func applyTheme() {
         guard mgr.sbxready else {
-            statusMessage = "Error: prepara el acceso de Lara primero."
+            statusMessage = LaraL10n.text(en: "Error: prepare Eagle first.", es: "Error: prepara el acceso de Eagle primero.")
             return
         }
 
@@ -531,7 +539,7 @@ struct PasscodeView: View {
             guard let basePath = resolveTelephonyBasePath() else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: no se encontró la interfaz del código en este dispositivo."
+                    statusMessage = LaraL10n.text(en: "Error: the passcode interface was not found on this device.", es: "Error: no se encontró la interfaz del código en este dispositivo.")
                 }
                 return
             }
@@ -540,7 +548,7 @@ struct PasscodeView: View {
             guard let enumerator = fm.enumerator(atPath: basePath) else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: no se pudieron localizar los números actuales."
+                    statusMessage = LaraL10n.text(en: "Error: the current digits could not be located.", es: "Error: no se pudieron localizar los números actuales.")
                 }
                 return
             }
@@ -569,7 +577,7 @@ struct PasscodeView: View {
             DispatchQueue.main.async {
                 passcodeThemeManager.isApplying = true
                 passcodeThemeManager.progress = 0
-                passcodeThemeManager.message = "Preparando estilo…"
+                passcodeThemeManager.message = LaraL10n.text(en: "Preparing style…", es: "Preparando estilo…")
             }
 
             defer {
@@ -587,7 +595,7 @@ struct PasscodeView: View {
 
                     DispatchQueue.main.async {
                         passcodeThemeManager.progress = Double(index) / total
-                        passcodeThemeManager.message = "Aplicando número \(keyId)"
+                        passcodeThemeManager.message = LaraL10n.text(en: "Applying digit \(keyId)", es: "Aplicando número \(keyId)")
                     }
 
                     if matched.isEmpty {
@@ -614,11 +622,14 @@ struct PasscodeView: View {
                 passcodeThemeManager.progress = 1.0
 
                 if failCount == 0 {
-                    passcodeThemeManager.message = "Listo"
-                    statusMessage = "El estilo se aplicó correctamente."
+                    passcodeThemeManager.message = LaraL10n.text(en: "Done", es: "Listo")
+                    statusMessage = LaraL10n.text(en: "The style was applied successfully.", es: "El estilo se aplicó correctamente.")
                 } else {
-                    passcodeThemeManager.message = "Terminado con errores"
-                    statusMessage = "Error: se aplicaron \(successCount) archivos y fallaron \(failCount).\n\n\(errors.joined(separator: "\n"))"
+                    passcodeThemeManager.message = LaraL10n.text(en: "Finished with errors", es: "Terminado con errores")
+                    statusMessage = LaraL10n.text(
+                        en: "Error: \(successCount) files were applied and \(failCount) failed.\n\n\(errors.joined(separator: "\n"))",
+                        es: "Error: se aplicaron \(successCount) archivos y fallaron \(failCount).\n\n\(errors.joined(separator: "\n"))"
+                    )
                 }
             }
         }
@@ -647,7 +658,7 @@ struct PasscodeView: View {
     
     func restoreTheme() {
         guard mgr.sbxready else {
-            statusMessage = "Error: prepara el acceso de Lara primero."
+            statusMessage = LaraL10n.text(en: "Error: prepare Eagle first.", es: "Error: prepara el acceso de Eagle primero.")
             return
         }
         processing = true
@@ -657,7 +668,7 @@ struct PasscodeView: View {
             guard let basePath = resolveTelephonyBasePath() else {
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Error: no se encontró la interfaz del código en este dispositivo."
+                    statusMessage = LaraL10n.text(en: "Error: the passcode interface was not found on this device.", es: "Error: no se encontró la interfaz del código en este dispositivo.")
                 }
                 return
             }
@@ -668,7 +679,7 @@ struct PasscodeView: View {
                 }
                 DispatchQueue.main.async {
                     processing = false
-                    statusMessage = "Se restauraron los números originales."
+                    statusMessage = LaraL10n.text(en: "The original digits were restored.", es: "Se restauraron los números originales.")
                 }
             } catch {
                 DispatchQueue.main.async {

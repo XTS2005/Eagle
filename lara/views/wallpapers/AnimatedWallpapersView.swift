@@ -30,7 +30,11 @@ private enum WallpaperMode: String, CaseIterable, Identifiable {
     case create
 
     var id: String { rawValue }
-    var title: String { self == .explore ? "Explorar" : "Crear" }
+    var title: String {
+        self == .explore
+            ? LaraL10n.text(en: "Explore", es: "Explorar")
+            : LaraL10n.text(en: "Create", es: "Crear")
+    }
 }
 
 struct AnimatedWallpapersView: View {
@@ -128,7 +132,7 @@ struct AnimatedWallpapersView: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Tu video, en la pantalla de bloqueo")
                 .font(.title2.weight(.bold))
-            Text("Elige un clip corto. Lara lo adapta y lo agrega a la colección de fondos de iOS.")
+            Text("Elige un clip corto. Eagle lo adapta y lo agrega a la colección de fondos de iOS.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -175,7 +179,9 @@ struct AnimatedWallpapersView: View {
         .frame(maxWidth: .infinity)
         .shadow(color: .black.opacity(0.13), radius: 20, y: 10)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(movieURL == nil ? "Vista previa vacía" : "Vista previa del fondo animado")
+        .accessibilityLabel(movieURL == nil
+            ? LaraL10n.text(en: "Empty preview", es: "Vista previa vacía")
+            : LaraL10n.text(en: "Animated wallpaper preview", es: "Vista previa del fondo animado"))
     }
 
     private var options: some View {
@@ -199,7 +205,10 @@ struct AnimatedWallpapersView: View {
     private var actionArea: some View {
         VStack(spacing: 12) {
             PhotosPicker(selection: $pickerItem, matching: .videos) {
-                Label(movieURL == nil ? "Elegir video" : "Elegir otro video", systemImage: "photo.on.rectangle")
+                Label(movieURL == nil
+                    ? LaraL10n.text(en: "Choose video", es: "Elegir video")
+                    : LaraL10n.text(en: "Choose another video", es: "Elegir otro video"),
+                    systemImage: "photo.on.rectangle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -215,7 +224,9 @@ struct AnimatedWallpapersView: View {
                             ProgressView()
                                 .tint(.white)
                         }
-                        Text(installer.isWorking ? "Preparando fondo…" : "Agregar a Fondos")
+                        Text(installer.isWorking
+                            ? LaraL10n.text(en: "Preparing wallpaper…", es: "Preparando fondo…")
+                            : LaraL10n.text(en: "Add to Wallpapers", es: "Agregar a Fondos"))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -307,23 +318,23 @@ enum AnimatedWallpaperError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidVideo:
-            return "No se pudo leer ese video. Prueba con otro archivo."
+            return LaraL10n.text(en: "That video could not be read. Try another file.", es: "No se pudo leer ese video. Prueba con otro archivo.")
         case .videoTooLong:
-            return "El video debe durar 12 segundos o menos."
+            return LaraL10n.text(en: "The video must be 12 seconds or shorter.", es: "El video debe durar 12 segundos o menos.")
         case .cancelled:
-            return "La preparación fue cancelada."
+            return LaraL10n.text(en: "Preparation was canceled.", es: "La preparación fue cancelada.")
         case .noFrames:
-            return "No se pudieron extraer imágenes del video."
+            return LaraL10n.text(en: "No frames could be extracted from the video.", es: "No se pudieron extraer imágenes del video.")
         case .posterBoardNotFound:
-            return "Lara no pudo encontrar la colección de fondos del sistema."
+            return LaraL10n.text(en: "Eagle could not find the system wallpaper collection.", es: "Eagle no pudo encontrar la colección de fondos del sistema.")
         case .posterBoardUnavailable:
-            return "La colección de fondos todavía no está preparada en este dispositivo."
+            return LaraL10n.text(en: "The wallpaper collection is not ready on this device yet.", es: "La colección de fondos todavía no está preparada en este dispositivo.")
         case .installationFailed:
-            return "El fondo no pudo instalarse. No se modificó la colección existente."
+            return LaraL10n.text(en: "The wallpaper could not be installed. The existing collection was not changed.", es: "El fondo no pudo instalarse. No se modificó la colección existente.")
         case .invalidDescriptor:
-            return "El paquete no contiene todos los archivos que PosterBoard necesita."
+            return LaraL10n.text(en: "The package does not contain every file PosterBoard needs.", es: "El paquete no contiene todos los archivos que PosterBoard necesita.")
         case .descriptorAlreadyExists:
-            return "Este fondo ya existe, pero su copia actual no es válida."
+            return LaraL10n.text(en: "This wallpaper already exists, but its current copy is invalid.", es: "Este fondo ya existe, pero su copia actual no es válida.")
         }
     }
 }
@@ -331,7 +342,7 @@ enum AnimatedWallpaperError: LocalizedError {
 final class AnimatedWallpaperInstaller: ObservableObject {
     @Published private(set) var isWorking = false
     @Published private(set) var progress: Double = 0
-    @Published private(set) var progressLabel = "Preparando"
+    @Published private(set) var progressLabel = LaraL10n.text(en: "Preparing", es: "Preparando")
     @Published private(set) var resultMessage: String?
     @Published private(set) var didInstall = false
 
@@ -349,7 +360,7 @@ final class AnimatedWallpaperInstaller: ObservableObject {
         resultMessage = nil
         isWorking = true
         progress = 0
-        progressLabel = "Analizando video"
+        progressLabel = LaraL10n.text(en: "Analyzing video", es: "Analizando video")
 
         let screenSize = AnimatedWallpaperBuilder.recommendedPixelSize()
 
@@ -374,7 +385,7 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 if self.isCancelled { throw AnimatedWallpaperError.cancelled }
                 DispatchQueue.main.async {
                     self.progress = 0.92
-                    self.progressLabel = "Agregando a Fondos"
+                    self.progressLabel = LaraL10n.text(en: "Adding to Wallpapers", es: "Agregando a Fondos")
                 }
 
                 _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
@@ -382,10 +393,13 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 DispatchQueue.main.async {
                     _ = PosterBoardWriter.refreshCollections()
                     self.progress = 1
-                    self.progressLabel = "Listo"
+                    self.progressLabel = LaraL10n.text(en: "Done", es: "Listo")
                     self.isWorking = false
                     self.didInstall = true
-                    self.resultMessage = "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
+                    self.resultMessage = LaraL10n.text(
+                        en: "The wallpaper was verified and PosterBoard refreshed its collection. You can now select it in Wallpapers.",
+                        es: "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
+                    )
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -405,7 +419,7 @@ final class AnimatedWallpaperInstaller: ObservableObject {
         cancellationLock.lock()
         cancellationRequested = true
         cancellationLock.unlock()
-        progressLabel = "Cancelando"
+        progressLabel = LaraL10n.text(en: "Canceling", es: "Cancelando")
     }
 
     func openWallpaperPicker() {
@@ -597,7 +611,7 @@ enum AnimatedWallpaperBuilder {
         progress: (Double, String) -> Void
     ) throws -> BuildResult {
         let fm = FileManager.default
-        let workingRoot = fm.temporaryDirectory.appendingPathComponent("LaraPoster-\(UUID().uuidString)", isDirectory: true)
+        let workingRoot = fm.temporaryDirectory.appendingPathComponent("EaglePoster-\(UUID().uuidString)", isDirectory: true)
         let descriptorURL = workingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try fm.createDirectory(at: descriptorURL, withIntermediateDirectories: true)
 
@@ -656,7 +670,7 @@ enum AnimatedWallpaperBuilder {
             try emptyFloatingCAML(width: width, height: height).data(using: .utf8)!.write(to: floating.appendingPathComponent("main.caml"))
             try indexXML(width: width, height: height).data(using: .utf8)!.write(to: floating.appendingPathComponent("index.xml"))
 
-            progress(0.03, "Leyendo el video")
+            progress(0.03, LaraL10n.text(en: "Reading video", es: "Leyendo el video"))
             let asset = AVURLAsset(url: video)
             let duration = CMTimeGetSeconds(asset.duration)
             guard duration.isFinite, duration > 0 else { throw AnimatedWallpaperError.invalidVideo }
@@ -684,7 +698,13 @@ enum AnimatedWallpaperBuilder {
                     try data.write(to: assets.appendingPathComponent("\(index).jpg"))
                     frameValues += "\t\t\t<CGImage src=\"assets/\(index).jpg\"/>\n"
                 }
-                progress(Double(index + 1) / Double(frameCount), "Procesando cuadro \(index + 1) de \(frameCount)")
+                progress(
+                    Double(index + 1) / Double(frameCount),
+                    LaraL10n.text(
+                        en: "Processing frame \(index + 1) of \(frameCount)",
+                        es: "Procesando cuadro \(index + 1) de \(frameCount)"
+                    )
+                )
             }
 
             guard !frameValues.isEmpty else { throw AnimatedWallpaperError.noFrames }
@@ -780,9 +800,9 @@ enum AnimatedWallpaperBuilder {
         <caml xmlns="http://www.apple.com/CoreAnimation/1.0">
           <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" hidden="0" name="_FLOATING" position="\(width / 2) \(height / 2)">
             <sublayers>
-              <CATransformLayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" allowsHitTesting="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Lara Motion" position="\(width / 2) \(height / 2)">
+              <CATransformLayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" allowsHitTesting="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Eagle Motion" position="\(width / 2) \(height / 2)">
                 <sublayers>
-                  <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Lara Video" position="\(width / 2) \(height / 2)">
+                  <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Eagle Video" position="\(width / 2) \(height / 2)">
                     <contents type="CGImage" src="assets/0.jpg"/>
                     <animations>
                       <animation type="CAKeyframeAnimation" calculationMode="linear" keyPath="contents" beginTime="1e-100" duration="\(duration)" removedOnCompletion="0" repeatCount="inf" repeatDuration="0" speed="1" timeOffset="0" autoreverses="\(autoReverses ? 1 : 0)">

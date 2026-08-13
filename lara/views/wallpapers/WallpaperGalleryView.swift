@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import WebKit
 
 private let nuggetWallpaperBaseURL = URL(
     string: "https://raw.githubusercontent.com/SerStars/Nugget-Wallpapers/main/"
@@ -14,7 +13,7 @@ enum WallpaperCatalogKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .community: return "Comunidad"
+        case .community: return LaraL10n.text(en: "Community", es: "Comunidad")
         case .apple: return "Apple"
         }
     }
@@ -36,7 +35,9 @@ struct NuggetWallpaper: Decodable, Identifiable, Hashable {
     var id: String { url }
 
     var authorLine: String {
-        guard let authors, !authors.isEmpty else { return "Colección de Nugget" }
+        guard let authors, !authors.isEmpty else {
+            return LaraL10n.text(en: "Nugget collection", es: "Colección de Nugget")
+        }
         return authors
     }
 
@@ -66,19 +67,40 @@ enum CommunityWallpaperError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "No se pudo obtener el catálogo en este momento."
+            return LaraL10n.text(
+                en: "The catalog is unavailable right now. Check your connection and try again.",
+                es: "No se pudo obtener el catálogo en este momento. Comprueba tu conexión e inténtalo otra vez."
+            )
         case .invalidPackage:
-            return "El archivo de este fondo no tiene una estructura compatible."
+            return LaraL10n.text(
+                en: "This wallpaper package does not have a compatible structure.",
+                es: "El archivo de este fondo no tiene una estructura compatible."
+            )
         case .packageTooLarge:
-            return "El archivo supera el límite seguro de tamaño para procesarlo en el iPhone."
+            return LaraL10n.text(
+                en: "This file is too large to process safely on your iPhone.",
+                es: "El archivo supera el límite seguro de tamaño para procesarlo en el iPhone."
+            )
         case .noDescriptors:
-            return "Este paquete no contiene fondos que Lara pueda instalar."
+            return LaraL10n.text(
+                en: "This package does not contain a wallpaper Eagle can install.",
+                es: "Este paquete no contiene fondos que Eagle pueda instalar."
+            )
         case .tooManyDescriptors:
-            return "El paquete contiene demasiados fondos para una sola instalación."
+            return LaraL10n.text(
+                en: "This package contains too many wallpapers for one installation.",
+                es: "El paquete contiene demasiados fondos para una sola instalación."
+            )
         case .requiresIOS26:
-            return "Este fondo requiere iOS 26 por las animaciones que utiliza."
+            return LaraL10n.text(
+                en: "This wallpaper requires iOS 26 because of the animations it uses.",
+                es: "Este fondo requiere iOS 26 por las animaciones que utiliza."
+            )
         case .unsupportedExtension:
-            return "Este paquete usa una categoría de fondos que Lara todavía no reconoce."
+            return LaraL10n.text(
+                en: "This package uses a wallpaper category Eagle does not recognize yet.",
+                es: "Este paquete usa una categoría de fondos que Eagle todavía no reconoce."
+            )
         }
     }
 }
@@ -149,7 +171,10 @@ final class WallpaperCatalogManager: ObservableObject {
     func install(_ wallpaper: NuggetWallpaper) async {
         guard installingID == nil else { return }
         guard laramgr.shared.sbxready else {
-            resultMessage = "Prepara el acceso de Lara antes de instalar un fondo."
+            resultMessage = LaraL10n.text(
+                en: "Prepare Eagle before installing a wallpaper.",
+                es: "Prepara el acceso de Eagle antes de instalar un fondo."
+            )
             return
         }
         if wallpaper.requiresIOS26,
@@ -170,11 +195,20 @@ final class WallpaperCatalogManager: ObservableObject {
             _ = PosterBoardWriter.refreshCollections()
             didInstall = true
             if result.installedCount == 0, result.existingCount > 0 {
-                resultMessage = "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
+                resultMessage = LaraL10n.text(
+                    en: "\(wallpaper.name) was already installed. PosterBoard refreshed its collection.",
+                    es: "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
+                )
             } else if result.installedCount == 1 {
-                resultMessage = "\(wallpaper.name) se verificó y se agregó a Fondos."
+                resultMessage = LaraL10n.text(
+                    en: "\(wallpaper.name) was verified and added to Wallpapers.",
+                    es: "\(wallpaper.name) se verificó y se agregó a Fondos."
+                )
             } else {
-                resultMessage = "Se verificaron y agregaron \(result.installedCount) fondos de \(wallpaper.name)."
+                resultMessage = LaraL10n.text(
+                    en: "Verified and added \(result.installedCount) wallpapers from \(wallpaper.name).",
+                    es: "Se verificaron y agregaron \(result.installedCount) fondos de \(wallpaper.name)."
+                )
             }
         } catch {
             didInstall = false
@@ -273,9 +307,14 @@ struct WallpaperGalleryView: View {
     }
 
     private var loadingView: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-            Text("Cargando la colección…")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("Cargando la colección…")
+                    .font(.headline)
+            }
+            Text("Buscando fondos y preparando sus vistas previas.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,8 +325,9 @@ struct WallpaperGalleryView: View {
 
     private func errorView(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("No pudimos cargar la colección")
+            Label("No pudimos cargar la colección", systemImage: "wifi.exclamationmark")
                 .font(.headline)
+                .foregroundStyle(.orange)
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -300,6 +340,10 @@ struct WallpaperGalleryView: View {
         .padding(20)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.14), lineWidth: 1)
+        }
     }
 
     private var emptyView: some View {
@@ -315,6 +359,8 @@ struct WallpaperGalleryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 44)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -323,21 +369,12 @@ private struct CommunityWallpaperCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AsyncImage(url: wallpaper.previewURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    ZStack {
-                        Color(uiColor: .tertiarySystemFill)
-                        Image(systemName: "sparkles.rectangle.stack")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            LaraRemoteMediaPreview(
+                url: wallpaper.previewURL,
+                animated: false,
+                contentMode: .fill,
+                showsRetry: false
+            )
             .frame(maxWidth: .infinity)
             .frame(height: 205)
             .clipped()
@@ -389,7 +426,13 @@ private struct CommunityWallpaperDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let previewURL = wallpaper.previewURL {
-                    RemoteAnimatedPreview(url: previewURL)
+                    LaraRemoteMediaPreview(
+                        url: previewURL,
+                        animated: true,
+                        contentMode: .fit,
+                        showsRetry: true,
+                        background: .black
+                    )
                         .aspectRatio(9.0 / 16.0, contentMode: .fit)
                         .frame(maxWidth: 340)
                         .frame(maxWidth: .infinity)
@@ -437,7 +480,9 @@ private struct CommunityWallpaperDetail: View {
                         } else {
                             Image(systemName: "arrow.down.circle.fill")
                         }
-                        Text(isInstalling ? "Descargando e instalando…" : "Agregar a Fondos")
+                        Text(isInstalling
+                            ? LaraL10n.text(en: "Downloading and installing…", es: "Descargando e instalando…")
+                            : LaraL10n.text(en: "Add to Wallpapers", es: "Agregar a Fondos"))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -445,7 +490,7 @@ private struct CommunityWallpaperDetail: View {
                 .controlSize(.large)
                 .disabled(!mgr.sbxready || gallery.installingID != nil || isIncompatible)
 
-                Text("Los fondos y sus vistas previas pertenecen a sus respectivos creadores. Lara instala una copia local y no modifica otros fondos.")
+                Text("Los fondos y sus vistas previas pertenecen a sus respectivos creadores. Eagle instala una copia local y no modifica otros fondos.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -471,36 +516,6 @@ private struct CommunityWallpaperDetail: View {
         } message: {
             Text(gallery.resultMessage ?? "")
         }
-    }
-}
-
-private struct RemoteAnimatedPreview: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.suppressesIncrementalRendering = false
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.isScrollEnabled = false
-        webView.scrollView.backgroundColor = .clear
-        webView.isUserInteractionEnabled = false
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        guard webView.url == nil else { return }
-        let escapedURL = url.absoluteString
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-        let html = """
-        <html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>
-        <body style="margin:0;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center;height:100vh">
-        <img src="\(escapedURL)" style="width:100%;height:100%;object-fit:cover" />
-        </body></html>
-        """
-        webView.loadHTMLString(html, baseURL: nil)
     }
 }
 
@@ -538,7 +553,7 @@ enum TendiesInstaller {
 
         let fm = FileManager.default
         let root = fm.temporaryDirectory
-            .appendingPathComponent("LaraTendies-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("EagleTendies-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
 

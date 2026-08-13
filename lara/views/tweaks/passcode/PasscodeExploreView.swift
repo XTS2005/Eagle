@@ -121,24 +121,14 @@ private struct PasscodeGalleryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let previewURL {
-                AsyncImage(url: previewURL) { phase in
-                    switch phase {
-                    case .success(let img):
-                        img
-                            .resizable()
-                            .interpolation(.low)
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 190)
-                            .background(Color.black.opacity(0.001))
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
+            LaraRemoteMediaPreview(
+                url: previewURL,
+                animated: false,
+                contentMode: .fit,
+                showsRetry: false
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 190)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top) {
@@ -179,14 +169,4 @@ private struct PasscodeGalleryCard: View {
         }
     }
 
-    private var placeholder: some View {
-        ZStack {
-            Color(uiColor: .tertiarySystemFill)
-            Image(systemName: "lock.rectangle.stack")
-                .font(.system(size: 34, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(height: 190)
-        .frame(maxWidth: .infinity)
-    }
 }

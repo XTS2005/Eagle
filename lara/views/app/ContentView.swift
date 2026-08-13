@@ -32,7 +32,7 @@ struct ContentView: View {
                 DebugSection
                 InlineLogsSection
             }
-            .navigationTitle("Lara Custom")
+            .navigationTitle("Eagle Custom")
             .toolbar {
                 if selectedlogsdisplaymode == .toolbar {
                     Button(action: {
@@ -246,7 +246,7 @@ struct ContentView: View {
                         Text("iOS 16 tip: Open Control Center after tapping Initialize RemoteCall. This significantly improves the success rate and speed.")
                             .fontWeight(.semibold)
                             .foregroundColor(.orange)
-                        Text("If initialization fails after about 2 minutes, respring, relaunch Lara, and try again.")
+                        Text("If initialization fails after about 2 minutes, respring, relaunch Eagle, and try again.")
                             .fontWeight(.semibold)
                             .foregroundColor(.red)
                     }

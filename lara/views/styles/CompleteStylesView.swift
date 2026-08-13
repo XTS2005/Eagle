@@ -16,9 +16,9 @@ enum CompleteStyleComponent: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .wallpaper: return "Fondo"
-        case .passcode: return "Código"
-        case .card: return "Tarjeta"
+        case .wallpaper: return LaraL10n.text(en: "Wallpaper", es: "Fondo")
+        case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
+        case .card: return LaraL10n.text(en: "Card", es: "Tarjeta")
         }
     }
 
@@ -69,6 +69,9 @@ struct CompleteStylePack: Identifiable, Hashable, Sendable {
     var primary: CompleteStyleTone { tones[0] }
     var secondary: CompleteStyleTone { tones[min(1, tones.count - 1)] }
     var tertiary: CompleteStyleTone { tones[min(2, tones.count - 1)] }
+    var localizedName: String { LaraL10n.localized(name) }
+    var localizedTagline: String { LaraL10n.localized(tagline) }
+    var localizedSummary: String { LaraL10n.localized(summary) }
 
     var wallpaperURL: URL {
         completeStyleRepositoryBase.appendingPathComponent("wallpapers/custom/\(wallpaperFile)")
@@ -320,29 +323,29 @@ private enum CompleteStyleEngineError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .badDownload:
-            return "No se pudo descargar uno de los recursos del estilo."
+            return LaraL10n.text(en: "One of the style assets could not be downloaded.", es: "No se pudo descargar uno de los recursos del estilo.")
         case .incompletePasscode:
-            return "El tema del código no contiene los diez números."
+            return LaraL10n.text(en: "The passcode theme does not contain all ten digits.", es: "El tema del código no contiene los diez números.")
         case .passcodeUnavailable:
-            return "No se encontró la caché del código en este iPhone."
+            return LaraL10n.text(en: "The passcode cache was not found on this iPhone.", es: "No se encontró la caché del código en este iPhone.")
         case .cardUnavailable:
-            return "No se encontró una tarjeta de Wallet compatible."
+            return LaraL10n.text(en: "No compatible Wallet card was found.", es: "No se encontró una tarjeta de Wallet compatible.")
         case .cardImageFailed:
-            return "No se pudo generar el diseño de la tarjeta."
+            return LaraL10n.text(en: "The card design could not be generated.", es: "No se pudo generar el diseño de la tarjeta.")
         case .cardBackupFailed:
-            return "No se pudo conservar la tarjeta original; Lara no realizó el cambio."
+            return LaraL10n.text(en: "The original card could not be saved, so Eagle made no change.", es: "No se pudo conservar la tarjeta original; Eagle no realizó el cambio.")
         case .cardWriteFailed(let message):
-            return "No se pudo actualizar la tarjeta: \(message)"
+            return LaraL10n.text(en: "The card could not be updated: \(message)", es: "No se pudo actualizar la tarjeta: \(message)")
         case .undoPreparationFailed(let component):
-            return "No se pudo preparar Deshacer para \(component); Lara no realizó ese cambio."
+            return LaraL10n.text(en: "Undo could not be prepared for \(component), so Eagle made no change.", es: "No se pudo preparar Deshacer para \(component); Eagle no realizó ese cambio.")
         case .undoWriteFailed(let message):
-            return "No se pudo recuperar uno de los archivos anteriores: \(message)"
+            return LaraL10n.text(en: "A previous file could not be recovered: \(message)", es: "No se pudo recuperar uno de los archivos anteriores: \(message)")
         case .undoUnavailable:
-            return "No hay un cambio reciente que Lara pueda deshacer."
+            return LaraL10n.text(en: "There is no recent change for Eagle to undo.", es: "No hay un cambio reciente que Eagle pueda deshacer.")
         case .cacheWriteFailed:
-            return "El recurso se descargó, pero Lara no pudo guardarlo de forma segura."
+            return LaraL10n.text(en: "The asset downloaded, but Eagle could not save it safely.", es: "El recurso se descargó, pero Eagle no pudo guardarlo de forma segura.")
         case .nothingToRestore:
-            return "Todavía no hay cambios de Estilos para restaurar."
+            return LaraL10n.text(en: "There are no Style changes to restore yet.", es: "Todavía no hay cambios de Estilos para restaurar.")
         }
     }
 }
@@ -504,7 +507,7 @@ final class CompleteStyleManager: ObservableObject {
 
     @Published private(set) var isWorking = false
     @Published private(set) var progress: Double = 0
-    @Published private(set) var stage = "Preparando"
+    @Published private(set) var stage = LaraL10n.text(en: "Preparing", es: "Preparando")
     @Published private(set) var passcodeAvailable = false
     @Published private(set) var cardAvailable = false
     @Published var lastResult: CompleteStyleRunResult?
@@ -525,7 +528,7 @@ final class CompleteStyleManager: ObservableObject {
         if activeStyleName == nil,
            let activePackID,
            let migrated = CompleteStylePack.all.first(where: { $0.id == activePackID }) {
-            activeStyleName = migrated.name
+            activeStyleName = migrated.localizedName
             activeVisualPackID = migrated.id
         }
         canUndo = CompleteStyleUndoStore.shared.hasSnapshot
@@ -570,8 +573,8 @@ final class CompleteStyleManager: ObservableObject {
         guard !isWorking else { return }
         guard laramgr.shared.sbxready else {
             lastResult = CompleteStyleRunResult(
-                title: "Lara necesita acceso",
-                message: "Pulsa Continuar en Preparar acceso antes de aplicar un estilo.",
+                title: LaraL10n.text(en: "Eagle needs access", es: "Eagle necesita acceso"),
+                message: LaraL10n.text(en: "Tap Continue under Prepare Access before applying a style.", es: "Pulsa Continuar en Preparar acceso antes de aplicar un estilo."),
                 components: []
             )
             return
@@ -580,8 +583,8 @@ final class CompleteStyleManager: ObservableObject {
         let selectedCount = selection.selectedCount
         guard selectedCount > 0 else {
             lastResult = CompleteStyleRunResult(
-                title: "Elige al menos una parte",
-                message: "Activa Fondo, Código o Tarjeta en las opciones del estilo.",
+                title: LaraL10n.text(en: "Choose at least one part", es: "Elige al menos una parte"),
+                message: LaraL10n.text(en: "Turn on Wallpaper, Passcode, or Card in the style options.", es: "Activa Fondo, Código o Tarjeta en las opciones del estilo."),
                 components: []
             )
             return
@@ -589,7 +592,7 @@ final class CompleteStyleManager: ObservableObject {
 
         isWorking = true
         progress = 0
-        stage = "Comprobando compatibilidad"
+        stage = LaraL10n.text(en: "Checking compatibility", es: "Comprobando compatibilidad")
         lastResult = nil
 
         Task {
@@ -627,7 +630,7 @@ final class CompleteStyleManager: ObservableObject {
             }
 
             do {
-                stage = "Preparando Deshacer"
+                stage = LaraL10n.text(en: "Preparing Undo", es: "Preparando Deshacer")
                 if selection.passcodePack != nil,
                    CompletePasscodeStyleEngine.basePath() != nil {
                     undoSnapshot.passcodeFiles = try CompletePasscodeStyleEngine.snapshot()
@@ -640,18 +643,18 @@ final class CompleteStyleManager: ObservableObject {
             } catch {
                 CompleteStyleUndoStore.shared.discardPending()
                 lastResult = CompleteStyleRunResult(
-                    title: "No se realizó ningún cambio",
-                    message: "Lara no pudo guardar el estado actual para Deshacer. Tus archivos permanecen intactos.",
+                    title: LaraL10n.text(en: "No changes were made", es: "No se realizó ningún cambio"),
+                    message: LaraL10n.text(en: "Eagle could not save the current state for Undo. Your files remain unchanged.", es: "Eagle no pudo guardar el estado actual para Deshacer. Tus archivos permanecen intactos."),
                     components: []
                 )
                 progress = 0
-                stage = "Sin cambios"
+                stage = LaraL10n.text(en: "No changes", es: "Sin cambios")
                 isWorking = false
                 return
             }
 
             if let pack = selection.passcodePack {
-                stage = "Preparando \(pack.passcodeName)"
+                stage = LaraL10n.text(en: "Preparing \(pack.passcodeName)", es: "Preparando \(pack.passcodeName)")
                 do {
                     guard CompletePasscodeStyleEngine.basePath() != nil else {
                         throw CompleteStyleEngineError.passcodeUnavailable
@@ -664,13 +667,16 @@ final class CompleteStyleManager: ObservableObject {
                     results.append(.init(
                         component: .passcode,
                         state: .applied,
-                        detail: "\(pack.passcodeName), \(count) archivos verificados\(prepared.cameFromCache ? " · guardado" : "")"
+                        detail: LaraL10n.text(
+                            en: "\(pack.passcodeName), \(count) files verified\(prepared.cameFromCache ? " · cached" : "")",
+                            es: "\(pack.passcodeName), \(count) archivos verificados\(prepared.cameFromCache ? " · guardado" : "")"
+                        )
                     ))
                 } catch CompleteStyleEngineError.passcodeUnavailable {
                     results.append(.init(
                         component: .passcode,
                         state: .skipped,
-                        detail: "No disponible en este dispositivo"
+                        detail: LaraL10n.text(en: "Unavailable on this device", es: "No disponible en este dispositivo")
                     ))
                 } catch {
                     results.append(.init(
@@ -679,11 +685,11 @@ final class CompleteStyleManager: ObservableObject {
                         detail: error.localizedDescription
                     ))
                 }
-                advance("Código terminado")
+                advance(LaraL10n.text(en: "Passcode complete", es: "Código terminado"))
             }
 
             if let pack = selection.cardPack {
-                stage = "Diseñando la tarjeta"
+                stage = LaraL10n.text(en: "Designing card", es: "Diseñando la tarjeta")
                 do {
                     try CompleteCardStyleEngine.apply(pack: pack)
                     undoSnapshot.changedComponents.append(CompleteStyleComponent.card.rawValue)
@@ -691,13 +697,13 @@ final class CompleteStyleManager: ObservableObject {
                     results.append(.init(
                         component: .card,
                         state: .applied,
-                        detail: "Diseño creado localmente y respaldado"
+                        detail: LaraL10n.text(en: "Design created locally and backed up", es: "Diseño creado localmente y respaldado")
                     ))
                 } catch CompleteStyleEngineError.cardUnavailable {
                     results.append(.init(
                         component: .card,
                         state: .skipped,
-                        detail: "No hay una tarjeta compatible en Wallet"
+                        detail: LaraL10n.text(en: "No compatible card in Wallet", es: "No hay una tarjeta compatible en Wallet")
                     ))
                 } catch {
                     results.append(.init(
@@ -706,11 +712,11 @@ final class CompleteStyleManager: ObservableObject {
                         detail: error.localizedDescription
                     ))
                 }
-                advance("Tarjeta terminada")
+                advance(LaraL10n.text(en: "Card complete", es: "Tarjeta terminada"))
             }
 
             if let pack = selection.wallpaperPack {
-                stage = "Instalando \(pack.wallpaperName)"
+                stage = LaraL10n.text(en: "Installing \(pack.wallpaperName)", es: "Instalando \(pack.wallpaperName)")
                 do {
                     let prepared = try await installWallpaper(pack)
                     let install = prepared.result
@@ -722,8 +728,11 @@ final class CompleteStyleManager: ObservableObject {
                         component: .wallpaper,
                         state: .applied,
                         detail: install.installedCount > 0
-                            ? "\(pack.wallpaperName) agregado a Fondos\(prepared.cameFromCache ? " · guardado" : "")"
-                            : "\(pack.wallpaperName) ya estaba instalado"
+                            ? LaraL10n.text(
+                                en: "\(pack.wallpaperName) added to Wallpapers\(prepared.cameFromCache ? " · cached" : "")",
+                                es: "\(pack.wallpaperName) agregado a Fondos\(prepared.cameFromCache ? " · guardado" : "")"
+                            )
+                            : LaraL10n.text(en: "\(pack.wallpaperName) was already installed", es: "\(pack.wallpaperName) ya estaba instalado")
                     ))
                 } catch {
                     results.append(.init(
@@ -732,7 +741,7 @@ final class CompleteStyleManager: ObservableObject {
                         detail: error.localizedDescription
                     ))
                 }
-                advance("Fondo terminado")
+                advance(LaraL10n.text(en: "Wallpaper complete", es: "Fondo terminado"))
             }
 
             let applied = results.filter { $0.state == .applied }.count
@@ -751,25 +760,30 @@ final class CompleteStyleManager: ObservableObject {
 
             var message: String
             if applied == selectedCount {
-                message = "Las partes elegidas se aplicaron y verificaron correctamente."
+                message = LaraL10n.text(en: "The selected parts were applied and verified successfully.", es: "Las partes elegidas se aplicaron y verificaron correctamente.")
             } else if applied > 0 {
                 message = failed > 0
-                    ? "El estilo se aplicó parcialmente. Revisa cada resultado."
-                    : "Se aplicó todo lo compatible con este iPhone."
+                    ? LaraL10n.text(en: "The style was partially applied. Review each result.", es: "El estilo se aplicó parcialmente. Revisa cada resultado.")
+                    : LaraL10n.text(en: "Everything compatible with this iPhone was applied.", es: "Se aplicó todo lo compatible con este iPhone.")
             } else {
-                message = "No se pudo aplicar ninguna de las partes elegidas."
+                message = LaraL10n.text(en: "None of the selected parts could be applied.", es: "No se pudo aplicar ninguna de las partes elegidas.")
             }
             if applied > 0, !undoSaved {
-                message += " Los originales siguen protegidos, pero Deshacer no está disponible para esta acción."
+                message += LaraL10n.text(en: " The originals remain protected, but Undo is unavailable for this action.", es: " Los originales siguen protegidos, pero Deshacer no está disponible para esta acción.")
             }
 
             lastResult = CompleteStyleRunResult(
-                title: applied > 0 ? "\(selection.title) está listo" : "No se aplicó el estilo",
+                title: applied > 0
+                    ? LaraL10n.text(
+                        en: "\(LaraL10n.localized(selection.title)) is ready",
+                        es: "\(LaraL10n.localized(selection.title)) está listo"
+                    )
+                    : LaraL10n.text(en: "Style not applied", es: "No se aplicó el estilo"),
                 message: message,
                 components: results
             )
             progress = 1
-            stage = "Listo"
+            stage = LaraL10n.text(en: "Done", es: "Listo")
             isWorking = false
             refreshCompatibility()
 
@@ -783,8 +797,8 @@ final class CompleteStyleManager: ObservableObject {
         guard !isWorking else { return }
         guard laramgr.shared.sbxready else {
             lastResult = CompleteStyleRunResult(
-                title: "Lara necesita acceso",
-                message: "Prepara el acceso antes de deshacer el último estilo.",
+                title: LaraL10n.text(en: "Eagle needs access", es: "Eagle necesita acceso"),
+                message: LaraL10n.text(en: "Prepare access before undoing the latest style.", es: "Prepara el acceso antes de deshacer el último estilo."),
                 components: []
             )
             return
@@ -792,7 +806,7 @@ final class CompleteStyleManager: ObservableObject {
         guard let snapshot = CompleteStyleUndoStore.shared.load() else {
             canUndo = false
             lastResult = CompleteStyleRunResult(
-                title: "Nada que deshacer",
+                title: LaraL10n.text(en: "Nothing to undo", es: "Nada que deshacer"),
                 message: CompleteStyleEngineError.undoUnavailable.localizedDescription,
                 components: []
             )
@@ -801,7 +815,7 @@ final class CompleteStyleManager: ObservableObject {
 
         isWorking = true
         progress = 0
-        stage = "Recuperando el estilo anterior"
+        stage = LaraL10n.text(en: "Recovering previous style", es: "Recuperando el estilo anterior")
         lastResult = nil
 
         Task {
@@ -814,7 +828,7 @@ final class CompleteStyleManager: ObservableObject {
                     results.append(.init(
                         component: .passcode,
                         state: .applied,
-                        detail: "Se recuperaron \(count) archivos anteriores"
+                        detail: LaraL10n.text(en: "Recovered \(count) previous files", es: "Se recuperaron \(count) archivos anteriores")
                     ))
                 } catch {
                     results.append(.init(component: .passcode, state: .failed, detail: error.localizedDescription))
@@ -825,13 +839,15 @@ final class CompleteStyleManager: ObservableObject {
             if changed.contains(CompleteStyleComponent.card.rawValue) {
                 do {
                     guard let cardFile = snapshot.cardFile else {
-                        throw CompleteStyleEngineError.undoPreparationFailed("la tarjeta")
+                        throw CompleteStyleEngineError.undoPreparationFailed(
+                            LaraL10n.text(en: "the card", es: "la tarjeta")
+                        )
                     }
                     try CompleteCardStyleEngine.restoreSnapshot(cardFile)
                     results.append(.init(
                         component: .card,
                         state: .applied,
-                        detail: "Se recuperó el diseño anterior"
+                        detail: LaraL10n.text(en: "The previous design was recovered", es: "Se recuperó el diseño anterior")
                     ))
                 } catch {
                     results.append(.init(component: .card, state: .failed, detail: error.localizedDescription))
@@ -848,8 +864,8 @@ final class CompleteStyleManager: ObservableObject {
                     component: .wallpaper,
                     state: removed > 0 ? .applied : .skipped,
                     detail: removed > 0
-                        ? "Se retiró el fondo del último cambio"
-                        : "Ese fondo ya existía; no fue necesario retirarlo"
+                        ? LaraL10n.text(en: "The wallpaper from the latest change was removed", es: "Se retiró el fondo del último cambio")
+                        : LaraL10n.text(en: "That wallpaper already existed, so it was not removed", es: "Ese fondo ya existía; no fue necesario retirarlo")
                 ))
             }
 
@@ -865,13 +881,17 @@ final class CompleteStyleManager: ObservableObject {
             }
 
             progress = 1
-            stage = failed ? "Deshacer incompleto" : "Cambio deshecho"
+            stage = failed
+                ? LaraL10n.text(en: "Undo incomplete", es: "Deshacer incompleto")
+                : LaraL10n.text(en: "Change undone", es: "Cambio deshecho")
             isWorking = false
             lastResult = CompleteStyleRunResult(
-                title: failed ? "No se pudo deshacer todo" : "Volviste al estilo anterior",
+                title: failed
+                    ? LaraL10n.text(en: "Could not undo everything", es: "No se pudo deshacer todo")
+                    : LaraL10n.text(en: "Previous style restored", es: "Volviste al estilo anterior"),
                 message: failed
-                    ? "Algunas partes necesitan otro intento. Lara conservó la instantánea."
-                    : "Lara recuperó el estado exacto que existía antes del último cambio.",
+                    ? LaraL10n.text(en: "Some parts need another attempt. Eagle kept the snapshot.", es: "Algunas partes necesitan otro intento. Eagle conservó la instantánea.")
+                    : LaraL10n.text(en: "Eagle recovered the exact state from before the latest change.", es: "Eagle recuperó el estado exacto que existía antes del último cambio."),
                 components: results
             )
             _ = PosterBoardWriter.refreshCollections()
@@ -882,8 +902,8 @@ final class CompleteStyleManager: ObservableObject {
         guard !isWorking else { return }
         guard laramgr.shared.sbxready else {
             lastResult = CompleteStyleRunResult(
-                title: "Lara necesita acceso",
-                message: "Prepara el acceso antes de restaurar.",
+                title: LaraL10n.text(en: "Eagle needs access", es: "Eagle necesita acceso"),
+                message: LaraL10n.text(en: "Prepare access before restoring.", es: "Prepara el acceso antes de restaurar."),
                 components: []
             )
             return
@@ -891,7 +911,7 @@ final class CompleteStyleManager: ObservableObject {
 
         isWorking = true
         progress = 0
-        stage = "Restaurando originales"
+        stage = LaraL10n.text(en: "Restoring originals", es: "Restaurando originales")
 
         Task {
             var results: [CompleteStyleComponentResult] = []
@@ -901,7 +921,9 @@ final class CompleteStyleManager: ObservableObject {
                 results.append(.init(
                     component: .passcode,
                     state: restored ? .applied : .skipped,
-                    detail: restored ? "Números originales restaurados" : "No había respaldo del código"
+                    detail: restored
+                        ? LaraL10n.text(en: "Original digits restored", es: "Números originales restaurados")
+                        : LaraL10n.text(en: "No passcode backup was available", es: "No había respaldo del código")
                 ))
             } catch {
                 results.append(.init(component: .passcode, state: .failed, detail: error.localizedDescription))
@@ -913,7 +935,9 @@ final class CompleteStyleManager: ObservableObject {
                 results.append(.init(
                     component: .card,
                     state: restored ? .applied : .skipped,
-                    detail: restored ? "Tarjeta original restaurada" : "No había respaldo de tarjeta"
+                    detail: restored
+                        ? LaraL10n.text(en: "Original card restored", es: "Tarjeta original restaurada")
+                        : LaraL10n.text(en: "No card backup was available", es: "No había respaldo de tarjeta")
                 ))
             } catch {
                 results.append(.init(component: .card, state: .failed, detail: error.localizedDescription))
@@ -926,7 +950,9 @@ final class CompleteStyleManager: ObservableObject {
             results.append(.init(
                 component: .wallpaper,
                 state: removed > 0 ? .applied : .skipped,
-                detail: removed > 0 ? "Se retiraron \(removed) fondos agregados por Estilos" : "No había fondos registrados"
+                detail: removed > 0
+                    ? LaraL10n.text(en: "Removed \(removed) wallpapers added by Styles", es: "Se retiraron \(removed) fondos agregados por Estilos")
+                    : LaraL10n.text(en: "No wallpapers were recorded", es: "No había fondos registrados")
             ))
             UserDefaults.standard.removeObject(forKey: wallpaperPathsKey)
             setActiveStyle(name: nil, packID: nil, visualPackID: nil)
@@ -934,11 +960,11 @@ final class CompleteStyleManager: ObservableObject {
             canUndo = false
 
             progress = 1
-            stage = "Originales restaurados"
+            stage = LaraL10n.text(en: "Originals restored", es: "Originales restaurados")
             isWorking = false
             lastResult = CompleteStyleRunResult(
-                title: "Restauración terminada",
-                message: "Lara restauró los respaldos disponibles. Puedes reiniciar la interfaz para ver todos los cambios.",
+                title: LaraL10n.text(en: "Restore complete", es: "Restauración terminada"),
+                message: LaraL10n.text(en: "Eagle restored the available backups. You can restart the interface to see every change.", es: "Eagle restauró los respaldos disponibles. Puedes reiniciar la interfaz para ver todos los cambios."),
                 components: results
             )
             _ = PosterBoardWriter.refreshCollections()
@@ -1071,12 +1097,16 @@ enum CompletePasscodeStyleEngine {
         }
         let paths = targetPaths(in: basePath).values.flatMap { $0 }
         guard !paths.isEmpty else {
-            throw CompleteStyleEngineError.undoPreparationFailed("el código")
+            throw CompleteStyleEngineError.undoPreparationFailed(
+                LaraL10n.text(en: "the passcode", es: "el código")
+            )
         }
 
         return try paths.map { path in
             guard let data = read(path, maximumSize: 8 * 1024 * 1024) else {
-                throw CompleteStyleEngineError.undoPreparationFailed("el código")
+                throw CompleteStyleEngineError.undoPreparationFailed(
+                    LaraL10n.text(en: "the passcode", es: "el código")
+                )
             }
             return CompleteStyleFileSnapshot(path: path, data: data)
         }
@@ -1097,7 +1127,9 @@ enum CompletePasscodeStyleEngine {
 
     static func restoreSnapshot(_ files: [CompleteStyleFileSnapshot]) throws -> Int {
         guard !files.isEmpty else {
-            throw CompleteStyleEngineError.undoPreparationFailed("el código")
+            throw CompleteStyleEngineError.undoPreparationFailed(
+                LaraL10n.text(en: "the passcode", es: "el código")
+            )
         }
         var restored = 0
         for file in files {
@@ -1485,7 +1517,10 @@ struct CompleteStylesView: View {
 
                 if manager.hasActiveStyle,
                    let visual = manager.activeVisualPack {
-                    activeStyle(visual, name: manager.activeStyleName ?? visual.name)
+                    activeStyle(
+                        visual,
+                        name: LaraL10n.localized(manager.activeStyleName ?? visual.name)
+                    )
                 }
 
                 NavigationLink {
@@ -1506,7 +1541,7 @@ struct CompleteStylesView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Lara Match")
+                            Text("Eagle Match")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
                             Text("Crea un estilo desde una foto o video")
@@ -1529,7 +1564,7 @@ struct CompleteStylesView: View {
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Colección Lara")
+                    Text("Colección Eagle")
                         .font(.title3.bold())
                     Text("Seis estilos completos. Ningún ajuste innecesario.")
                         .font(.subheadline)
@@ -1584,7 +1619,7 @@ struct CompleteStylesView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                Text("Los fondos y números provienen de la colección abierta de Nugget Wallpapers. Los diseños de tarjeta se generan en el dispositivo y Lara conserva los originales.")
+                Text("Los fondos y números provienen de la colección abierta de Nugget Wallpapers. Los diseños de tarjeta se generan en el dispositivo y Eagle conserva los originales.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1608,7 +1643,7 @@ struct CompleteStylesView: View {
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("Lara restaurará los respaldos del código y la tarjeta, y retirará los fondos agregados desde Estilos.")
+            Text("Eagle restaurará los respaldos del código y la tarjeta, y retirará los fondos agregados desde Estilos.")
         }
         .sheet(item: $manager.lastResult) { result in
             CompleteStyleResultView(result: result)
@@ -1619,7 +1654,7 @@ struct CompleteStylesView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Un aspecto completo, en un toque")
                 .font(.title2.bold())
-            Text("Elige una dirección visual. Lara coordina el fondo, el código y la tarjeta, y te muestra el resultado de cada parte.")
+            Text("Elige una dirección visual. Eagle coordina el fondo, el código y la tarjeta, y te muestra el resultado de cada parte.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1710,10 +1745,10 @@ private struct CompleteStyleCard: View {
             .frame(height: 132)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(pack.name)
+                Text(pack.localizedName)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(pack.tagline)
+                Text(pack.localizedTagline)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -1769,12 +1804,12 @@ private struct CompleteStyleDetailView: View {
                 .disabled(!(includeWallpaper || includePasscode || includeCard))
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(pack.name)
+                    Text(pack.localizedName)
                         .font(.largeTitle.bold())
-                    Text(pack.tagline)
+                    Text(pack.localizedTagline)
                         .font(.title3.weight(.medium))
                         .foregroundStyle(pack.tertiary.color)
-                    Text(pack.summary)
+                    Text(pack.localizedSummary)
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1800,7 +1835,7 @@ private struct CompleteStyleDetailView: View {
                         Divider().padding(.leading, 50)
                         optionToggle(
                             "Código",
-                            detail: manager.passcodeAvailable ? pack.passcodeName : "Se comprobará al preparar Lara",
+                            detail: manager.passcodeAvailable ? pack.passcodeName : "Se comprobará al preparar Eagle",
                             systemImage: CompleteStyleComponent.passcode.systemImage,
                             isOn: $includePasscode,
                             available: mgr.sbxready ? manager.passcodeAvailable : true
@@ -1855,7 +1890,9 @@ private struct CompleteStyleDetailView: View {
                         } else {
                             Image(systemName: "sparkles")
                         }
-                        Text(manager.isWorking ? "Aplicando \(pack.name)…" : "Aplicar estilo")
+                        Text(manager.isWorking
+                            ? LaraL10n.text(en: "Applying \(pack.localizedName)…", es: "Aplicando \(pack.localizedName)…")
+                            : LaraL10n.text(en: "Apply style", es: "Aplicar estilo"))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -1871,13 +1908,13 @@ private struct CompleteStyleDetailView: View {
             .padding(.bottom, 40)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(pack.name)
+        .navigationTitle(pack.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { manager.refreshCompatibility() }
         .onChange(of: mgr.sbxready) { _ in manager.refreshCompatibility() }
         .fullScreenCover(isPresented: $showLivePreview) {
             CompleteStyleLivePreviewView(
-                title: pack.name,
+                title: pack.localizedName,
                 wallpaperPack: includeWallpaper ? pack : nil,
                 passcodePack: includePasscode ? pack : nil,
                 cardPack: includeCard ? pack : nil
@@ -1898,7 +1935,7 @@ private struct CompleteStyleDetailView: View {
             Divider().padding(.leading, 52)
             componentRow(.passcode, value: pack.passcodeName)
             Divider().padding(.leading, 52)
-            componentRow(.card, value: "Diseño Lara")
+            componentRow(.card, value: LaraL10n.text(en: "Eagle design", es: "Diseño Eagle"))
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
@@ -1935,8 +1972,8 @@ private struct CompleteStyleDetailView: View {
                     .foregroundStyle(pack.tertiary.color)
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.subheadline.weight(.medium))
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(LaraL10n.localized(title)).font(.subheadline.weight(.medium))
+                    Text(LaraL10n.localized(detail)).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -1949,7 +1986,7 @@ private struct CompleteStyleDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Créditos")
                 .font(.footnote.weight(.semibold))
-            Text("Fondo \(pack.wallpaperName) por \(pack.wallpaperAuthor). Código \(pack.passcodeName) por \(pack.passcodeAuthor). Curaduría y tarjeta por Lara.")
+            Text("Fondo \(pack.wallpaperName) por \(pack.wallpaperAuthor). Código \(pack.passcodeName) por \(pack.passcodeAuthor). Curaduría y tarjeta por Eagle.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             Link(
@@ -1999,17 +2036,13 @@ private struct CompleteStylePreview: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(Color.black)
 
-            AsyncImage(url: pack.wallpaperPreviewURL) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    LinearGradient(
-                        colors: [pack.primary.color, pack.secondary.color],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-            }
+            LaraRemoteMediaPreview(
+                url: pack.wallpaperPreviewURL,
+                animated: false,
+                contentMode: .fill,
+                showsRetry: false,
+                background: pack.secondary.color
+            )
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding(4)
 

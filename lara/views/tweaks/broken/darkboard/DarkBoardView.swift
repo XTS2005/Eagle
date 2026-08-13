@@ -183,7 +183,7 @@ struct DarkBoardView: View {
                 let errors = try manager.applyThemes()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     if errors.isEmpty {
-                        alert = DarkBoardAlert(message: "Icons applied. Respring now. After reopening lara, initialize SBX again so the post-respring icon fixup can restore the original bundle files.")
+                        alert = DarkBoardAlert(message: "Icons applied. Respring now. After reopening Eagle, initialize SBX again so the post-respring icon fixup can restore the original bundle files.")
                     } else {
                         alert = DarkBoardAlert(message: "Applied with some errors:\n\n" + errors.joined(separator: "\n\n"))
                     }

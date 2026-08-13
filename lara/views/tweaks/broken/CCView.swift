@@ -15,7 +15,7 @@ struct CCView: View {
                 } header: {
                     Text("RespringCC")
                 } footer: {
-                    Text("Uses lara's respring helper.")
+                    Text("Uses Eagle's respring helper.")
                 }
             }
             .navigationTitle("Control Center")

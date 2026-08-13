@@ -80,7 +80,7 @@
 		A1B2C3D4E5F60002A1B2C3D4 /* lara/kexploit/ota.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lara/kexploit/ota.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003A1B2C3D4 /* lara/kexploit/screentime.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = lara/kexploit/screentime.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60004A1B2C3D4 /* lara/kexploit/screentime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lara/kexploit/screentime.h; sourceTree = "<group>"; };
-		CC1C8B392F71DF9C00206982 /* lara.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lara.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC1C8B392F71DF9C00206982 /* Eagle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Eagle.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC6842DF2F8311C300B08EB0 /* libSystem.B.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libSystem.B.tbd; path = usr/lib/libSystem.B.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -227,7 +227,7 @@
 		CC1C8B3A2F71DF9C00206982 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CC1C8B392F71DF9C00206982 /* lara.app */,
+				CC1C8B392F71DF9C00206982 /* Eagle.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -279,7 +279,7 @@
 			packageProductDependencies = (
 			);
 			productName = lara;
-			productReference = CC1C8B392F71DF9C00206982 /* lara.app */;
+			productReference = CC1C8B392F71DF9C00206982 /* Eagle.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -298,10 +298,11 @@
 				};
 			};
 			buildConfigurationList = CC1C8B342F71DF9C00206982 /* Build configuration list for PBXProject "lara" */;
-			developmentRegion = en;
+			developmentRegion = es;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				es,
 				Base,
 			);
 			mainGroup = CC1C8B302F71DF9C00206982;
@@ -519,7 +520,8 @@
 					"$(SRCROOT)/lara/kexploit",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lara Custom";
+				INFOPLIST_KEY_CFBundleDisplayName = Eagle;
+				INFOPLIST_KEY_CFBundleName = Eagle;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -538,7 +540,7 @@
 				);
 				MARKETING_VERSION = 0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leonardobaptiste.laracustom;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Eagle;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -572,7 +574,8 @@
 					"$(SRCROOT)/lara/kexploit",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lara Custom";
+				INFOPLIST_KEY_CFBundleDisplayName = Eagle;
+				INFOPLIST_KEY_CFBundleName = Eagle;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -591,7 +594,7 @@
 				);
 				MARKETING_VERSION = 0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leonardobaptiste.laracustom;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Eagle;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

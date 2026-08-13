@@ -1,5 +1,4 @@
 import SwiftUI
-import WebKit
 
 struct CompleteStyleLivePreviewView: View {
     let title: String
@@ -79,7 +78,9 @@ struct CompleteStyleLivePreviewView: View {
                             }
                         } label: {
                             Label(
-                                mgr.sbxready ? "Aplicar esta selección" : "Prepara Lara para aplicar",
+                                mgr.sbxready
+                                    ? LaraL10n.text(en: "Apply this selection", es: "Aplicar esta selección")
+                                    : LaraL10n.text(en: "Prepare Eagle to apply", es: "Prepara Eagle para aplicar"),
                                 systemImage: mgr.sbxready ? "sparkles" : "lock.fill"
                             )
                             .frame(maxWidth: .infinity)
@@ -90,7 +91,7 @@ struct CompleteStyleLivePreviewView: View {
                     }
 
                     Label(
-                        "Lara guarda el estado anterior para que puedas deshacerlo.",
+                        "Eagle guarda el estado anterior para que puedas deshacerlo.",
                         systemImage: "arrow.uturn.backward.circle.fill"
                     )
                     .font(.footnote)
@@ -136,7 +137,13 @@ private struct CompleteWallpaperLivePage: View {
                 RoundedRectangle(cornerRadius: 42, style: .continuous)
                     .fill(.black)
 
-                CompleteStyleAnimatedRemoteView(url: pack.wallpaperPreviewURL)
+                LaraRemoteMediaPreview(
+                    url: pack.wallpaperPreviewURL,
+                    animated: true,
+                    contentMode: .fill,
+                    showsRetry: true,
+                    background: .black
+                )
                     .clipShape(RoundedRectangle(cornerRadius: 37, style: .continuous))
                     .padding(5)
 
@@ -256,55 +263,13 @@ private struct CompleteCardLivePage: View {
             VStack(spacing: 3) {
                 Label("Render final de Wallet", systemImage: "creditcard.fill")
                     .font(.headline)
-                Text("Generado localmente por Lara")
+                Text("Generado localmente por Eagle")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 18)
-    }
-}
-
-private struct CompleteStyleAnimatedRemoteView: UIViewRepresentable {
-    let url: URL
-
-    final class Coordinator {
-        var loadedURL: URL?
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.suppressesIncrementalRendering = false
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
-        webView.scrollView.isScrollEnabled = false
-        webView.scrollView.isUserInteractionEnabled = false
-        load(url, in: webView)
-        context.coordinator.loadedURL = url
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.loadedURL != url else { return }
-        load(url, in: webView)
-        context.coordinator.loadedURL = url
-    }
-
-    private func load(_ url: URL, in webView: WKWebView) {
-        let escaped = url.absoluteString
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-        let html = """
-        <html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-        <style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#000}img{width:100%;height:100%;object-fit:cover}</style>
-        </head><body><img src="\(escaped)"></body></html>
-        """
-        webView.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
     }
 }
 
@@ -335,7 +300,7 @@ struct CompleteStyleMixerView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Tres piezas. Una identidad.")
                         .font(.title2.bold())
-                    Text("Mezcla solamente lo que importa. Lara mantiene la aplicación coordinada y reversible.")
+                    Text("Mezcla solamente lo que importa. Eagle mantiene la aplicación coordinada y reversible.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -425,7 +390,7 @@ struct CompleteStyleMixerView: View {
         .onAppear { manager.refreshCompatibility() }
         .fullScreenCover(isPresented: $showLivePreview) {
             CompleteStyleLivePreviewView(
-                title: "Mi combinación",
+                title: LaraL10n.text(en: "My Mix", es: "Mi combinación"),
                 wallpaperPack: wallpaperPack,
                 passcodePack: passcodePack,
                 cardPack: cardPack
@@ -446,13 +411,13 @@ struct CompleteStyleMixerView: View {
             HStack(alignment: .bottom, spacing: -24) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 27, style: .continuous).fill(.black)
-                    AsyncImage(url: wallpaperPack.wallpaperPreviewURL) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
-                        } else {
-                            wallpaperPack.secondary.color
-                        }
-                    }
+                    LaraRemoteMediaPreview(
+                        url: wallpaperPack.wallpaperPreviewURL,
+                        animated: false,
+                        contentMode: .fill,
+                        showsRetry: false,
+                        background: wallpaperPack.secondary.color
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .padding(4)
                 }
@@ -501,9 +466,9 @@ struct CompleteStyleMixerView: View {
                     selection.wrappedValue = pack.id
                 } label: {
                     if pack.id == selected.id {
-                        Label(pack.name, systemImage: "checkmark")
+                        Label(pack.localizedName, systemImage: "checkmark")
                     } else {
-                        Text(pack.name)
+                        Text(pack.localizedName)
                     }
                 }
             }
@@ -522,7 +487,7 @@ struct CompleteStyleMixerView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(selected.name)
+                Text(selected.localizedName)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                 Image(systemName: "chevron.up.chevron.down")
@@ -538,7 +503,7 @@ struct CompleteStyleMixerView: View {
         switch component {
         case .wallpaper: return pack.wallpaperName
         case .passcode: return pack.passcodeName
-        case .card: return "Diseño Lara"
+        case .card: return LaraL10n.text(en: "Eagle design", es: "Diseño Eagle")
         }
     }
 

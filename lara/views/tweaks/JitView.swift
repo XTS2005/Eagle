@@ -102,7 +102,7 @@ struct JitView: View {
                     Text("Only works on apps with the `get-task-allow` entitlement.")
                 }
             }
-            .navigationTitle("LaraJIT")
+            .navigationTitle("EagleJIT")
         }
         .onAppear {
             if mgr.sbxready {

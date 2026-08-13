@@ -122,7 +122,7 @@ struct SettingsView: View {
                         }
                     } else {
                         Button("Remove Kernelcache", action: {
-                            Alertinator.shared.alert(title: "Clear Kernelcache Data?", body: "This will delete all kernelcache data and remove saved offsets. You will have to refetch the data to use lara again.", actionLabel: "Confirm", action: {
+                            Alertinator.shared.alert(title: "Clear Kernelcache Data?", body: "This will delete all kernelcache data and remove saved offsets. You will have to refetch the data to use Eagle again.", actionLabel: "Confirm", action: {
                                 clearKcacheData()
                             })
                         })
@@ -216,7 +216,7 @@ struct SettingsView: View {
                         }
                     if isIOS16() {
                         Toggle("Keep SpringBoard RemoteCall alive in background", isOn: $keepSpringBoardRemoteCallAliveIOS16)
-                        Text("Warning: If Lara exits while RemoteCall is active, SpringBoard may respring.")
+                        Text("Warning: If Eagle exits while RemoteCall is active, SpringBoard may respring.")
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(.red)
 

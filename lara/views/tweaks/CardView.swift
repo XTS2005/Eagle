@@ -213,7 +213,7 @@ struct CardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Copia de seguridad automática", systemImage: "checkmark.shield")
                         .font(.footnote.weight(.semibold))
-                    Text("Lara conserva el archivo original antes del primer cambio para que puedas restaurarlo.")
+                    Text("Eagle conserva el archivo original antes del primer cambio para que puedas restaurarlo.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -283,7 +283,9 @@ struct CardView: View {
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text(currentcardnum.isEmpty ? "Terminación actual: ninguna" : "Terminación actual: \(currentcardnum)")
+            Text(currentcardnum.isEmpty
+                ? LaraL10n.text(en: "Current ending: none", es: "Terminación actual: ninguna")
+                : LaraL10n.text(en: "Current ending: \(currentcardnum)", es: "Terminación actual: \(currentcardnum)"))
         }
         .sheet(isPresented: $showimgpicker) {
             ImagePicker(imageData: $pickedimgdata)
@@ -464,7 +466,7 @@ struct CardView: View {
 
     private func applyreplace(card: carditem, imgdata: Data) {
         guard let image = UIImage(data: imgdata) else {
-            status = "No se pudo leer esa imagen."
+            status = LaraL10n.text(en: "That image could not be read.", es: "No se pudo leer esa imagen.")
             return
         }
 
@@ -483,7 +485,7 @@ struct CardView: View {
         }
 
         guard let data = payload else {
-            status = "No se pudo preparar la imagen."
+            status = LaraL10n.text(en: "The image could not be prepared.", es: "No se pudo preparar la imagen.")
             return
         }
 
@@ -491,9 +493,9 @@ struct CardView: View {
         if writeprefersbx(path: card.imgpath, data: data) {
             clearcache(for: card)
             promptforrespring = true
-            status = "La tarjeta se actualizó. ¿Quieres reiniciar la interfaz ahora?"
+            status = LaraL10n.text(en: "The card was updated. Restart the interface now?", es: "La tarjeta se actualizó. ¿Quieres reiniciar la interfaz ahora?")
         } else {
-            status = "No se pudo actualizar la tarjeta."
+            status = LaraL10n.text(en: "The card could not be updated.", es: "No se pudo actualizar la tarjeta.")
         }
     }
 
@@ -509,19 +511,19 @@ struct CardView: View {
     private func restoreimg(card: carditem) {
         let backuppath = card.imgpath + ".backup"
         guard FileManager.default.fileExists(atPath: backuppath) else {
-            status = "Todavía no existe una copia original para esta tarjeta."
+            status = LaraL10n.text(en: "There is no original backup for this card yet.", es: "Todavía no existe una copia original para esta tarjeta.")
             return
         }
         guard let data = readprefersbx(path: backuppath, maxsize: 16 * 1024 * 1024) else {
-            status = "No se pudo leer la copia original."
+            status = LaraL10n.text(en: "The original backup could not be read.", es: "No se pudo leer la copia original.")
             return
         }
         if writeprefersbx(path: card.imgpath, data: data) {
             clearcache(for: card)
             promptforrespring = true
-            status = "Se restauró el diseño original. ¿Quieres reiniciar la interfaz ahora?"
+            status = LaraL10n.text(en: "The original design was restored. Restart the interface now?", es: "Se restauró el diseño original. ¿Quieres reiniciar la interfaz ahora?")
         } else {
-            status = "No se pudo restaurar el diseño original."
+            status = LaraL10n.text(en: "The original design could not be restored.", es: "No se pudo restaurar el diseño original.")
         }
     }
 
@@ -563,7 +565,7 @@ struct CardView: View {
 
     private func applycardnum(card: carditem, newsuffix: String) {
         guard var json = (readpassjson(for: card)).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) else {
-            status = "No se pudo leer la información de la tarjeta."
+            status = LaraL10n.text(en: "The card information could not be read.", es: "No se pudo leer la información de la tarjeta.")
             return
         }
         backuppassjsonifneeded(card: card)
@@ -574,34 +576,34 @@ struct CardView: View {
             json["primaryAccountSuffix"] = trimmed
         }
         guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else {
-            status = "No se pudo preparar la información de la tarjeta."
+            status = LaraL10n.text(en: "The card information could not be prepared.", es: "No se pudo preparar la información de la tarjeta.")
             return
         }
         if writeprefersbx(path: passjsonpath(for: card), data: data) {
             clearcache(for: card)
             currentcardnum = trimmed
-            status = "La terminación se actualizó."
+            status = LaraL10n.text(en: "The card ending was updated.", es: "La terminación se actualizó.")
         } else {
-            status = "No se pudo actualizar la terminación."
+            status = LaraL10n.text(en: "The card ending could not be updated.", es: "No se pudo actualizar la terminación.")
         }
     }
 
     private func restorepassjson(card: carditem) {
         let backup = passjsonbackuppath(for: card)
         guard FileManager.default.fileExists(atPath: backup) else {
-            status = "No existe una copia original de la información de esta tarjeta."
+            status = LaraL10n.text(en: "There is no original information backup for this card.", es: "No existe una copia original de la información de esta tarjeta.")
             return
         }
         guard let data = readprefersbx(path: backup, maxsize: 512 * 1024) else {
-            status = "No se pudo leer la copia original."
+            status = LaraL10n.text(en: "The original backup could not be read.", es: "No se pudo leer la copia original.")
             return
         }
         if writeprefersbx(path: passjsonpath(for: card), data: data) {
             clearcache(for: card)
             currentcardnum = readcardnum(for: card) ?? ""
-            status = "Se restauró la terminación original."
+            status = LaraL10n.text(en: "The original card ending was restored.", es: "Se restauró la terminación original.")
         } else {
-            status = "No se pudo restaurar la terminación original."
+            status = LaraL10n.text(en: "The original card ending could not be restored.", es: "No se pudo restaurar la terminación original.")
         }
     }
 
