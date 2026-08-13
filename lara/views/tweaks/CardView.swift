@@ -10,8 +10,8 @@ import PDFKit
 import UniformTypeIdentifiers
 
 enum replaceoption: String, CaseIterable, Identifiable {
-    case photos = "Photos"
-    case files = "Files"
+    case photos = "Fotos"
+    case files = "Archivos"
     
     var id: String { self.rawValue }
 }
@@ -53,155 +53,198 @@ struct CardView: View {
         let oneditnum: (carditem) -> Void
         let previewimg: (carditem) -> UIImage?
 
-        @State private var selected: replaceoption? = nil
-
         var body: some View {
-            Section(header: Text(card.bgfilename)) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
+                Group {
                     if let img = previewimg(card) {
                         Image(uiImage: img)
                             .resizable()
-                            .scaledToFit()
-                            .frame(width: 140, height: 90)
-                            .cornerRadius(8)
+                            .scaledToFill()
                     } else {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 140, height: 90)
-                            .overlay(
-                                Image(systemName: "creditcard.fill")
-                                    .foregroundColor(.secondary)
-                            )
+                        ZStack {
+                            Color(uiColor: .tertiarySystemFill)
+                            Image(systemName: "creditcard.fill")
+                                .font(.system(size: 38, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1.586, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(card.bundlename)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Tarjeta de Wallet")
+                        .font(.headline)
+                    Text("Lista para personalizar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 10) {
+                    Menu {
+                        Button {
+                            onreplace(card, .photos)
+                        } label: {
+                            Label("Elegir de Fotos", systemImage: "photo.on.rectangle")
+                        }
+
+                        Button {
+                            onreplace(card, .files)
+                        } label: {
+                            Label("Elegir de Archivos", systemImage: "folder")
+                        }
+                    } label: {
+                        Label("Cambiar diseño", systemImage: "photo.badge.plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Menu {
+                        Button {
+                            oneditnum(card)
+                        } label: {
+                            Label("Editar terminación", systemImage: "number")
+                        }
+
+                        Button(role: .destructive) {
+                            onrestore(card)
+                        } label: {
+                            Label("Restaurar original", systemImage: "arrow.uturn.backward")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
                             .font(.headline)
-
-                        Text(card.imgpath)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
+                            .frame(width: 46, height: 46)
                     }
-
-                    Spacer()
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Más opciones")
                 }
-
-                Picker("Replace", selection: $selected) {
-                    Text("Select... ").tag(replaceoption?.none)
-                    ForEach(replaceoption.allCases) { option in
-                        Text(option.rawValue).tag(Optional(option))
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-                .onChange(of: selected) { option in
-                    guard let option = option else { return }
-                    onreplace(card, option)
-                    selected = nil
-                }
-
-                Button("Restore") {
-                    onrestore(card)
-                }
-                .foregroundColor(.red)
-
-                Button("Edit Card Number") {
-                    oneditnum(card)
-                }
+            }
+            .padding(16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
             }
         }
     }
     
     var body: some View {
-        List {
-            Section {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tu tarjeta, con tu estilo")
+                        .font(.title2.bold())
+                    Text("Cambia la imagen que ya usa Wallet sin añadir capas, animaciones ni efectos innecesarios.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 4)
+
+                if !mgr.sbxready {
+                    LaraAccessView(compact: true)
+                } else if working {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Buscando tarjetas…")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                } else if cards.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "creditcard")
+                            .font(.system(size: 34, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text("No encontramos tarjetas")
+                            .font(.headline)
+                        Text("Comprueba que tengas una tarjeta compatible en Wallet y vuelve a buscar.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Buscar de nuevo") {
+                            refresh()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                    .padding(.horizontal, 20)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                } else {
+                    ForEach(cards) { card in
+                        cardrow(
+                            card: card,
+                            onreplace: { card, option in
+                                pendingcard = card
+                                switch option {
+                                case .photos:
+                                    showimgpicker = true
+                                case .files:
+                                    showdocpicker = true
+                                }
+                            },
+                            onrestore: { card in
+                                pendingrestorecard = card
+                                restoreimg(card: card)
+                            },
+                            oneditnum: { card in
+                                pendingnumcard = card
+                                currentcardnum = readcardnum(for: card) ?? ""
+                                cardnuminput = currentcardnum
+                                shownumbereditor = true
+                            },
+                            previewimg: previewimg
+                        )
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Copia de seguridad automática", systemImage: "checkmark.shield")
+                        .font(.footnote.weight(.semibold))
+                    Text("Lara conserva el archivo original antes del primer cambio para que puedas restaurarlo.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Link("Idea original de drkm9743", destination: URL(string: "https://github.com/drkm9743")!)
+                        .font(.footnote.weight(.medium))
+                        .padding(.top, 2)
+                }
+                .padding(.horizontal, 4)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle("Tarjetas")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     refresh()
                 } label: {
                     if working {
-                        HStack {
-                            ProgressView()
-                            Text("Scanning...")
-                        }
+                        ProgressView()
                     } else {
-                        Text("Refresh")
+                        Image(systemName: "arrow.clockwise")
                     }
                 }
-                .disabled(working)
-            } header: {
-                Text("Actions")
-            } footer: {
-                Text("Uses SBX first and falls back to VFS for overwrite.\nGet card images [here](https://dynalist.io/d/ldKY6rbMR3LPnWz4fTvf_HCh).")
-            }
-
-            if cards.isEmpty {
-                Section {
-                    Text("No cards found.")
-                        .foregroundColor(.secondary)
-                }
-            } else {
-                ForEach(cards) { card in
-                    cardrow(
-                        card: card,
-                        onreplace: { card, option in
-                            pendingcard = card
-                            switch option {
-                            case .photos:
-                                showimgpicker = true
-                            case .files:
-                                showdocpicker = true
-                            }
-                        },
-                        onrestore: { card in
-                            pendingrestorecard = card
-                            restoreimg(card: card)
-                        },
-                        oneditnum: { card in
-                            pendingnumcard = card
-                            currentcardnum = readcardnum(for: card) ?? ""
-                            cardnuminput = currentcardnum
-                            shownumbereditor = true
-                        },
-                        previewimg: previewimg
-                    )
-                }
-
-                Section {
-                    HStack(alignment: .top) {
-                        AsyncImage(url: URL(string: "https://github.com/drkm9743.png")) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-
-                        VStack(alignment: .leading) {
-                            Text("drkm9743")
-                                .font(.headline)
-
-                            Text("Inspiration.")
-                                .font(.subheadline)
-                                .foregroundColor(Color.secondary)
-                        }
-
-                        Spacer()
-                    }
-                    .onTapGesture {
-                        if let url = URL(string: "https://github.com/drkm9743"),
-                           UIApplication.shared.canOpenURL(url) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                } header: {
-                    Text("Credits")
-                }
+                .disabled(working || !mgr.sbxready)
+                .accessibilityLabel("Buscar tarjetas")
             }
         }
-        .navigationTitle("Card Overwrite")
-        .alert("Status", isPresented: Binding(
+        .alert("Tarjetas", isPresented: Binding(
             get: { status != nil },
             set: { presented in
                 if !presented {
@@ -211,36 +254,36 @@ struct CardView: View {
             }
         )) {
             if promptforrespring {
-                Button("Respring") {
+                Button("Reiniciar interfaz") {
                     status = nil
                     promptforrespring = false
                     mgr.respring()
                 }
-                Button("Later", role: .cancel) {
+                Button("Más tarde", role: .cancel) {
                     status = nil
                     promptforrespring = false
                 }
             } else {
-                Button("OK") { status = nil }
+                Button("Aceptar") { status = nil }
             }
         } message: {
             Text(status ?? "")
         }
-        .alert("Edit Card Number", isPresented: $shownumbereditor) {
-            TextField("Suffix", text: $cardnuminput)
-            Button("Save") {
+        .alert("Editar terminación", isPresented: $shownumbereditor) {
+            TextField("Terminación", text: $cardnuminput)
+            Button("Guardar") {
                 if let card = pendingnumcard {
                     applycardnum(card: card, newsuffix: cardnuminput)
                 }
             }
             if let card = pendingnumcard, haspassjsonbackup(card: card) {
-                Button("Restore Original", role: .destructive) {
+                Button("Restaurar original", role: .destructive) {
                     restorepassjson(card: card)
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancelar", role: .cancel) {}
         } message: {
-            Text(currentcardnum.isEmpty ? "Current suffix: (none)" : "Current suffix: \(currentcardnum)")
+            Text(currentcardnum.isEmpty ? "Terminación actual: ninguna" : "Terminación actual: \(currentcardnum)")
         }
         .sheet(isPresented: $showimgpicker) {
             ImagePicker(imageData: $pickedimgdata)
@@ -255,7 +298,14 @@ struct CardView: View {
             applyreplace(card: card, imgdata: data)
         }
         .onAppear {
-            refresh()
+            if mgr.sbxready {
+                refresh()
+            }
+        }
+        .onChange(of: mgr.sbxready) { ready in
+            if ready {
+                refresh()
+            }
         }
     }
 
@@ -414,7 +464,7 @@ struct CardView: View {
 
     private func applyreplace(card: carditem, imgdata: Data) {
         guard let image = UIImage(data: imgdata) else {
-            status = "Invalid image data"
+            status = "No se pudo leer esa imagen."
             return
         }
 
@@ -433,7 +483,7 @@ struct CardView: View {
         }
 
         guard let data = payload else {
-            status = "Failed to encode image"
+            status = "No se pudo preparar la imagen."
             return
         }
 
@@ -441,9 +491,9 @@ struct CardView: View {
         if writeprefersbx(path: card.imgpath, data: data) {
             clearcache(for: card)
             promptforrespring = true
-            status = "Card updated. Respring now?"
+            status = "La tarjeta se actualizó. ¿Quieres reiniciar la interfaz ahora?"
         } else {
-            status = "Failed to overwrite card"
+            status = "No se pudo actualizar la tarjeta."
         }
     }
 
@@ -459,19 +509,19 @@ struct CardView: View {
     private func restoreimg(card: carditem) {
         let backuppath = card.imgpath + ".backup"
         guard FileManager.default.fileExists(atPath: backuppath) else {
-            status = "No backup found"
+            status = "Todavía no existe una copia original para esta tarjeta."
             return
         }
         guard let data = readprefersbx(path: backuppath, maxsize: 16 * 1024 * 1024) else {
-            status = "Failed to read backup"
+            status = "No se pudo leer la copia original."
             return
         }
         if writeprefersbx(path: card.imgpath, data: data) {
             clearcache(for: card)
             promptforrespring = true
-            status = "Restored card image. Respring now?"
+            status = "Se restauró el diseño original. ¿Quieres reiniciar la interfaz ahora?"
         } else {
-            status = "Restore failed"
+            status = "No se pudo restaurar el diseño original."
         }
     }
 
@@ -513,7 +563,7 @@ struct CardView: View {
 
     private func applycardnum(card: carditem, newsuffix: String) {
         guard var json = (readpassjson(for: card)).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) else {
-            status = "Failed to read pass.json"
+            status = "No se pudo leer la información de la tarjeta."
             return
         }
         backuppassjsonifneeded(card: card)
@@ -524,34 +574,34 @@ struct CardView: View {
             json["primaryAccountSuffix"] = trimmed
         }
         guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else {
-            status = "Failed to encode pass.json"
+            status = "No se pudo preparar la información de la tarjeta."
             return
         }
         if writeprefersbx(path: passjsonpath(for: card), data: data) {
             clearcache(for: card)
             currentcardnum = trimmed
-            status = "Card number updated"
+            status = "La terminación se actualizó."
         } else {
-            status = "Failed to update pass.json"
+            status = "No se pudo actualizar la terminación."
         }
     }
 
     private func restorepassjson(card: carditem) {
         let backup = passjsonbackuppath(for: card)
         guard FileManager.default.fileExists(atPath: backup) else {
-            status = "No pass.json backup"
+            status = "No existe una copia original de la información de esta tarjeta."
             return
         }
         guard let data = readprefersbx(path: backup, maxsize: 512 * 1024) else {
-            status = "Failed to read backup"
+            status = "No se pudo leer la copia original."
             return
         }
         if writeprefersbx(path: passjsonpath(for: card), data: data) {
             clearcache(for: card)
             currentcardnum = readcardnum(for: card) ?? ""
-            status = "Restored pass.json"
+            status = "Se restauró la terminación original."
         } else {
-            status = "Failed to restore pass.json"
+            status = "No se pudo restaurar la terminación original."
         }
     }
 

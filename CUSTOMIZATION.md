@@ -9,25 +9,31 @@ modified, and pushes to the `upstream` remote are disabled intentionally.
 - Bundle identifier: `com.leonardobaptiste.laracustom`
 - Xcode scheme: `lara`
 
-## Removing options
+## Current experience
 
-Visible features are controlled from
-`lara/config/LaraCustomProfile.swift`. Add a `LaraFeature` case to
-`disabledFeatures` to hide it. Keeping the feature's implementation in the tree
-makes upstream merges easier and lets the option be restored later.
+The original tab interface is no longer mounted. `LaraHomeView` is the only
+root experience and intentionally exposes two destinations:
 
-The permanently disabled `DarkBoard` row was removed from the custom menu
-because it did not expose a working action.
+- **Animated wallpapers** — imports a video of up to 12 seconds, creates a
+  Pocket Poster-compatible descriptor, and installs it after Lara has explicit
+  sandbox access.
+- **Cards** — keeps Lara's existing Wallet card discovery, backup, overwrite,
+  restore, and card-number-suffix engine behind a simpler interface.
+
+Legacy feature views remain in the source tree as dormant implementation
+references, but they are not reachable from the app. This keeps upstream code
+available as an engine for future features without exposing unused options to
+the user.
 
 ## Adding a tweak
 
 1. Identify the minimum capability it needs: `exploit`, `vfs`, `sandbox`, or
    `remoteCall`.
-2. Add a case to `LaraFeature` and declare its `supportedCapabilityPaths`.
-3. Implement the operation in its own view or service. Reuse `laramgr` for
-   exploit and filesystem primitives.
-4. Add the navigation row to `TweaksView` and preserve Lara's existing readiness
-   checks before enabling it.
+2. Implement the operation in its own focused view or service. Reuse `laramgr`
+   for exploit and filesystem primitives.
+3. Add one intentional feature card to `LaraHomeView`; do not restore the old
+   toolbox-style navigation.
+4. Use `LaraAccessView` before any operation that needs sandbox access.
 5. Test failure, cancellation, retry, and unsupported-device paths in addition
    to the successful path.
 
