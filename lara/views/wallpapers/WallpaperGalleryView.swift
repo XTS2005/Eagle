@@ -583,7 +583,11 @@ enum TendiesInstaller {
 
     private static func extract(_ archive: ZipArchive, to root: URL) throws {
         let fm = FileManager.default
-        let safeRoot = root.standardizedFileURL.path + "/"
+        let rawRootPath = root.standardizedFileURL.path
+        let rootPath = rawRootPath.count > 1 && rawRootPath.hasSuffix("/")
+            ? String(rawRootPath.dropLast())
+            : rawRootPath
+        let safeRoot = rootPath + "/"
 
         for entry in archive.entries {
             let normalized = entry.path.replacingOccurrences(of: "\\", with: "/")
@@ -599,7 +603,7 @@ enum TendiesInstaller {
             }
 
             let output = root.appendingPathComponent(normalized).standardizedFileURL
-            guard output.path == root.path || output.path.hasPrefix(safeRoot) else {
+            guard output.path == rootPath || output.path.hasPrefix(safeRoot) else {
                 laramgr.shared.logmsg("(wallpaper) ignored archive entry outside temporary folder: \(entry.path)")
                 continue
             }
