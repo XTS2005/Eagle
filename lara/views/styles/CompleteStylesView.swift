@@ -1497,7 +1497,6 @@ struct CompleteStylesView: View {
     @ObservedObject private var manager = CompleteStyleManager.shared
     @ObservedObject private var mgr = laramgr.shared
     @State private var confirmRestore = false
-    @State private var showAdvanced = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -1585,39 +1584,41 @@ struct CompleteStylesView: View {
                     }
                 }
 
-                DisclosureGroup(isExpanded: $showAdvanced) {
-                    NavigationLink {
-                        CompleteStyleMixerView()
-                    } label: {
-                        HStack(spacing: 13) {
-                            Image(systemName: "slider.horizontal.2.square")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.indigo)
-                                .frame(width: 42, height: 42)
-                                .background(Color.indigo.opacity(0.11), in: RoundedRectangle(cornerRadius: 12))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Crear combinación")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Text("Mezcla fondo, código y tarjeta")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.top, 12)
-                    }
-                    .buttonStyle(.plain)
+                NavigationLink {
+                    CompleteStyleMixerView()
                 } label: {
-                    Label("Crear algo propio", systemImage: "wand.and.sparkles")
-                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 13) {
+                        Image(systemName: "wand.and.sparkles")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.indigo)
+                            .frame(width: 44, height: 44)
+                            .background(Color.indigo.opacity(0.11), in: RoundedRectangle(cornerRadius: 13))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Crear algo propio")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Mezcla fondo, código y tarjeta")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .padding(16)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Color.indigo.opacity(0.10), lineWidth: 1)
+                }
+                .buttonStyle(.plain)
 
                 Text("Los fondos y números provienen de la colección abierta de Nugget Wallpapers. Los diseños de tarjeta se generan en el dispositivo y Eagle conserva los originales.")
                     .font(.footnote)
