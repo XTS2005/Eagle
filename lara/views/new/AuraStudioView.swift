@@ -296,8 +296,8 @@ struct AuraStudioView: View {
                     .fill(activeFlagsRaw == 0 ? Color.secondary.opacity(0.5) : Color.green)
                     .frame(width: 8, height: 8)
                 Text(activeFlagsRaw == 0
-                     ? LaraL10n.text(en: "No active verified aura", es: "Sin aura activa verificada")
-                     : LaraL10n.text(en: "Last Apply installed \(activeModuleCount) surfaces", es: "El último Apply instaló \(activeModuleCount) superficies"))
+                     ? LaraL10n.text(en: "No verified Apply saved", es: "Sin Apply verificado guardado")
+                     : LaraL10n.text(en: "Last Apply verified \(activeModuleCount) surfaces", es: "El último Apply verificó \(activeModuleCount) superficies"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -368,19 +368,19 @@ struct AuraStudioView: View {
             modules: [
                 AuraStudioModule(
                     id: Flag.island,
-                    title: "Island Aura",
+                    title: LaraL10n.text(en: "Island Aura", es: "Aura de la isla"),
                     subtitle: LaraL10n.text(en: "Adaptive Dynamic Island outline", es: "Contorno adaptable de Dynamic Island"),
                     symbol: "capsule.fill"
                 ),
                 AuraStudioModule(
                     id: Flag.screen,
-                    title: "Screen Aura",
+                    title: LaraL10n.text(en: "Screen Aura", es: "Aura de pantalla"),
                     subtitle: LaraL10n.text(en: "A non-interactive edge around the display", es: "Un borde que no bloquea toques"),
                     symbol: "rectangle.inset.filled"
                 ),
                 AuraStudioModule(
                     id: Flag.battery,
-                    title: "Battery Halo",
+                    title: LaraL10n.text(en: "Battery Halo", es: "Halo de batería"),
                     subtitle: LaraL10n.text(en: "A global halo around the battery area", es: "Un halo global alrededor de la batería"),
                     symbol: "battery.75percent"
                 ),
@@ -394,13 +394,13 @@ struct AuraStudioView: View {
             modules: [
                 AuraStudioModule(
                     id: Flag.dock,
-                    title: "Dock Aura",
+                    title: LaraL10n.text(en: "Dock Aura", es: "Aura del Dock"),
                     subtitle: LaraL10n.text(en: "Fits the visible Dock capsule without touching its icons", es: "Se ajusta a la cápsula visible sin tocar sus iconos"),
                     symbol: "dock.rectangle"
                 ),
                 AuraStudioModule(
                     id: Flag.lock,
-                    title: "Lock Aura",
+                    title: LaraL10n.text(en: "Lock Aura", es: "Aura de bloqueo"),
                     subtitle: LaraL10n.text(en: "A lock-screen halo near Face ID", es: "Un halo de bloqueo junto a Face ID"),
                     symbol: "lock.fill"
                 ),
@@ -707,11 +707,19 @@ struct AuraStudioView: View {
 
     private func names(for flags: UInt32) -> [String] {
         var names: [String] = []
-        if flags & Flag.island != 0 { names.append("Island") }
-        if flags & Flag.screen != 0 { names.append("Screen") }
-        if flags & Flag.battery != 0 { names.append("Battery Halo") }
+        if flags & Flag.island != 0 {
+            names.append(LaraL10n.text(en: "Island", es: "Isla"))
+        }
+        if flags & Flag.screen != 0 {
+            names.append(LaraL10n.text(en: "Screen", es: "Pantalla"))
+        }
+        if flags & Flag.battery != 0 {
+            names.append(LaraL10n.text(en: "Battery Halo", es: "Halo de batería"))
+        }
         if flags & Flag.dock != 0 { names.append("Dock") }
-        if flags & Flag.lock != 0 { names.append("Lock") }
+        if flags & Flag.lock != 0 {
+            names.append(LaraL10n.text(en: "Lock", es: "Bloqueo"))
+        }
         return names
     }
 }
