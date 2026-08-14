@@ -78,10 +78,11 @@ struct AuraStudioView: View {
         static let island: UInt32 = 1 << 0
         static let screen: UInt32 = 1 << 1
         static let battery: UInt32 = 1 << 2
-        static let volume: UInt32 = 1 << 3
-        static let notification: UInt32 = 1 << 4
+        // Bits 3 and 4 remain reserved so existing installs keep the stable
+        // Dock and Lock flag values after Volume/Notification Aura removal.
         static let dock: UInt32 = 1 << 5
         static let lock: UInt32 = 1 << 6
+        static let supported = island | screen | battery | dock | lock
     }
 
     @ObservedObject private var mgr = laramgr.shared
@@ -95,8 +96,6 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.island") private var islandEnabled = true
     @AppStorage("eagle.auraStudio.screen") private var screenEnabled = true
     @AppStorage("eagle.auraStudio.battery") private var batteryEnabled = true
-    @AppStorage("eagle.auraStudio.volume") private var volumeEnabled = false
-    @AppStorage("eagle.auraStudio.notification") private var notificationEnabled = false
     @AppStorage("eagle.auraStudio.dock") private var dockEnabled = false
     @AppStorage("eagle.auraStudio.lock") private var lockEnabled = false
 
@@ -118,8 +117,6 @@ struct AuraStudioView: View {
         if islandEnabled { flags |= Flag.island }
         if screenEnabled { flags |= Flag.screen }
         if batteryEnabled { flags |= Flag.battery }
-        if volumeEnabled { flags |= Flag.volume }
-        if notificationEnabled { flags |= Flag.notification }
         if dockEnabled { flags |= Flag.dock }
         if lockEnabled { flags |= Flag.lock }
         return flags
@@ -194,6 +191,9 @@ struct AuraStudioView: View {
             }
         }
         .onAppear {
+            // Do not keep removed Volume/Notification bits in the verified
+            // status shown to users upgrading from the first Aura Studio.
+            activeFlagsRaw &= Int(Flag.supported)
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
             }
@@ -253,29 +253,6 @@ struct AuraStudioView: View {
                     }
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
-
-                    Spacer()
-
-                    if notificationEnabled {
-                        HStack(spacing: 10) {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(auraColor.gradient)
-                                .frame(width: 30, height: 30)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Capsule().fill(.white.opacity(0.75)).frame(width: 82, height: 5)
-                                Capsule().fill(.white.opacity(0.34)).frame(width: 118, height: 4)
-                            }
-                            Spacer()
-                        }
-                        .padding(10)
-                        .background(.black.opacity(0.62))
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(auraColor, lineWidth: 1.6)
-                        }
-                        .shadow(color: auraColor.opacity(0.8), radius: 8)
-                    }
 
                     Spacer()
 
@@ -413,24 +390,12 @@ struct AuraStudioView: View {
 
     private var systemMomentsCard: some View {
         moduleCard(
-            title: LaraL10n.text(en: "System Moments", es: "Momentos del sistema"),
+            title: LaraL10n.text(en: "Home & Lock", es: "Inicio y bloqueo"),
             modules: [
-                AuraStudioModule(
-                    id: Flag.volume,
-                    title: "Volume Aura",
-                    subtitle: LaraL10n.text(en: "Lights with the system volume HUD", es: "Se muestra con el volumen del sistema"),
-                    symbol: "speaker.wave.2.fill"
-                ),
-                AuraStudioModule(
-                    id: Flag.notification,
-                    title: "Notification Aura",
-                    subtitle: LaraL10n.text(en: "A neon frame for incoming banners", es: "Un marco neón para notificaciones"),
-                    symbol: "bell.badge.fill"
-                ),
                 AuraStudioModule(
                     id: Flag.dock,
                     title: "Dock Aura",
-                    subtitle: LaraL10n.text(en: "A focused light around the Home Screen Dock", es: "Luz alrededor del Dock de inicio"),
+                    subtitle: LaraL10n.text(en: "Fits the visible Dock capsule without touching its icons", es: "Se ajusta a la cápsula visible sin tocar sus iconos"),
                     symbol: "dock.rectangle"
                 ),
                 AuraStudioModule(
@@ -543,7 +508,7 @@ struct AuraStudioView: View {
     }
 
     private var activeModuleCount: Int {
-        UInt32(max(activeFlagsRaw, 0)).nonzeroBitCount
+        (UInt32(max(activeFlagsRaw, 0)) & Flag.supported).nonzeroBitCount
     }
 
     private func binding(for flag: UInt32) -> Binding<Bool> {
@@ -551,8 +516,6 @@ struct AuraStudioView: View {
         case Flag.island: return $islandEnabled
         case Flag.screen: return $screenEnabled
         case Flag.battery: return $batteryEnabled
-        case Flag.volume: return $volumeEnabled
-        case Flag.notification: return $notificationEnabled
         case Flag.dock: return $dockEnabled
         default: return $lockEnabled
         }
@@ -747,8 +710,6 @@ struct AuraStudioView: View {
         if flags & Flag.island != 0 { names.append("Island") }
         if flags & Flag.screen != 0 { names.append("Screen") }
         if flags & Flag.battery != 0 { names.append("Battery Halo") }
-        if flags & Flag.volume != 0 { names.append("Volume") }
-        if flags & Flag.notification != 0 { names.append("Notifications") }
         if flags & Flag.dock != 0 { names.append("Dock") }
         if flags & Flag.lock != 0 { names.append("Lock") }
         return names
