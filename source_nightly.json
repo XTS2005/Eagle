@@ -1,0 +1,34 @@
+{
+  "name": "Eagle Nightly",
+  "subtitle": "Automatic, unsigned development builds.",
+  "description": "Nightly builds may be less stable than the public beta and are intended for testing recent changes.",
+  "iconURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+  "headerURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+  "website": "https://github.com/leonardob8777-bit/Eagle",
+  "tintColor": "#20BDE9",
+  "featuredApps": [
+    "com.leonardobaptiste.laracustom"
+  ],
+  "apps": [
+    {
+      "name": "Eagle Nightly",
+      "bundleIdentifier": "com.leonardobaptiste.laracustom",
+      "developerName": "Leonardo Baptiste and Eagle contributors",
+      "subtitle": "The newest automated Eagle test build.",
+      "localizedDescription": "This channel follows the main branch and can contain unfinished changes. Use the regular Eagle Beta source unless you specifically want to test the newest code.",
+      "iconURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+      "tintColor": "#20BDE9",
+      "versions": [
+        {
+          "version": "0.3.0",
+          "date": "2026-08-14",
+          "size": 11762062,
+          "downloadURL": "https://github.com/leonardob8777-bit/Eagle/releases/download/nightly/Eagle.ipa",
+          "localizedDescription": "Unsigned development build generated from the current main branch.",
+          "minOSVersion": "16.0"
+        }
+      ],
+      "appPermissions": {}
+    }
+  ]
+}

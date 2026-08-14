@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Eagle README and safety notes
+    url: https://github.com/leonardob8777-bit/Eagle#readme
+    about: Check tested devices, known limitations and installation notes first.
+  - name: Existing Eagle issues
+    url: https://github.com/leonardob8777-bit/Eagle/issues
+    about: Search for the same device, iOS version and feature before reporting.

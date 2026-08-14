@@ -1,0 +1,275 @@
+{
+  "/var/tmp": {
+    "blacklist": []
+  },
+  "/var/mobile/Library/UserConfigurationProfiles/PublicInfo/": {
+    "blacklist": [
+      "Flex3Patches.plist"
+    ]
+  },
+  "/var/mobile/Library/SplashBoard/Snapshots": {
+    "blacklist": [
+      "com.roothide.manager",
+      "com.opa334.Dopamine.roothide",
+      "com.opa334.Dopamine",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "com.xina.jailbreak",
+      "org.coolstar.SileoStore",
+      "ru.domo.cocoatop64",
+      "ws.hbang.Terminal",
+      "xyz.willy.Zebra",
+      "com.apple.Terminal"
+    ]
+  },
+  "/var/mobile/Library/Application Support/Containers": {
+    "blacklist": [
+      "xyz.willy.Zebra",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "org.coolstar.SileoStore",
+      "com.apple.Terminal"
+    ]
+  },
+  "/var/containers/Bundle": {
+    "blacklist": [
+      "dylib",
+      "xina"
+    ]
+  },
+  "/var/mobile/Library/Cookies": {
+    "blacklist": [
+      "com.johncoates.Flex.binarycookies"
+    ]
+  },
+  "/var/root/Library/Caches": {
+    "blacklist": [
+      "shshd"
+    ]
+  },
+  "/var/mobile/Library/Logs": {
+    "blacklist": [
+      "Cydia"
+    ]
+  },
+  "/var/mobile/Library/Preferences": {
+    "blacklist": [
+      "com.roothide.manager.plist",
+      "com.opa334.Dopamine.roothide.plist",
+      "com.opa334.Dopamine.plist",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "com.xina.jailbreak.plist",
+      "org.coolstar.SileoStore.plist",
+      "ru.domo.cocoatop64.plist",
+      "ws.hbang.Terminal.plist",
+      "xyz.willy.Zebra.plist",
+      "com.apple.lockscreencache-new.plist",
+      "com.apple.homescreencache-new.plist",
+      "com.apple.terminal.plist"
+    ]
+  },
+  "/var/mobile/Library/Caches": {
+    "blacklist": [
+      "ImageTables",
+      "SentryCrash",
+      "io.sentry",
+      "com.hackemist.SDImageCache",
+      "com.opa334.Dopamine",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "org.coolstar.SileoStore",
+      "ws.hbang.Terminal",
+      "xyz.willy.Zebra",
+      "Cephei",
+      "com.apple.Terminal"
+    ]
+  },
+  "/var": {
+    "blacklist": [
+      "stash",
+      "alternatives",
+      "ap",
+      "apt",
+      "bin",
+      "bzip2",
+      "cache",
+      "dpkg",
+      "etc",
+      "gzip",
+      "local",
+      "lib",
+      "Lib",
+      "libexec",
+      "Library",
+      "LIY",
+      "Liy",
+      "newuser",
+      "profile",
+      "sbin",
+      "sh",
+      "share",
+      "ssh",
+      "sudo_logsrvd.conf",
+      "suid_profile",
+      "sy",
+      "usr",
+      "zlogin",
+      "zlogout",
+      "zprofile",
+      "zshenv",
+      "zshrc",
+      "master.passwd",
+      ".keep_symlinks"
+    ]
+  },
+  "/var/mobile/Library": {
+    "blacklist": [
+      "Sileo",
+      "Filza",
+      "Flex3",
+      "SBSettings",
+      "RootHide",
+      "iCleaner",
+      "Terminal",
+      "varClean",
+      "ADManager"
+    ]
+  },
+  "/var/mobile/Library/Saved Application State": {
+    "blacklist": [
+      "com.opa334.Dopamine.savedState",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "org.coolstar.SileoStore.savedState",
+      "ws.hbang.Terminal.savedState",
+      "xyz.willy.Zebra.savedState",
+      "ru.domo.cocoatop64.savedState",
+      "com.apple.Terminal.savedState"
+    ]
+  },
+  "/var/mobile/Library/WebKit": {
+    "blacklist": [
+      "xyz.willy.Zebra",
+      "com.ivanobilenchi.icleaner"
+    ]
+  },
+  "/var/mobile": {
+    "blacklist": [
+      "log.txt",
+      ".ekenablelogging",
+      ".eksafemode",
+      ".serotonin_hidetext",
+      ".TrollApps",
+      "Serotonin.jp2"
+    ]
+  },
+  "/var/mobile/Library/Application Support": {
+    "blacklist": [
+      "xyz.willy.Zebra",
+      "com.apple.Terminal"
+    ]
+  },
+  "/var/mobile/Media": {
+    "blacklist": [
+      {
+        "match": "include",
+        "name": "Auto"
+      },
+      {
+        "match": "include",
+        "name": "Touch"
+      },
+      {
+        "match": "include",
+        "name": "Theme"
+      },
+      {
+        "match": "include",
+        "name": "Script"
+      },
+      "Cydia",
+      "CatScript",
+      "TrollRecorder",
+      ".evasi0n7_installed",
+      ".loli",
+      "blackb0x.log",
+      "Divise",
+      ".bootstrapped_electraRemover",
+      "install",
+      "log.txt",
+      "p0laris",
+      ".Trash",
+      "spirit",
+      "TouchSprite",
+      ".bootstrapped_Th0r_remover",
+      "AppRank",
+      "KDTScript",
+      "NeonStaticClockIcon.png",
+      "Erika"
+    ]
+  },
+  "/var/mobile/Library/HTTPStorages": {
+    "blacklist": [
+      "com.opa334.Dopamine",
+      {
+        "match": "regexp",
+        "name": "^com\\.tigisoftware\\."
+      },
+      "org.coolstar.SileoStore",
+      "ws.hbang.Terminal",
+      "xyz.willy.Zebra"
+    ]
+  },
+  "/var/MobileSoftwareUpdate/mnt1": {
+    "blacklist": []
+  },
+  "/var/root/Library/Preferences": {
+    "blacklist": [
+      "com.xina.jailbreak.plist",
+      "com.xina.blacklist.plist",
+      "ws.hbang.Terminal.plist"
+    ]
+  },
+  "/var/root/Library/Application Support": {
+    "blacklist": []
+  },
+  "/var/lib": {
+    "blacklist": [
+      "filza"
+    ]
+  },
+  "/var/mobile/Documents": {
+    "blacklist": [
+      "Flex",
+      "DumpDecrypter",
+      ".DynamicCowBackups"
+    ]
+  },
+  "/var/log": {
+    "blacklist": []
+  },
+  "/var/root": {
+    "blacklist": [
+      ".bash_history",
+      ".config",
+      ".local"
+    ]
+  },
+  "/var/root/Library/HTTPStorages": {
+    "blacklist": [
+      "shshd",
+      "FilzaHelper"
+    ]
+  }
+}
