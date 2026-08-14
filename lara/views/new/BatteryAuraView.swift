@@ -31,8 +31,8 @@ private enum BatteryAuraStyle: Int, CaseIterable, Identifiable {
             )
         case .full:
             return LaraL10n.text(
-                en: "Colors the fill, outline, charging bolt, and percentage together.",
-                es: "Colorea al mismo tiempo la carga, el contorno, el rayo y el porcentaje."
+                en: "Colors the fill, outline, and charging bolt while keeping the percentage readable.",
+                es: "Colorea la carga, el contorno y el rayo, manteniendo legible el porcentaje."
             )
         case .neon:
             return LaraL10n.text(
@@ -481,8 +481,8 @@ struct BatteryAuraView: View {
                                     es: "Se restauraron los colores originales de la batería del sistema."
                                 )
                                 : LaraL10n.text(
-                                    en: "Battery Aura was applied and verified on \(result) live system view\(result == 1 ? "" : "s").",
-                                    es: "Battery Aura fue aplicada y verificada en \(result) vista\(result == 1 ? "" : "s") activa\(result == 1 ? "" : "s") del sistema."
+                                    en: "Battery Aura was applied and verified on \(result) drawable system view\(result == 1 ? "" : "s"). Return to the Home Screen to see the SpringBoard battery.",
+                                    es: "Battery Aura fue aplicada y verificada en \(result) vista\(result == 1 ? "" : "s") dibujable\(result == 1 ? "" : "s") del sistema. Vuelve a la pantalla de inicio para ver la batería de SpringBoard."
                                 )
                         )
                     } else {
@@ -549,13 +549,33 @@ struct BatteryAuraView: View {
             )
         case -6:
             return LaraL10n.text(
-                en: "Eagle found the battery but could not verify that its color remained applied. Nothing was reported as successful.",
-                es: "Eagle encontró la batería, pero no pudo verificar que el color permaneciera aplicado. No se marcó como exitoso."
+                en: "SpringBoard could not create the requested battery color. Nothing was changed.",
+                es: "SpringBoard no pudo crear el color solicitado para la batería. No se cambió nada."
             )
         case -7:
             return LaraL10n.text(
                 en: "Battery Aura caught an Objective-C exception and stopped. Copy the end of Documents/lara.log before trying again.",
                 es: "Battery Aura detectó una excepción de Objective-C y se detuvo. Copia el final de Documents/lara.log antes de volver a intentarlo."
+            )
+        case -8:
+            return LaraL10n.text(
+                en: "Eagle found the status-bar battery container, but iOS did not expose its drawable battery glyph. Visit the Home Screen once, reopen Eagle, and try again.",
+                es: "Eagle encontró el contenedor de batería de la barra de estado, pero iOS no mostró su icono dibujable. Visita una vez la pantalla de inicio, vuelve a Eagle e inténtalo otra vez."
+            )
+        case -9:
+            return LaraL10n.text(
+                en: "Eagle found the real battery glyph but could not install its reversible color route. Nothing was reported as applied.",
+                es: "Eagle encontró el icono real de batería, pero no pudo instalar su ruta reversible de color. No se marcó como aplicado."
+            )
+        case -10:
+            return LaraL10n.text(
+                en: "UIKit repainted the battery with a different color during verification. Eagle restored the original view instead of reporting a false success.",
+                es: "UIKit volvió a dibujar la batería con otro color durante la verificación. Eagle restauró la vista original en lugar de mostrar un éxito falso."
+            )
+        case -11:
+            return LaraL10n.text(
+                en: "This iOS battery surface exposes Fill but not the private outline and percentage routes required by Full or Neon. Select Fill and apply again.",
+                es: "La superficie de batería de esta versión de iOS permite Carga, pero no las rutas privadas de contorno y porcentaje que requieren Completa o Neón. Selecciona Carga y vuelve a aplicar."
             )
         default:
             return LaraL10n.text(
