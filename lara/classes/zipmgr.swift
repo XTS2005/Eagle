@@ -8,7 +8,13 @@
 import Foundation
 import zlib
 
-private let crcTable: [UInt32] = [
+nonisolated private func zipLog(_ message: String) {
+    Task { @MainActor in
+        laramgr.shared.logmsg(message)
+    }
+}
+
+nonisolated private let crcTable: [UInt32] = [
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535, 0x9e6495a3, 0x0edb8832,
     0x79dcb8a4, 0xe0d5e91e, 0x97d2d988, 0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91, 0x1db71064, 0x6ab020f2,
     0xf3b97148, 0x84be41de, 0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7, 0x136c9856, 0x646ba8c0, 0xfd62f97a,
@@ -39,7 +45,7 @@ private let crcTable: [UInt32] = [
     0x24b4a3a6, 0xbad03605, 0xcdd70693, 0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
     0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d]
 
-extension Data {
+nonisolated extension Data {
     var zipCRC32: UInt32 {
         let mask: UInt32 = 0xffffffff
         var result = mask
@@ -56,13 +62,13 @@ extension Data {
     }
 }
 
-extension Data {
+nonisolated extension Data {
     func scan<T>(at offset: Int) -> T {
         self.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: T.self) }
     }
 }
 
-private let cp437Table: [UInt8: String] = [
+nonisolated private let cp437Table: [UInt8: String] = [
     0x80: "Ç", 0x81: "ü", 0x82: "é", 0x83: "â", 0x84: "ä", 0x85: "à", 0x86: "å", 0x87: "ç",
     0x88: "ê", 0x89: "ë", 0x8a: "è", 0x8b: "ï", 0x8c: "î", 0x8d: "ì", 0x8e: "Ä", 0x8f: "Å",
     0x90: "É", 0x91: "æ", 0x92: "Æ", 0x93: "ô", 0x94: "ö", 0x95: "ò", 0x96: "û", 0x97: "ù",
@@ -81,7 +87,7 @@ private let cp437Table: [UInt8: String] = [
     0xf8: "°", 0xf9: "∙", 0xfa: "·", 0xfb: "√", 0xfc: "ⁿ", 0xfd: "²", 0xfe: "■", 0xff: " "
 ]
 
-extension String {
+nonisolated extension String {
     init(cp437 data: Data) {
         var result = ""
         result.reserveCapacity(data.count)
@@ -96,13 +102,13 @@ extension String {
     }
 }
 
-private let eocdSignature: UInt32 = 0x06054b50
-private let cdSignature: UInt32 = 0x02014b50
-private let lfhSignature: UInt32 = 0x04034b50
-private let zip64EOCDLocatorSignature: UInt32 = 0x07064b50
-private let zip64EOCDRecordSignature: UInt32 = 0x06064b50
+nonisolated private let eocdSignature: UInt32 = 0x06054b50
+nonisolated private let cdSignature: UInt32 = 0x02014b50
+nonisolated private let lfhSignature: UInt32 = 0x04034b50
+nonisolated private let zip64EOCDLocatorSignature: UInt32 = 0x07064b50
+nonisolated private let zip64EOCDRecordSignature: UInt32 = 0x06064b50
 
-public struct ZipEntry {
+nonisolated public struct ZipEntry: Sendable {
     public let path: String
     public let compressionMethod: UInt16
     public let compressedSize: UInt64
@@ -112,18 +118,17 @@ public struct ZipEntry {
     public let isDirectory: Bool
 }
 
-public enum ZipError: Error {
+nonisolated public enum ZipError: Error {
     case notFound(String)
     case corruptArchive(String)
     case unsupportedCompression
     case crcMismatch
 }
 
-public class ZipArchive {
+nonisolated public final class ZipArchive {
     private let data: Data
     public private(set) var entries: [ZipEntry] = []
     private var entryMap: [String: ZipEntry]
-    private let mgr = laramgr.shared
     private var error = ""
 
     public init(data: Data) throws {
@@ -144,7 +149,7 @@ public class ZipArchive {
         guard entry.dataOffset < UInt64(data.count),
               end <= data.count else {
             error = "(zip) entry data out of bounds"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
 
@@ -153,7 +158,7 @@ public class ZipArchive {
             let raw = data.subdata(in: Int(entry.dataOffset)..<Int(end))
             guard raw.zipCRC32 == entry.crc32 else {
                 error = "(zip) crc mismatch"
-                mgr.logmsg("\(error)")
+                zipLog(error)
                 throw ZipError.crcMismatch
             }
             return raw
@@ -162,13 +167,13 @@ public class ZipArchive {
             let decompressed = try decompressDeflate(raw, decompressedSize: Int(entry.uncompressedSize))
             guard decompressed.zipCRC32 == entry.crc32 else {
                 error = "(zip) crc mismatch"
-                mgr.logmsg("\(error)")
+                zipLog(error)
                 throw ZipError.crcMismatch
             }
             return decompressed
         default:
             error = "(zip) unsupported compression, not a valid .zip"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.unsupportedCompression
         }
     }
@@ -176,7 +181,7 @@ public class ZipArchive {
     private func scanEntries() throws {
         guard data.count >= 22 else {
             error = "(zip) too small"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
 
@@ -190,7 +195,7 @@ public class ZipArchive {
         let totalEntries16: UInt16 = data.scan(at: eocdOffset + 10)
 
         if cdOffset32 == UInt32.max || cdSize32 == UInt32.max || totalEntries16 == UInt16.max {
-            let (z64off, z64rec) = try locateZIP64EOCD(eocdOffset: eocdOffset)
+            let (_, z64rec) = try locateZIP64EOCD(eocdOffset: eocdOffset)
             cdOffset = z64rec.isEmpty ? UInt64(cdOffset32) : z64rec.scan(at: 48) as UInt64
             cdSize = z64rec.isEmpty ? UInt64(cdSize32) : z64rec.scan(at: 40) as UInt64
             totalEntries = z64rec.isEmpty ? UInt64(totalEntries16) : z64rec.scan(at: 32) as UInt64
@@ -202,7 +207,7 @@ public class ZipArchive {
 
         guard cdOffset + cdSize <= UInt64(data.count) else {
             error = "(zip) cd out of bounds"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
 
@@ -210,13 +215,13 @@ public class ZipArchive {
         for _ in 0..<totalEntries {
             guard pos + 46 <= data.count else {
                 error = "(zip) cd entry truncated"
-                mgr.logmsg("\(error)")
+                zipLog(error)
                 throw ZipError.corruptArchive("\(error)")
             }
             let sig: UInt32 = data.scan(at: pos)
             guard sig == cdSignature else {
                 error = "(zip) bad cd sig"
-                mgr.logmsg("\(error)")
+                zipLog(error)
                 throw ZipError.corruptArchive("\(error)")
             }
 
@@ -272,13 +277,13 @@ public class ZipArchive {
         let off = Int(lfhOffset)
         guard off + 30 <= data.count else {
             error = "(zip) lfh truncated"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
         let sig: UInt32 = data.scan(at: off)
         guard sig == lfhSignature else {
             error = "(zip) bad lfh sig"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
         let nameLen: UInt16 = data.scan(at: off + 26)
@@ -312,7 +317,7 @@ public class ZipArchive {
 
         guard status == Z_STREAM_END else {
             error = "(zip) raw deflate failed with zlib status \(status)"
-            mgr.logmsg("\(error)")
+            zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
         return result.prefix(actualSize)
@@ -328,7 +333,7 @@ public class ZipArchive {
             }
         }
         error = "(zip) no eocd"
-        mgr.logmsg("\(error)")
+        zipLog(error)
         throw ZipError.corruptArchive("\(error)")
     }
 
@@ -401,7 +406,6 @@ private func crc32OfFile(at url: URL) -> (crc: UInt32, data: Data) {
 }
 
 public func createZipArchive(fromDirectory sourceURL: URL, to destinationURL: URL, compressionMethod: UInt16 = 0) throws {
-    let mgr = laramgr.shared
     var error = ""
     let fm = FileManager.default
     var fileEntries: [(name: String, data: Data, crc32: UInt32)] = []
@@ -411,7 +415,7 @@ public func createZipArchive(fromDirectory sourceURL: URL, to destinationURL: UR
 
     guard let enumerator = fm.enumerator(at: resolvedSource, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
         error = "(zip) cannot enumerate source directory"
-        mgr.logmsg("\(error)")
+        zipLog(error)
         throw ZipError.corruptArchive("\(error)")
     }
 
@@ -432,7 +436,7 @@ public func createZipArchive(fromDirectory sourceURL: URL, to destinationURL: UR
 
     guard fm.createFile(atPath: destinationURL.path, contents: nil, attributes: nil) else {
         error = "(zip) cannot create output file"
-        mgr.logmsg("\(error)")
+        zipLog(error)
         throw ZipError.corruptArchive("\(error)")
     }
     let fh = try FileHandle(forWritingTo: destinationURL)

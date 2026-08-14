@@ -357,7 +357,7 @@ class ColorSwapManager {
     public static func setColor(url: URL, color: CIColor, blur: Int) throws -> Data {
         let plistData = try Data(contentsOf: url)
         if let originalPlist = try PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any] {
-            var plist = setColor(list: originalPlist, color: color, blur: blur)
+            let plist = setColor(list: originalPlist, color: color, blur: blur)
             let newData = try addEmptyData(matchingSize: plistData.count, to: plist)
             if newData.count == plistData.count {
                 return newData
@@ -477,4 +477,3 @@ extension URL {
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 }
-

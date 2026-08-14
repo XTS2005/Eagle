@@ -52,6 +52,21 @@ private enum BatteryAuraDiagnostics {
     }
 }
 
+@MainActor
+private enum BatteryAuraApplyGate {
+    private static var operationInFlight = false
+
+    static func begin() -> Bool {
+        guard !operationInFlight else { return false }
+        operationInFlight = true
+        return true
+    }
+
+    static func end() {
+        operationInFlight = false
+    }
+}
+
 struct BatteryAuraView: View {
     @ObservedObject private var mgr = laramgr.shared
     @AppStorage("eagle.batteryAura.red") private var red = 0.22
@@ -423,6 +438,17 @@ struct BatteryAuraView: View {
             return
         }
 
+        guard BatteryAuraApplyGate.begin() else {
+            finish(
+                stage: "rejected.operation-in-flight",
+                message: LaraL10n.text(
+                    en: "Battery Aura is still finishing a previous system operation. Keep Eagle open and wait for its result before applying again.",
+                    es: "Battery Aura todavía está terminando una operación anterior del sistema. Mantén Eagle abierto y espera el resultado antes de volver a aplicar."
+                )
+            )
+            return
+        }
+
         isApplying = true
         let applyWithSession = {
             guard let process = self.mgr.sbProc else {
@@ -471,6 +497,7 @@ struct BatteryAuraView: View {
                 }
                 BatteryAuraDiagnostics.log("native-call.end", "result=\(result)")
                 DispatchQueue.main.async {
+                    BatteryAuraApplyGate.end()
                     self.isApplying = false
                     if result > 0 {
                         self.activeStyleRaw = style
@@ -523,6 +550,9 @@ struct BatteryAuraView: View {
     private func finish(stage: String, message: String) {
         BatteryAuraDiagnostics.log(stage, "finish=true")
         DispatchQueue.main.async {
+            if self.isApplying {
+                BatteryAuraApplyGate.end()
+            }
             self.isApplying = false
             self.notice = BatteryAuraNotice(message: message)
         }

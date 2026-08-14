@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-private struct varcleanmatch: Identifiable, Hashable {
+nonisolated private struct varcleanmatch: Identifiable, Hashable, Sendable {
     let path: String
     let name: String
     let isdir: Bool
@@ -17,7 +17,7 @@ private struct varcleanmatch: Identifiable, Hashable {
     var id: String { path }
 }
 
-private struct varcleangroup: Identifiable, Hashable {
+nonisolated private struct varcleangroup: Identifiable, Hashable, Sendable {
     let path: String
     var items: [varcleanmatch]
 
@@ -194,7 +194,7 @@ struct VarCleanView: View {
     }
 }
 
-private func loadvarcleangroups() -> [varcleangroup] {
+nonisolated private func loadvarcleangroups() -> [varcleangroup] {
     var error: NSError?
     guard let rules = VarCleanBridge.loadRulesNamed("VarCleanRules", in: .main, error: &error) as? [String: Any] else {
         return []
@@ -246,7 +246,7 @@ private func loadvarcleangroups() -> [varcleangroup] {
     }
 }
 
-private func probepaths(
+nonisolated private func probepaths(
     for basepath: String,
     blacklist: [Any],
     seenpaths: inout Set<String>,
@@ -283,7 +283,7 @@ private func probepaths(
     return out
 }
 
-private func direntries(atpath path: String, cache: inout [String: [String]]) -> [String] {
+nonisolated private func direntries(atpath path: String, cache: inout [String: [String]]) -> [String] {
     if let cached = cache[path] {
         return cached
     }

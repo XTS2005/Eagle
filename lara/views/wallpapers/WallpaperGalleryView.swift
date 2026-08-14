@@ -519,19 +519,19 @@ private struct CommunityWallpaperDetail: View {
     }
 }
 
-struct TendiesInstallResult {
+nonisolated struct TendiesInstallResult: Sendable {
     let installedCount: Int
     let existingCount: Int
     let installedDestinations: [URL]
 }
 
-private struct TendiesDescriptor {
+nonisolated private struct TendiesDescriptor: Sendable {
     let url: URL
     let extensionIdentifier: String
     let preservesIdentity: Bool
 }
 
-enum TendiesInstaller {
+nonisolated enum TendiesInstaller {
     static let maximumCompressedSize = 120 * 1024 * 1024
     private static let maximumExpandedSize: UInt64 = 1_200 * 1024 * 1024
     private static let maximumDescriptors = 64
@@ -559,7 +559,7 @@ enum TendiesInstaller {
 
         try extract(archive, to: root)
         let descriptors = try findDescriptors(in: root)
-        globallogger.log("(wallpaper) found \(descriptors.count) installable descriptor(s)")
+        log("(wallpaper) found \(descriptors.count) installable descriptor(s)")
         guard !descriptors.isEmpty else { throw CommunityWallpaperError.noDescriptors }
         guard descriptors.count <= maximumDescriptors else {
             throw CommunityWallpaperError.tooManyDescriptors
@@ -569,7 +569,7 @@ enum TendiesInstaller {
         var existingCount = 0
         do {
             for descriptor in descriptors {
-                globallogger.log(
+                log(
                     "(wallpaper) preparing \(descriptor.url.lastPathComponent) for \(descriptor.extensionIdentifier)"
                 )
                 if !descriptor.preservesIdentity {
@@ -583,7 +583,7 @@ enum TendiesInstaller {
                     extensionIdentifier: descriptor.extensionIdentifier,
                     preserveDescriptorName: descriptor.preservesIdentity
                 )
-                globallogger.log(
+                log(
                     "(wallpaper) verified descriptor at \(result.destination.lastPathComponent), created=\(result.wasCreated)"
                 )
                 if result.wasCreated {
@@ -627,7 +627,7 @@ enum TendiesInstaller {
                   !normalized.hasPrefix("/"),
                   !normalized.contains("\0"),
                   !components.contains("..") else {
-                laramgr.shared.logmsg("(wallpaper) ignored unsafe archive entry: \(entry.path)")
+                log("(wallpaper) ignored unsafe archive entry: \(entry.path)")
                 continue
             }
 
@@ -645,7 +645,7 @@ enum TendiesInstaller {
             }
         }
 
-        laramgr.shared.logmsg("(wallpaper) extracted \(extractedFiles) files into the temporary package")
+        log("(wallpaper) extracted \(extractedFiles) files into the temporary package")
     }
 
     private static func findDescriptors(in root: URL) throws -> [TendiesDescriptor] {
@@ -774,7 +774,7 @@ enum TendiesInstaller {
             } catch {
                 // A few legacy tendies use opaque metadata here. They can still
                 // be installed safely with their original internal identity.
-                laramgr.shared.logmsg(
+                log(
                     "(wallpaper) preserving legacy descriptor identity because \(file.lastPathComponent) could not be updated: \(error.localizedDescription)"
                 )
                 return
@@ -829,5 +829,11 @@ enum TendiesInstaller {
             }
         }
         return replaced
+    }
+
+    private static func log(_ message: String) {
+        Task { @MainActor in
+            globallogger.log(message)
+        }
     }
 }
