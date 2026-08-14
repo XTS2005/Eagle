@@ -1,6 +1,6 @@
 import Foundation
 
-enum LaraLanguage: String, CaseIterable, Identifiable {
+nonisolated enum LaraLanguage: String, CaseIterable, Identifiable {
     case english = "en"
     case spanish = "es"
 
@@ -27,7 +27,7 @@ enum LaraLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-enum LaraL10n {
+nonisolated enum LaraL10n {
     static var language: LaraLanguage {
         guard
             let rawValue = UserDefaults.standard.string(forKey: LaraLanguage.storageKey),

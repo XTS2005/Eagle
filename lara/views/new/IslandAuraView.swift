@@ -1,9 +1,19 @@
 import SwiftUI
 import UIKit
+import Darwin
 
 private struct IslandAuraNotice: Identifiable {
     let id = UUID()
     let message: String
+}
+
+private enum IslandAuraDiagnostics {
+    static func log(_ stage: String, _ detail: String = "") {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let suffix = detail.isEmpty ? "" : " \(detail)"
+        globallogger.log("[\(formatter.string(from: Date()))] (eagle.island.apply) stage=\(stage)\(suffix)")
+    }
 }
 
 private enum IslandAuraMode: Int, CaseIterable, Identifiable {
@@ -356,8 +366,21 @@ struct IslandAuraView: View {
     }
 
     private func apply(mode: Int) {
-        guard !isApplying else { return }
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let versionString = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+        IslandAuraDiagnostics.log(
+            "request",
+            "mode=\(mode) device=\(devicemachine()) ios=\(versionString) " +
+            "dsready=\(mgr.dsready) rcrunning=\(mgr.rcrunning) rcready=\(mgr.rcready) session=\(mgr.sbProc != nil) " +
+            "sbxready=\(mgr.sbxready) vfsready=\(mgr.vfsready)"
+        )
+
+        guard !isApplying else {
+            IslandAuraDiagnostics.log("rejected", "reason=already-applying")
+            return
+        }
         guard !isdebugged() else {
+            IslandAuraDiagnostics.log("rejected", "reason=debugger-attached")
             notice = IslandAuraNotice(message: LaraL10n.text(
                 en: "Stop the Xcode run and open Eagle manually from the Home Screen before changing SpringBoard.",
                 es: "Detén la ejecución en Xcode y abre Eagle manualmente desde la pantalla de inicio antes de modificar SpringBoard."
@@ -365,9 +388,20 @@ struct IslandAuraView: View {
             return
         }
         guard mgr.dsready else {
+            IslandAuraDiagnostics.log("rejected", "reason=darksword-not-ready")
             notice = IslandAuraNotice(message: LaraL10n.text(
                 en: "Prepare Eagle access before changing the Dynamic Island.",
                 es: "Prepara el acceso de Eagle antes de cambiar la Dynamic Island."
+            ))
+            return
+        }
+        if version.majorVersion == 17,
+           mgr.rcrunning,
+           !(mgr.rcready && mgr.sbProc != nil) {
+            IslandAuraDiagnostics.log("rejected", "reason=remote-session-already-initializing ios=17")
+            notice = IslandAuraNotice(message: LaraL10n.text(
+                en: "Eagle is already preparing a SpringBoard session. Wait for it to finish before applying Island Aura.",
+                es: "Eagle ya está preparando una sesión de SpringBoard. Espera a que termine antes de aplicar Island Aura."
             ))
             return
         }
@@ -375,32 +409,64 @@ struct IslandAuraView: View {
         isApplying = true
         let applyWithSession = {
             guard let process = self.mgr.sbProc else {
-                self.finish(message: LaraL10n.text(
+                IslandAuraDiagnostics.log("session.invalid", "reason=nil-process")
+                self.finish(stage: "session.invalid", message: LaraL10n.text(
                     en: "Eagle connected to SpringBoard but did not receive a live session.",
                     es: "Eagle se conectó a SpringBoard, pero no recibió una sesión activa."
                 ))
                 return
             }
 
+            if version.majorVersion == 17 {
+                let targetPID = process.pid
+                let probeResult = targetPID > 0 ? Darwin.kill(targetPID, 0) : -1
+                let probeError = errno
+                guard targetPID > 0, probeResult == 0 || probeError == EPERM else {
+                    IslandAuraDiagnostics.log(
+                        "session.invalid",
+                        "reason=stale-springboard-pid pid=\(targetPID) errno=\(probeError)"
+                    )
+                    self.finish(stage: "session.invalid", message: LaraL10n.text(
+                        en: "The saved SpringBoard session is no longer alive. Reopen Eagle and prepare access again.",
+                        es: "La sesión guardada de SpringBoard ya no está activa. Vuelve a abrir Eagle y prepara el acceso otra vez."
+                    ))
+                    return
+                }
+                IslandAuraDiagnostics.log(
+                    "session.pid-check",
+                    "result=alive pid=\(targetPID) probe=\(probeResult) errno=\(probeError)"
+                )
+            }
+
             let redValue = Int32(max(0, min(255, Int((self.red * 255).rounded()))))
             let greenValue = Int32(max(0, min(255, Int((self.green * 255).rounded()))))
             let blueValue = Int32(max(0, min(255, Int((self.blue * 255).rounded()))))
+            IslandAuraDiagnostics.log(
+                "session.ready",
+                "isolatedThread=\(process.creatingExtraThread) mode=\(mode) rgb=\(redValue),\(greenValue),\(blueValue)"
+            )
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = eagle_set_island_aura(
-                    process,
-                    redValue,
-                    greenValue,
-                    blueValue,
-                    Int32(mode)
-                )
+                IslandAuraDiagnostics.log("native-call.begin", "mode=\(mode)")
+                let result = autoreleasepool {
+                    eagle_set_island_aura(
+                        process,
+                        redValue,
+                        greenValue,
+                        blueValue,
+                        Int32(mode)
+                    )
+                }
+                IslandAuraDiagnostics.log("native-call.end", "result=\(result)")
                 DispatchQueue.main.async {
                     self.isApplying = false
                     if result >= 0 {
                         self.activeModeRaw = mode
+                        IslandAuraDiagnostics.log("ui.success", "result=\(result) activeMode=\(mode)")
                         self.notice = IslandAuraNotice(
                             message: self.successMessage(for: result, mode: mode)
                         )
                     } else {
+                        IslandAuraDiagnostics.log("ui.failure", "result=\(result)")
                         self.notice = IslandAuraNotice(message: self.message(for: result))
                     }
                 }
@@ -408,14 +474,21 @@ struct IslandAuraView: View {
         }
 
         if mgr.rcready, mgr.sbProc != nil {
+            IslandAuraDiagnostics.log("session.reuse")
             applyWithSession()
         } else {
+            IslandAuraDiagnostics.log("session.init.begin", "process=SpringBoard")
             mgr.rcinit(process: "SpringBoard") { success in
+                IslandAuraDiagnostics.log(
+                    "session.init.end",
+                    "success=\(success) rcready=\(self.mgr.rcready) session=\(self.mgr.sbProc != nil)"
+                )
                 if success || (self.mgr.rcready && self.mgr.sbProc != nil) {
                     applyWithSession()
                 } else {
                     let detail = self.mgr.rcLastError?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.finish(message: detail?.isEmpty == false
+                    IslandAuraDiagnostics.log("session.init.failure", "detail=\(detail ?? "none")")
+                    self.finish(stage: "session.init.failure", message: detail?.isEmpty == false
                         ? detail!
                         : LaraL10n.text(
                             en: "Eagle could not start the live SpringBoard session.",
@@ -426,7 +499,8 @@ struct IslandAuraView: View {
         }
     }
 
-    private func finish(message: String) {
+    private func finish(stage: String, message: String) {
+        IslandAuraDiagnostics.log(stage, "finish=true")
         DispatchQueue.main.async {
             self.isApplying = false
             self.notice = IslandAuraNotice(message: message)
@@ -474,6 +548,11 @@ struct IslandAuraView: View {
             return LaraL10n.text(
                 en: "The SpringBoard session did not provide an isolated call thread. Eagle stopped before changing anything.",
                 es: "La sesión de SpringBoard no proporcionó un hilo de llamadas aislado. Eagle se detuvo antes de cambiar nada."
+            )
+        case -14:
+            return LaraL10n.text(
+                en: "Island Aura caught an Objective-C exception and stopped. Copy the end of Documents/lara.log before trying again.",
+                es: "Island Aura detectó una excepción de Objective-C y se detuvo. Copia el final de Documents/lara.log antes de volver a intentarlo."
             )
         default:
             return LaraL10n.text(

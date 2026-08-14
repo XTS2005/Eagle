@@ -23,14 +23,14 @@
 
 #import <zlib.h>
 
-long findcachedataoff(const char *mgkey);
+long findcachedataoff(const char * _Nonnull mgkey);
 void LaraClearIconCache(void);
 
 @interface UIDevice(Private)
 + (BOOL)_hasHomeButton;
 @end
 
-void test(NSString *path);
+void test(NSString * _Nonnull path);
 
 NS_ASSUME_NONNULL_BEGIN
 

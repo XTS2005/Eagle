@@ -527,9 +527,7 @@ final class laramgr: ObservableObject {
     // inspired by nugget from leminlimez
     func PPHelper() -> Bool {
         do {
-            let fm = FileManager.default
             let dataFolder = "/private/var/mobile/Containers/Data/Application"
-            let bundleFolder = "/private/var/containers/Bundle/Application"
             var bundleIDs = ["com.apple.PosterBoard"]
             if UIDevice.current.userInterfaceIdiom == .phone {
                 bundleIDs.append("com.apple.CarPlayWallpaper")

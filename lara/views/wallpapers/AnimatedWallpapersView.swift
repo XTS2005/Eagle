@@ -276,7 +276,8 @@ struct AnimatedWallpapersView: View {
                 guard let movie = try await item.loadTransferable(type: LaraMovie.self) else {
                     throw AnimatedWallpaperError.invalidVideo
                 }
-                let duration = CMTimeGetSeconds(AVURLAsset(url: movie.url).duration)
+                let durationTime = try await AVURLAsset(url: movie.url).load(.duration)
+                let duration = CMTimeGetSeconds(durationTime)
                 guard duration.isFinite, duration > 0 else {
                     throw AnimatedWallpaperError.invalidVideo
                 }
@@ -339,6 +340,29 @@ enum AnimatedWallpaperError: LocalizedError {
     }
 }
 
+nonisolated private final class AnimatedWallpaperCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancellationRequested = false
+
+    func reset() {
+        lock.lock()
+        cancellationRequested = false
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        cancellationRequested = true
+        lock.unlock()
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancellationRequested
+    }
+}
+
 final class AnimatedWallpaperInstaller: ObservableObject {
     @Published private(set) var isWorking = false
     @Published private(set) var progress: Double = 0
@@ -346,15 +370,12 @@ final class AnimatedWallpaperInstaller: ObservableObject {
     @Published private(set) var resultMessage: String?
     @Published private(set) var didInstall = false
 
-    private let cancellationLock = NSLock()
-    private var cancellationRequested = false
+    private let cancellation = AnimatedWallpaperCancellation()
 
     func install(video: URL, autoReverses: Bool) {
         guard !isWorking, laramgr.shared.sbxready else { return }
 
-        cancellationLock.lock()
-        cancellationRequested = false
-        cancellationLock.unlock()
+        cancellation.reset()
 
         didInstall = false
         resultMessage = nil
@@ -364,17 +385,17 @@ final class AnimatedWallpaperInstaller: ObservableObject {
 
         let screenSize = AnimatedWallpaperBuilder.recommendedPixelSize()
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
+        let cancellation = cancellation
+        Task.detached(priority: .userInitiated) { [self, cancellation] in
             var buildRoot: URL?
             do {
-                let build = try AnimatedWallpaperBuilder.build(
+                let build = try await AnimatedWallpaperBuilder.build(
                     video: video,
                     autoReverses: autoReverses,
                     targetSize: screenSize,
-                    isCancelled: { self.isCancelled },
-                    progress: { value, label in
-                        DispatchQueue.main.async {
+                    isCancelled: { cancellation.isCancelled },
+                    progress: { [self] value, label in
+                        Task { @MainActor in
                             self.progress = value * 0.88
                             self.progressLabel = label
                         }
@@ -382,15 +403,15 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 )
                 buildRoot = build.workingRoot
 
-                if self.isCancelled { throw AnimatedWallpaperError.cancelled }
-                DispatchQueue.main.async {
+                if cancellation.isCancelled { throw AnimatedWallpaperError.cancelled }
+                await MainActor.run {
                     self.progress = 0.92
                     self.progressLabel = LaraL10n.text(en: "Adding to Wallpapers", es: "Agregando a Fondos")
                 }
 
                 _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
 
-                DispatchQueue.main.async {
+                await MainActor.run {
                     _ = PosterBoardWriter.refreshCollections()
                     self.progress = 1
                     self.progressLabel = LaraL10n.text(en: "Done", es: "Listo")
@@ -402,7 +423,7 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                     )
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isWorking = false
                     self.didInstall = false
                     self.resultMessage = error.localizedDescription
@@ -416,9 +437,7 @@ final class AnimatedWallpaperInstaller: ObservableObject {
     }
 
     func cancel() {
-        cancellationLock.lock()
-        cancellationRequested = true
-        cancellationLock.unlock()
+        cancellation.cancel()
         progressLabel = LaraL10n.text(en: "Canceling", es: "Cancelando")
     }
 
@@ -426,11 +445,6 @@ final class AnimatedWallpaperInstaller: ObservableObject {
         _ = "com.apple.PosterBoard".withCString { launch_app($0) }
     }
 
-    private var isCancelled: Bool {
-        cancellationLock.lock()
-        defer { cancellationLock.unlock() }
-        return cancellationRequested
-    }
 }
 
 struct PosterBoardInstallResult {
@@ -585,16 +599,16 @@ nonisolated enum PosterBoardWriter {
     }
 }
 
-enum AnimatedWallpaperBuilder {
+nonisolated enum AnimatedWallpaperBuilder {
     static let maximumDuration = 12.0
     static let maximumFrames = 300
 
-    struct BuildResult {
+    struct BuildResult: Sendable {
         let workingRoot: URL
         let descriptorURL: URL
     }
 
-    static func recommendedPixelSize() -> CGSize {
+    @MainActor static func recommendedPixelSize() -> CGSize {
         let native = UIScreen.main.nativeBounds.size
         let shortEdge = min(native.width, native.height)
         let longEdge = max(native.width, native.height)
@@ -607,9 +621,9 @@ enum AnimatedWallpaperBuilder {
         video: URL,
         autoReverses: Bool,
         targetSize: CGSize,
-        isCancelled: () -> Bool,
-        progress: (Double, String) -> Void
-    ) throws -> BuildResult {
+        isCancelled: @escaping @Sendable () -> Bool,
+        progress: @escaping @Sendable (Double, String) -> Void
+    ) async throws -> BuildResult {
         let fm = FileManager.default
         let workingRoot = fm.temporaryDirectory.appendingPathComponent("EaglePoster-\(UUID().uuidString)", isDirectory: true)
         let descriptorURL = workingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -672,12 +686,16 @@ enum AnimatedWallpaperBuilder {
 
             progress(0.03, LaraL10n.text(en: "Reading video", es: "Leyendo el video"))
             let asset = AVURLAsset(url: video)
-            let duration = CMTimeGetSeconds(asset.duration)
+            let durationTime = try await asset.load(.duration)
+            let duration = CMTimeGetSeconds(durationTime)
             guard duration.isFinite, duration > 0 else { throw AnimatedWallpaperError.invalidVideo }
             guard duration <= maximumDuration else { throw AnimatedWallpaperError.videoTooLong }
-            guard let track = asset.tracks(withMediaType: .video).first else { throw AnimatedWallpaperError.invalidVideo }
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+                throw AnimatedWallpaperError.invalidVideo
+            }
 
-            let sourceFPS = track.nominalFrameRate > 0 ? Double(track.nominalFrameRate) : 30
+            let nominalFrameRate = try await track.load(.nominalFrameRate)
+            let sourceFPS = nominalFrameRate > 0 ? Double(nominalFrameRate) : 30
             let requestedFPS = min(30, max(15, sourceFPS))
             let frameCount = min(maximumFrames, max(2, Int(floor(duration * requestedFPS))))
             let effectiveFPS = Double(frameCount) / duration

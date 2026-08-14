@@ -95,7 +95,7 @@ struct SpringBoardView: View {
                     if doubleSystemVersion() <= option.maxVers {
                         Section(header: HeaderLabel(text: option.title, icon: option.imageName)) {
                             Picker("Option", selection: $option.selectedOption) {
-                                ForEach(0..<option.options.count) { ind in
+                                ForEach(option.options.indices, id: \.self) { ind in
                                     Text(option.options[ind]).tag(option.options[ind])
                                 }
                             }
@@ -263,7 +263,7 @@ struct SpringBoardView: View {
                     if fileIdentifier == "HomeBar" && value as? Bool == false {
                         if let url: URL = Bundle.main.url(forResource: "HomeBarAssets", withExtension: "car") {
                             do {
-                                let replacementCar = try Data(contentsOf: url)
+                                _ = try Data(contentsOf: url)
                                 //try MDC.overwriteFile(at: "/System/Library/PrivateFrameworks/" + path, with: replacementCar)
                             } catch {
                                 print(error.localizedDescription)

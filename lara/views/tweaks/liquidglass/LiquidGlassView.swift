@@ -109,13 +109,11 @@ struct LiquidGlassView: View {
     }
     
     // MARK: bindings
-    private func gpKeyBinding<T: Equatable>(_ key: String, type: T.Type = Bool.self, default: T? = false, enable: T? = true) -> Binding<Bool> {
+    private func gpKeyBinding(_ key: String, default defaultValue: Bool = false, enable: Bool = true) -> Binding<Bool> {
         return Binding(get: {
             _ = dumbassToggleThatMakesTheViewUpdate
-            if let value = gpCurrentDict[key] as? T?, let enable {
-                return value == enable
-            }
-            return false
+            let value = (gpCurrentDict[key] as? Bool) ?? defaultValue
+            return value == enable
         }, set: { enabled in
             if enabled {
                 dumbassToggleThatMakesTheViewUpdate.toggle()
