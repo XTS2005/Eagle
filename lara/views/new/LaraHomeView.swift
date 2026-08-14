@@ -153,6 +153,20 @@ struct LaraHomeView: View {
                                         accent: Color(red: 0.10, green: 0.78, blue: 1.00)
                                     )
                                 }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: BatteryAuraView()) {
+                                    LaraToolRow(
+                                        title: "Battery Aura",
+                                        subtitle: LaraL10n.text(
+                                            en: "Color and neon battery",
+                                            es: "Color y neón para la batería"
+                                        ),
+                                        systemImage: "battery.75percent",
+                                        accent: Color(red: 0.24, green: 0.84, blue: 0.48)
+                                    )
+                                }
                             }
                             .buttonStyle(.plain)
                             .background(Color(uiColor: .secondarySystemGroupedBackground))
