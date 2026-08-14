@@ -7,6 +7,14 @@ enum IconThemeGalleryFilter: String, CaseIterable, Identifiable {
     case oldest = "Oldest"
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .random: return LaraL10n.text(en: "Discover", es: "Descubrir")
+        case .newest: return LaraL10n.text(en: "Newest", es: "Más recientes")
+        case .oldest: return LaraL10n.text(en: "Oldest", es: "Más antiguos")
+        }
+    }
 }
 
 struct GalleryThemeContact: Codable, Hashable {
@@ -106,7 +114,11 @@ final class IconThemeGalleryManager: ObservableObject {
         downloadingThemeNames.contains(theme.name)
     }
 
-    func downloadAndImport(_ theme: GalleryTheme, importer: IconThemeManager = .shared) async throws {
+    func downloadAndImport(_ theme: GalleryTheme) async throws {
+        try await downloadAndImport(theme, importer: .shared)
+    }
+
+    func downloadAndImport(_ theme: GalleryTheme, importer: IconThemeManager) async throws {
         if downloadingThemeNames.contains(theme.name) { return }
         downloadingThemeNames.insert(theme.name)
         defer { downloadingThemeNames.remove(theme.name) }
@@ -123,7 +135,16 @@ final class IconThemeGalleryManager: ObservableObject {
         try FileManager.default.moveItem(at: temporaryURL, to: importURL)
         defer { try? FileManager.default.removeItem(at: importURL) }
 
-        try importer.importTheme(from: importURL, preferredName: theme.name)
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try importer.importTheme(from: importURL, preferredName: theme.name)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private func absoluteURL(for relativePath: String) async throws -> URL {

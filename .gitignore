@@ -2,3 +2,12 @@ Resources/*
 xcuserdata/
 *.xcuserstate
 .DS_Store
+build/
+DerivedData/
+*.ipa
+*.mobileprovision
+*.p12
+*.cer
+*.pem
+*.key
+*.xcarchive

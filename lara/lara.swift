@@ -53,6 +53,9 @@ struct LaraCustomApp: App {
                     offsets_init()
                     mgr.hasOffsets = emergencyfixfunctiontobereplacedlateronquestionmark()
                 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    EagleSceneManager.shared.applyPendingShortcutIfNeeded()
+                }
             }
             .onChange(of: scenephase, perform: handleScenePhase)
         }
@@ -66,6 +69,9 @@ struct LaraCustomApp: App {
 
         case .active:
             globallogger.capture()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                EagleSceneManager.shared.applyPendingShortcutIfNeeded()
+            }
 
         @unknown default:
             break

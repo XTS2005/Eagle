@@ -3,11 +3,72 @@ import Foundation
 import SwiftUI
 import UIKit
 
-private let iconThemeStorageRoot = URL(fileURLWithPath: "/var/mobile/.DO-NOT-DELETE-lara/IconThemes", isDirectory: true)
+private let iconThemeStorageRoot: URL = {
+    let base = FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+    ).first ?? FileManager.default.temporaryDirectory
+    return base
+        .appendingPathComponent("Eagle", isDirectory: true)
+        .appendingPathComponent("IconThemes", isDirectory: true)
+}()
+private let legacyIconThemeStorageRoot = URL(
+    fileURLWithPath: "/var/mobile/.DO-NOT-DELETE-lara/IconThemes",
+    isDirectory: true
+)
 private let rawThemesDir = iconThemeStorageRoot.appendingPathComponent("RawThemes", isDirectory: true)
 private let processedThemesDir = iconThemeStorageRoot.appendingPathComponent("ProcessedThemes", isDirectory: true)
 private let originalIconsDir = iconThemeStorageRoot.appendingPathComponent("OriginalIconsBackup", isDirectory: true)
 private func clearIconCache() { LaraClearIconCache() }
+
+enum EagleIconShape: String, CaseIterable, Identifiable {
+    case original
+    case circle
+    case material
+
+    static let storageKey = "eagle.iconThemes.shape"
+
+    var id: String { rawValue }
+
+    var liveValue: Int32 {
+        switch self {
+        case .original: return 0
+        case .circle: return 1
+        case .material: return 2
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .original:
+            return LaraL10n.text(en: "Original", es: "Original")
+        case .circle:
+            return LaraL10n.text(en: "Circle", es: "Círculo")
+        case .material:
+            return "Material"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .original:
+            return LaraL10n.text(
+                en: "Keeps the familiar iOS shape.",
+                es: "Conserva la forma familiar de iOS."
+            )
+        case .circle:
+            return LaraL10n.text(
+                en: "Round icons inspired by Pixel launchers.",
+                es: "Iconos redondos inspirados en los Pixel."
+            )
+        case .material:
+            return LaraL10n.text(
+                en: "A compact Android-style rounded square.",
+                es: "Un cuadrado redondeado compacto al estilo Android."
+            )
+        }
+    }
+}
 
 struct LaraIconTheme: Identifiable, Equatable, Hashable {
     let name: String
@@ -26,8 +87,11 @@ struct LaraThemedIcon: Codable {
         rawThemesDir.appendingPathComponent(themeName).appendingPathComponent(appID + ".png")
     }
 
-    func cachedThemeIconURL(fileName: String) -> URL {
-        processedThemesDir.appendingPathComponent(themeName).appendingPathComponent(appID + "----" + fileName)
+    func cachedThemeIconURL(fileName: String, shape: EagleIconShape, appVersion: String) -> URL {
+        processedThemesDir
+            .appendingPathComponent(themeName)
+            .appendingPathComponent(shape.rawValue)
+            .appendingPathComponent(appID + "----" + appVersion + "----" + fileName)
     }
 }
 
@@ -112,13 +176,19 @@ struct LaraThemedApp: Identifiable, Hashable {
         }
     }
 
-    func setPNGIcons(icon: LaraThemedIcon) throws {
+    @discardableResult
+    func setPNGIcons(icon: LaraThemedIcon, shape: EagleIconShape) throws -> Int {
         let fm = FileManager.default
+        var changedFiles = 0
         for iconName in pngIconPaths {
             let iconURL = bundleURL.appendingPathComponent(iconName)
             guard fm.fileExists(atPath: iconURL.path) else { continue }
 
-            let cachedIconURL = icon.cachedThemeIconURL(fileName: iconName)
+            let cachedIconURL = icon.cachedThemeIconURL(
+                fileName: iconName,
+                shape: shape,
+                appVersion: version
+            )
             var cachedIcon = try? Data(contentsOf: cachedIconURL)
 
             if cachedIcon == nil {
@@ -132,24 +202,18 @@ struct LaraThemedApp: Identifiable, Hashable {
                     throw NSError(domain: "IconThemer", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not read original icon image at \(iconURL.path)"])
                 }
 
-                var processedImage: Data?
-                var resScale: CGFloat = 1.0
-                let width = max(origImage.size.width / 2.0, 8.0)
+                let pixelSize = CGSize(
+                    width: max(CGFloat(origImage.cgImage?.width ?? Int(origImage.size.width)), 8),
+                    height: max(CGFloat(origImage.cgImage?.height ?? Int(origImage.size.height)), 8)
+                )
+                let rendered = renderThemeIcon(themeIcon, size: pixelSize, shape: shape)
 
-                while resScale > 0.01 {
-                    let size = CGSize(width: width * resScale, height: width * resScale)
-                    let rendered = UIGraphicsImageRenderer(size: size).image { _ in
-                        themeIcon.draw(in: CGRect(origin: .zero, size: size))
-                    }
-                    processedImage = try? rendered.resizeToApprox(allowedSizeInBytes: origImageData.count)
-                    if processedImage != nil {
-                        break
-                    }
-                    resScale *= 0.75
-                }
-
-                guard let processedImage else {
-                    throw NSError(domain: "IconThemer", code: 5, userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not fit icon \(iconName) inside original size budget"])
+                guard let processedImage = rendered.pngData() else {
+                    throw NSError(
+                        domain: "IconThemer",
+                        code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not render \(iconName) as a transparent PNG"]
+                    )
                 }
 
                 try? FileManager.default.createDirectory(at: cachedIconURL.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
@@ -158,28 +222,189 @@ struct LaraThemedApp: Identifiable, Hashable {
             }
 
             guard let cachedIcon else { continue }
-            
-            let chown1 = SantanderChown.chown( path: iconURL.path, uid: 501, gid: 501)
-            if(!chown1) {
-                throw NSError(domain: "IconThemer", code: 6, userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): 1st chown failed"])
-            }
-            
-            let overwrite = laramgr.shared.lara_overwritefile(target: iconURL.path, data: cachedIcon)
-            if !overwrite.ok {
-                throw NSError(domain: "IconThemer", code: 6, userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): \(overwrite.message)"])
-            }
-            
-            let chown2 = SantanderChown.chown( path: iconURL.path, uid: 33, gid: 33)
-            if(!chown2) {
-                throw NSError(domain: "IconThemer", code: 6, userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): 2nd chown failed"])
-            }
+            try overwriteIcon(at: iconURL, data: cachedIcon)
+            changedFiles += 1
         }
+        return changedFiles
+    }
+
+    @discardableResult
+    func setOriginalPNGIcons(shape: EagleIconShape) throws -> Int {
+        guard shape != .original else {
+            try restorePNGIcons()
+            return 0
+        }
+
+        let fm = FileManager.default
+        var changedFiles = 0
+        for iconName in pngIconPaths {
+            let iconURL = bundleURL.appendingPathComponent(iconName)
+            guard fm.fileExists(atPath: iconURL.path),
+                  let originalURL = backedUpIconURL(fileName: iconName) else { continue }
+
+            let cachedIconURL = processedThemesDir
+                .appendingPathComponent("OriginalShapes")
+                .appendingPathComponent(shape.rawValue)
+                .appendingPathComponent(bundleIdentifier)
+                .appendingPathComponent(version)
+                .appendingPathComponent(iconName)
+
+            var cachedIcon = try? Data(contentsOf: cachedIconURL)
+            if cachedIcon == nil {
+                let originalData = try Data(contentsOf: originalURL)
+                guard let originalImage = UIImage(data: originalData) else {
+                    throw NSError(
+                        domain: "IconThemer",
+                        code: 4,
+                        userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not read the original \(iconName)"]
+                    )
+                }
+
+                let pixelSize = CGSize(
+                    width: max(CGFloat(originalImage.cgImage?.width ?? Int(originalImage.size.width)), 8),
+                    height: max(CGFloat(originalImage.cgImage?.height ?? Int(originalImage.size.height)), 8)
+                )
+                let rendered = renderThemeIcon(originalImage, size: pixelSize, shape: shape)
+                guard let processedImage = rendered.pngData() else {
+                    throw NSError(
+                        domain: "IconThemer",
+                        code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not render \(iconName) as a transparent PNG"]
+                    )
+                }
+
+                try fm.createDirectory(
+                    at: cachedIconURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+                try processedImage.write(to: cachedIconURL)
+                cachedIcon = processedImage
+            }
+
+            guard let cachedIcon else { continue }
+            try overwriteIcon(at: iconURL, data: cachedIcon)
+            changedFiles += 1
+        }
+        return changedFiles
+    }
+
+    private func overwriteIcon(at iconURL: URL, data: Data) throws {
+        guard SantanderChown.chown(path: iconURL.path, uid: 501, gid: 501) else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not prepare the icon file"]
+            )
+        }
+
+        let overwrite = laramgr.shared.lara_overwritefile(target: iconURL.path, data: data)
+        guard overwrite.ok else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): \(overwrite.message)"]
+            )
+        }
+
+        guard SantanderChown.chown(path: iconURL.path, uid: 33, gid: 33) else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "\(bundleIdentifier): Could not finalize the icon file"]
+            )
+        }
+
+        guard let writtenData = try? Data(contentsOf: iconURL), writtenData == data else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 6,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        LaraL10n.text(
+                            en: "\(bundleIdentifier): Eagle could not verify \(iconURL.lastPathComponent) after writing it",
+                            es: "\(bundleIdentifier): Eagle no pudo verificar \(iconURL.lastPathComponent) después de escribirlo"
+                        )
+                ]
+            )
+        }
+    }
+
+    private func renderThemeIcon(_ image: UIImage, size: CGSize, shape: EagleIconShape) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let canvas = CGRect(origin: .zero, size: size)
+            context.cgContext.clear(canvas)
+            context.cgContext.interpolationQuality = .high
+
+            let minimumEdge = min(size.width, size.height)
+            let square = CGRect(
+                x: (size.width - minimumEdge) / 2,
+                y: (size.height - minimumEdge) / 2,
+                width: minimumEdge,
+                height: minimumEdge
+            )
+
+            let contentRect: CGRect
+            let maskPath: UIBezierPath?
+
+            switch shape {
+            case .original:
+                contentRect = square
+                maskPath = nil
+            case .circle:
+                contentRect = square.insetBy(dx: minimumEdge * 0.035, dy: minimumEdge * 0.035)
+                maskPath = UIBezierPath(ovalIn: contentRect)
+            case .material:
+                contentRect = square.insetBy(dx: minimumEdge * 0.035, dy: minimumEdge * 0.035)
+                maskPath = UIBezierPath(
+                    roundedRect: contentRect,
+                    cornerRadius: contentRect.width * 0.18
+                )
+            }
+
+            context.cgContext.saveGState()
+            maskPath?.addClip()
+            image.draw(in: aspectFillRect(for: image.size, inside: contentRect))
+            context.cgContext.restoreGState()
+        }
+    }
+
+    private func aspectFillRect(for sourceSize: CGSize, inside targetRect: CGRect) -> CGRect {
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return targetRect }
+        let scale = max(
+            targetRect.width / sourceSize.width,
+            targetRect.height / sourceSize.height
+        )
+        let renderedSize = CGSize(
+            width: sourceSize.width * scale,
+            height: sourceSize.height * scale
+        )
+        return CGRect(
+            x: targetRect.midX - renderedSize.width / 2,
+            y: targetRect.midY - renderedSize.height / 2,
+            width: renderedSize.width,
+            height: renderedSize.height
+        )
     }
 }
 
 struct LaraAppIconChange {
     let app: LaraThemedApp
     let icon: LaraThemedIcon?
+}
+
+struct EagleIconApplyResult {
+    let errors: [String]
+    let fileChangeCount: Int
+}
+
+struct EagleLiveIconResult {
+    let shapedIconCount: Int
+    let themedIconCount: Int
 }
 
 final class IconThemeManager: ObservableObject {
@@ -195,6 +420,11 @@ final class IconThemeManager: ObservableObject {
     @Published var fixupProgress: Double = 0
     @Published var fixupMessage = ""
     @Published var showFixupSheet = false
+    @Published var selectedIconShape: EagleIconShape {
+        didSet {
+            UserDefaults.standard.set(selectedIconShape.rawValue, forKey: EagleIconShape.storageKey)
+        }
+    }
     private let mgr = laramgr.shared
 
     private let fm = FileManager.default
@@ -203,6 +433,9 @@ final class IconThemeManager: ObservableObject {
     private let pendingFixupKey = "lara.iconThemes.pendingFixup"
     private init() {
         self.selectedThemeNames = UserDefaults.standard.stringArray(forKey: selectedThemesKey) ?? []
+        self.selectedIconShape = EagleIconShape(
+            rawValue: UserDefaults.standard.string(forKey: EagleIconShape.storageKey) ?? ""
+        ) ?? .original
         refreshThemes()
     }
 
@@ -284,6 +517,31 @@ final class IconThemeManager: ObservableObject {
         try? fm.createDirectory(at: rawThemesDir, withIntermediateDirectories: true, attributes: nil)
         try? fm.createDirectory(at: processedThemesDir, withIntermediateDirectories: true, attributes: nil)
         try? fm.createDirectory(at: originalIconsDir, withIntermediateDirectories: true, attributes: nil)
+        migrateReadableLegacyThemesIfNeeded()
+    }
+
+    private func migrateReadableLegacyThemesIfNeeded() {
+        guard ((try? fm.contentsOfDirectory(at: rawThemesDir, includingPropertiesForKeys: nil)) ?? []).isEmpty else {
+            return
+        }
+
+        let legacyRawThemes = legacyIconThemeStorageRoot.appendingPathComponent("RawThemes", isDirectory: true)
+        guard let legacyThemes = try? fm.contentsOfDirectory(
+            at: legacyRawThemes,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        for legacyTheme in legacyThemes where legacyTheme.hasDirectoryPath {
+            let destination = rawThemesDir.appendingPathComponent(
+                legacyTheme.lastPathComponent,
+                isDirectory: true
+            )
+            guard !fm.fileExists(atPath: destination.path) else { continue }
+            try? fm.copyItem(at: legacyTheme, to: destination)
+        }
     }
 
     func refreshThemes() {
@@ -311,7 +569,7 @@ final class IconThemeManager: ObservableObject {
         let userAppsDir = (try? fm.contentsOfDirectory(at: userApplicationsURL, includingPropertiesForKeys: nil)) ?? []
         for folder in userAppsDir {
             let contents = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-            if let dotApp = contents.first(where: { $0.absoluteString.hasSuffix(".app/") }) {
+            if let dotApp = contents.first(where: { $0.pathExtension.lowercased() == "app" }) {
                 dotAppDirs.append(dotApp)
             }
         }
@@ -332,23 +590,11 @@ final class IconThemeManager: ObservableObject {
                 hiddenFromSpringboard: false
             )
 
-            if bundleID == "com.apple.mobiletimer" {
-                app.pngIconPaths.append("circle_borderless@2x~iphone.png")
-            }
-
-            if let icons = infoPlist["CFBundleIcons"] as? [String: AnyObject],
-               let primary = icons["CFBundlePrimaryIcon"] as? [String: AnyObject] {
-                if let iconFiles = primary["CFBundleIconFiles"] as? [String] {
-                    app.pngIconPaths += iconFiles.map { $0.hasSuffix(".png") ? $0 : $0 + "@2x.png" }
-                }
-            }
-
-            if let bundleIconFile = infoPlist["CFBundleIconFile"] as? String {
-                app.pngIconPaths.append(bundleIconFile.hasSuffix(".png") ? bundleIconFile : bundleIconFile + ".png")
-            }
-            if let bundleIconFiles = infoPlist["CFBundleIconFiles"] as? [String], !bundleIconFiles.isEmpty {
-                app.pngIconPaths += bundleIconFiles.map { $0.hasSuffix(".png") ? $0 : $0 + ".png" }
-            }
+            app.pngIconPaths = resolvedPNGIconPaths(
+                infoPlist: infoPlist,
+                bundleURL: bundleURL,
+                bundleID: bundleID
+            )
             if let tags = infoPlist["SBAppTags"] as? [String], tags.contains("hidden") {
                 app.hiddenFromSpringboard = true
             }
@@ -358,6 +604,51 @@ final class IconThemeManager: ObservableObject {
         }
 
         installedApps = apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private func resolvedPNGIconPaths(
+        infoPlist: [String: AnyObject],
+        bundleURL: URL,
+        bundleID: String
+    ) -> [String] {
+        var declaredNames: [String] = []
+
+        for iconsKey in ["CFBundleIcons", "CFBundleIcons~ipad"] {
+            if let icons = infoPlist[iconsKey] as? [String: AnyObject],
+               let primary = icons["CFBundlePrimaryIcon"] as? [String: AnyObject],
+               let files = primary["CFBundleIconFiles"] as? [String] {
+                declaredNames += files
+            }
+        }
+        if let file = infoPlist["CFBundleIconFile"] as? String {
+            declaredNames.append(file)
+        }
+        if let files = infoPlist["CFBundleIconFiles"] as? [String] {
+            declaredNames += files
+        }
+        if bundleID == "com.apple.mobiletimer" {
+            declaredNames.append("circle_borderless@2x~iphone.png")
+        }
+
+        let bundlePNGs = ((try? fm.contentsOfDirectory(at: bundleURL, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "png" }
+        var resolved: [String] = []
+
+        for declaredName in declaredNames {
+            let normalizedName = URL(fileURLWithPath: declaredName).lastPathComponent
+            let stem = URL(fileURLWithPath: normalizedName).deletingPathExtension().lastPathComponent
+
+            let matches = bundlePNGs.filter { candidate in
+                let candidateStem = candidate.deletingPathExtension().lastPathComponent
+                return candidate.lastPathComponent == normalizedName ||
+                    candidateStem == stem ||
+                    candidateStem.hasPrefix(stem + "@") ||
+                    candidateStem.hasPrefix(stem + "~")
+            }
+            resolved += matches.map(\.lastPathComponent)
+        }
+
+        return Array(NSOrderedSet(array: resolved)) as? [String] ?? resolved
     }
 
     func icons(forAppIDs appIDs: [String], from theme: LaraIconTheme) -> [UIImage?] {
@@ -389,78 +680,142 @@ final class IconThemeManager: ObservableObject {
         let workingURL = importURL.resolvingSymlinksInPath()
         let derivedThemeName = workingURL.deletingPathExtension().lastPathComponent
         let finalThemeName = sanitizedThemeName(preferredName ?? derivedThemeName)
+        let isDirectory = try workingURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
 
         let sourceDirectory: URL
-        if workingURL.hasDirectoryPath {
-            sourceDirectory = try resolveThemeSourceDirectory(from: workingURL)
-        } else {
-            let ext = workingURL.pathExtension.lowercased()
-            if ext == "theme" || ext == "zip" {
-                let tempDir = fm.temporaryDirectory.appendingPathComponent("theme_import_\(UUID().uuidString)", isDirectory: true)
-                try fm.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
-                defer { try? fm.removeItem(at: tempDir) }
-
-                let extractDir = tempDir.appendingPathComponent("Extracted", isDirectory: true)
-                try fm.createDirectory(at: extractDir, withIntermediateDirectories: true, attributes: nil)
-                
-                let archivePath = tempDir.appendingPathComponent("import.\(ext == "zip" ? "zip" : "theme")")
-                try Data(contentsOf: workingURL).write(to: archivePath)
-                try unzipFile(at: archivePath, to: extractDir)
-                let resolvedSource = try resolveThemeSourceDirectory(from: extractDir)
-                let themeURL = rawThemesDir.appendingPathComponent(finalThemeName, isDirectory: true)
-                try? fm.removeItem(at: themeURL)
-                try fm.createDirectory(at: themeURL, withIntermediateDirectories: true, attributes: nil)
-
-                for icon in (try? fm.contentsOfDirectory(at: resolvedSource, includingPropertiesForKeys: nil)) ?? [] {
-                    guard icon.pathExtension.lowercased() == "png" else { continue }
-                    let appID = appIDFromIcon(url: icon)
-                    let destination = themeURL.appendingPathComponent(appID + ".png")
-                    try? fm.removeItem(at: destination)
-                    do {
-                        try fm.copyItem(at: icon, to: destination)
-                        icon_logmsg("copied icon: \(appID)")
-                    } catch {
-                        icon_logmsg("copy fail: \(appID) -> \(error.localizedDescription)")
-                    }
-                }
-
-                let importedIcons = ((try? fm.contentsOfDirectory(at: themeURL, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension.lowercased() == "png" }
-                if importedIcons.isEmpty {
-                    try? fm.removeItem(at: themeURL)
-                    throw NSError(domain: "IconThemer", code: 9, userInfo: [NSLocalizedDescriptionKey: "No icons were found in the imported theme. Expected `<bundle-id>.png` in a folder."])
-                }
-
-                refreshThemes()
-                return
-            } else {
-                throw NSError(domain: "IconThemer", code: 8, userInfo: [NSLocalizedDescriptionKey: "Unsupported theme import type: \(workingURL.lastPathComponent)"])
+        var temporaryDirectory: URL?
+        defer {
+            if let temporaryDirectory {
+                try? fm.removeItem(at: temporaryDirectory)
             }
         }
 
-        let themeURL = rawThemesDir.appendingPathComponent(finalThemeName, isDirectory: true)
+        if isDirectory {
+            sourceDirectory = try resolveThemeSourceDirectory(from: workingURL)
+        } else {
+            let ext = workingURL.pathExtension.lowercased()
+            guard ext == "theme" || ext == "zip" else {
+                throw NSError(domain: "IconThemer", code: 8, userInfo: [NSLocalizedDescriptionKey: "Unsupported theme import type: \(workingURL.lastPathComponent)"])
+            }
+
+            let tempDir = fm.temporaryDirectory.appendingPathComponent("theme_import_\(UUID().uuidString)", isDirectory: true)
+            temporaryDirectory = tempDir
+            try fm.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
+
+            let extractDir = tempDir.appendingPathComponent("Extracted", isDirectory: true)
+            try fm.createDirectory(at: extractDir, withIntermediateDirectories: true, attributes: nil)
+            let archivePath = tempDir.appendingPathComponent("import.\(ext)")
+            try Data(contentsOf: workingURL).write(to: archivePath)
+            try unzipFile(at: archivePath, to: extractDir)
+            sourceDirectory = try resolveThemeSourceDirectory(from: extractDir)
+        }
+
+        try installThemeIcons(from: sourceDirectory, themeName: finalThemeName)
+        finishThemeImport(named: finalThemeName)
+    }
+
+    private func finishThemeImport(named themeName: String) {
+        let updateState = {
+            self.refreshThemes()
+            if !self.selectedThemeNames.contains(themeName) {
+                self.selectedThemeNames.append(themeName)
+                self.saveSelection()
+            }
+        }
+        if Thread.isMainThread {
+            updateState()
+        } else {
+            DispatchQueue.main.sync(execute: updateState)
+        }
+    }
+
+    @discardableResult
+    func importSingleIcon(data: Data, for bundleID: String) throws -> LaraIconTheme {
+        createDirectoriesIfNeeded()
+        guard !bundleID.isEmpty,
+              let image = UIImage(data: data),
+              let pngData = image.pngData() else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 11,
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "This file is not a readable PNG image.",
+                    es: "Este archivo no es una imagen PNG válida."
+                )]
+            )
+        }
+
+        let themeName = "My Icons"
+        let themeURL = rawThemesDir.appendingPathComponent(themeName, isDirectory: true)
+        try fm.createDirectory(at: themeURL, withIntermediateDirectories: true, attributes: nil)
+        try pngData.write(to: themeURL.appendingPathComponent(bundleID + ".png"), options: .atomic)
+        try? fm.removeItem(at: processedThemesDir.appendingPathComponent(themeName, isDirectory: true))
+
+        setOverride(bundleID: bundleID, themeName: themeName)
+        refreshThemes()
+        guard let theme = theme(named: themeName) else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 11,
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "Eagle saved the icon but could not refresh My Icons.",
+                    es: "Eagle guardó el icono, pero no pudo actualizar Mis iconos."
+                )]
+            )
+        }
+        return theme
+    }
+
+    private func installThemeIcons(from sourceDirectory: URL, themeName: String) throws {
+        let themeURL = rawThemesDir.appendingPathComponent(themeName, isDirectory: true)
+        let sourceIcons = validIconPNGs(in: sourceDirectory)
+
+        guard !sourceIcons.isEmpty else {
+            throw NSError(
+                domain: "IconThemer",
+                code: 9,
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "No PNG icons were found. Expected files named `<bundle-id>.png`.",
+                    es: "No se encontraron iconos PNG. Se esperaban archivos llamados `<bundle-id>.png`."
+                )]
+            )
+        }
+
         try? fm.removeItem(at: themeURL)
+        try? fm.removeItem(at: processedThemesDir.appendingPathComponent(themeName, isDirectory: true))
         try fm.createDirectory(at: themeURL, withIntermediateDirectories: true, attributes: nil)
 
-        for icon in (try? fm.contentsOfDirectory(at: sourceDirectory, includingPropertiesForKeys: nil)) ?? [] {
-            guard icon.pathExtension.lowercased() == "png" else { continue }
+        var importedCount = 0
+        for icon in sourceIcons {
+            guard let data = try? Data(contentsOf: icon), UIImage(data: data) != nil else {
+                icon_logmsg("skipped unreadable image: \(icon.lastPathComponent)")
+                continue
+            }
+
             let appID = appIDFromIcon(url: icon)
+            guard !appID.isEmpty else { continue }
             let destination = themeURL.appendingPathComponent(appID + ".png")
             try? fm.removeItem(at: destination)
             do {
-                try fm.copyItem(at: icon, to: destination)
+                try data.write(to: destination, options: .atomic)
+                importedCount += 1
                 icon_logmsg("copied icon: \(appID)")
             } catch {
                 icon_logmsg("copy fail: \(appID) -> \(error.localizedDescription)")
             }
         }
 
-        let importedIcons = ((try? fm.contentsOfDirectory(at: themeURL, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension.lowercased() == "png" }
-        if importedIcons.isEmpty {
+        if importedCount == 0 {
             try? fm.removeItem(at: themeURL)
-            throw NSError(domain: "IconThemer", code: 9, userInfo: [NSLocalizedDescriptionKey: "No icons were found in the imported theme. Expected `<bundle-id>.png` in a folder."])
+            throw NSError(
+                domain: "IconThemer",
+                code: 9,
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The package contained PNG files, but none could be read as app icons.",
+                    es: "El paquete contenía archivos PNG, pero ninguno se pudo leer como icono de app."
+                )]
+            )
         }
-
-        refreshThemes()
     }
 
     func removeTheme(_ theme: LaraIconTheme) throws {
@@ -503,17 +858,21 @@ final class IconThemeManager: ObservableObject {
     }
 
     @discardableResult
-    func applyThemes() throws -> [String] {
+    func applyThemes() throws -> EagleIconApplyResult {
         createDirectoriesIfNeeded()
         let changes = try neededChanges()
+        let chosenShape = selectedIconShape
         let changeCount = max(Double(changes.count), 1.0)
         var errors: [String] = []
-        var themedCount = 0
+        var changedCount = 0
 
         DispatchQueue.main.async {
             self.isApplying = true
             self.applyProgress = 0
-            self.applyMessage = "Preparing icon changes..."
+            self.applyMessage = LaraL10n.text(
+                en: "Preparing icon changes…",
+                es: "Preparando los iconos…"
+            )
         }
 
         defer {
@@ -526,15 +885,17 @@ final class IconThemeManager: ObservableObject {
             autoreleasepool {
                 DispatchQueue.main.async {
                     self.applyProgress = Double(index) / changeCount
-                    self.applyMessage = "Applying \(change.app.name)"
+                    self.applyMessage = LaraL10n.text(
+                        en: "Applying \(change.app.name)",
+                        es: "Aplicando \(change.app.name)"
+                    )
                 }
 
                 do {
                     if let icon = change.icon {
-                        themedCount += 1
                         change.app.backUpPNGIcons()
                         try? fm.createDirectory(at: processedThemesDir.appendingPathComponent(icon.themeName), withIntermediateDirectories: true, attributes: nil)
-                        try change.app.setPNGIcons(icon: icon)
+                        changedCount += try change.app.setPNGIcons(icon: icon, shape: chosenShape)
                     } else {
                         try change.app.restorePNGIcons()
                     }
@@ -546,12 +907,142 @@ final class IconThemeManager: ObservableObject {
 
         DispatchQueue.main.async {
             self.applyProgress = 1.0
-            self.applyMessage = "Clearing icon cache..."
+            self.applyMessage = LaraL10n.text(
+                en: "Refreshing the icon cache…",
+                es: "Actualizando la caché de iconos…"
+            )
         }
         clearIconCache()
 
-        UserDefaults.standard.set(themedCount > 0, forKey: pendingFixupKey)
-        return errors
+        UserDefaults.standard.set(changedCount > 0, forKey: pendingFixupKey)
+        return EagleIconApplyResult(errors: errors, fileChangeCount: changedCount)
+    }
+
+    func applyLiveIcons(completion: @escaping (Result<EagleLiveIconResult, Error>) -> Void) {
+        let finish: (Result<EagleLiveIconResult, Error>) -> Void = { result in
+            DispatchQueue.main.async {
+                self.isApplying = false
+                completion(result)
+            }
+        }
+
+        let applyWithCurrentSession = {
+            guard let process = self.mgr.sbProc else {
+                finish(.failure(NSError(
+                    domain: "IconThemer",
+                    code: 12,
+                    userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                        en: "Eagle connected to SpringBoard but did not receive a live session.",
+                        es: "Eagle se conectó a SpringBoard, pero no recibió una sesión activa."
+                    )]
+                )))
+                return
+            }
+
+            let iconPaths = self.preferredLiveIconPaths()
+            let shape = self.selectedIconShape.liveValue
+            DispatchQueue.main.async {
+                self.isApplying = true
+                self.applyProgress = 0.86
+                self.applyMessage = LaraL10n.text(
+                    en: "Applying the live Home Screen style…",
+                    es: "Aplicando el estilo en vivo…"
+                )
+            }
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                let shaped: Int
+                let themed: Int
+                if shape == EagleIconShape.original.liveValue {
+                    shaped = Int(eagle_apply_live_icon_shape(process, shape))
+                    themed = Int(eagle_apply_live_icon_theme(process, iconPaths, shape))
+                } else {
+                    themed = Int(eagle_apply_live_icon_theme(process, iconPaths, shape))
+                    shaped = Int(eagle_apply_live_icon_shape(process, shape))
+                }
+
+                guard shaped > 0 else {
+                    finish(.failure(NSError(
+                        domain: "IconThemer",
+                        code: 13,
+                        userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                            en: "SpringBoard did not expose any Home Screen app icons. Unlock the phone, return to the Home Screen once, reopen Eagle, and try again.",
+                            es: "SpringBoard no mostró iconos de apps. Desbloquea el iPhone, ve una vez a la pantalla de inicio, vuelve a Eagle e inténtalo de nuevo."
+                        )]
+                    )))
+                    return
+                }
+
+                finish(.success(EagleLiveIconResult(
+                    shapedIconCount: shaped,
+                    themedIconCount: max(themed, 0)
+                )))
+            }
+        }
+
+        DispatchQueue.main.async {
+            self.isApplying = true
+            self.applyProgress = 0.78
+            self.applyMessage = LaraL10n.text(
+                en: "Connecting to SpringBoard…",
+                es: "Conectando con SpringBoard…"
+            )
+        }
+
+        if mgr.rcready, mgr.sbProc != nil {
+            applyWithCurrentSession()
+            return
+        }
+
+        guard mgr.dsready else {
+            finish(.failure(NSError(
+                domain: "IconThemer",
+                code: 12,
+                userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "Complete Eagle setup before applying live icons.",
+                    es: "Completa la preparación de Eagle antes de aplicar iconos en vivo."
+                )]
+            )))
+            return
+        }
+
+        mgr.rcinit(process: "SpringBoard") { success in
+            if success || (self.mgr.rcready && self.mgr.sbProc != nil) {
+                applyWithCurrentSession()
+            } else {
+                let detail = self.mgr.rcLastError?.trimmingCharacters(in: .whitespacesAndNewlines)
+                finish(.failure(NSError(
+                    domain: "IconThemer",
+                    code: 12,
+                    userInfo: [NSLocalizedDescriptionKey: detail?.isEmpty == false
+                        ? detail!
+                        : LaraL10n.text(
+                            en: "Eagle could not start the live SpringBoard session.",
+                            es: "Eagle no pudo iniciar la sesión en vivo con SpringBoard."
+                        )]
+                )))
+            }
+        }
+    }
+
+    private func preferredLiveIconPaths() -> [String: String] {
+        let icons = preferredIcons
+        var paths: [String: String] = [:]
+
+        for (bundleID, icon) in icons where fm.fileExists(atPath: icon.rawThemeIconURL.path) {
+            paths[bundleID] = icon.rawThemeIconURL.path
+        }
+
+        for app in installedApps where paths[app.bundleIdentifier] == nil {
+            var components = app.bundleIdentifier.components(separatedBy: ".")
+            guard components.count > 2 else { continue }
+            components.removeLast()
+            let parentID = components.joined(separator: ".")
+            if let parentPath = paths[parentID] {
+                paths[app.bundleIdentifier] = parentPath
+            }
+        }
+        return paths
     }
 
     func startPendingFixupIfPossible() {
@@ -568,7 +1059,10 @@ final class IconThemeManager: ObservableObject {
 
         isFixingUp = true
         fixupProgress = 0
-        fixupMessage = "Restoring original app icons..."
+        fixupMessage = LaraL10n.text(
+            en: "Restoring original app icons…",
+            es: "Restaurando los iconos originales…"
+        )
 
         let apps = installedApps.filter { !$0.hiddenFromSpringboard && !$0.pngIconPaths.isEmpty }
         let appCount = max(Double(apps.count), 1.0)
@@ -578,7 +1072,10 @@ final class IconThemeManager: ObservableObject {
             for (index, app) in apps.enumerated() {
                 DispatchQueue.main.async {
                     self.fixupProgress = Double(index) / appCount
-                    self.fixupMessage = "Fixing \(app.name)"
+                    self.fixupMessage = LaraL10n.text(
+                        en: "Finishing \(app.name)",
+                        es: "Terminando \(app.name)"
+                    )
                 }
                 do {
                     try app.restorePNGIcons()
@@ -589,7 +1086,12 @@ final class IconThemeManager: ObservableObject {
 
             DispatchQueue.main.async {
                 self.fixupProgress = 1.0
-                self.fixupMessage = errors.isEmpty ? "Your apps should now function properly." : errors.joined(separator: "\n\n")
+                self.fixupMessage = errors.isEmpty
+                    ? LaraL10n.text(
+                        en: "Your icons are ready and your apps should work normally.",
+                        es: "Tus iconos están listos y las apps deberían funcionar normalmente."
+                    )
+                    : errors.joined(separator: "\n\n")
                 self.isFixingUp = false
                 UserDefaults.standard.set(false, forKey: self.pendingFixupKey)
             }
@@ -607,14 +1109,14 @@ final class IconThemeManager: ObservableObject {
     }
 
     private func iconFileEnding(iconFilename: String) -> String {
-        if iconFilename.contains("-large@2x.png") {
-            return "-large@2x"
-        } else if iconFilename.contains("-large.png") {
-            return "-large"
-        } else if iconFilename.contains("@2x.png") {
-            return "@2x"
-        } else if iconFilename.contains("@3x.png") {
-            return "@3x"
+        let baseName = URL(fileURLWithPath: iconFilename).deletingPathExtension().lastPathComponent
+        let commonSuffixes = [
+            "-large@3x~iphone", "-large@2x~iphone", "-large@3x", "-large@2x",
+            "@3x~iphone", "@2x~iphone", "@3x~ipad", "@2x~ipad",
+            "-large", "-small", "@3x", "@2x", "~iphone", "~ipad",
+        ]
+        if let suffix = commonSuffixes.first(where: { baseName.hasSuffix($0) }) {
+            return suffix
         }
         return ""
     }
@@ -659,15 +1161,17 @@ final class IconThemeManager: ObservableObject {
     private func findFirstDirectoryContainingPNGs(in root: URL) -> URL? {
         icon_logmsg("scanning root: \(root.path)")
 
-        let rootPNGs = (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil))?.filter { $0.pathExtension.lowercased() == "png" } ?? []
+        var bestDirectory: URL?
+        var bestIconCount = 0
 
-        if !rootPNGs.isEmpty {
-            icon_logmsg("found png-s in root: \(root.path)")
-            for png in rootPNGs {
-                icon_logmsg("png: \(png.lastPathComponent)")
-            }
-            return root
+        func consider(_ directory: URL) {
+            let icons = validIconPNGs(in: directory)
+            guard icons.count > bestIconCount else { return }
+            bestDirectory = directory
+            bestIconCount = icons.count
         }
+
+        consider(root)
 
         guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
         ) else {
@@ -676,20 +1180,44 @@ final class IconThemeManager: ObservableObject {
         }
 
         for case let url as URL in enumerator {
-            icon_logmsg("scanning directory \(url.path) ...")
-
-            guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { continue }
-
-            let pngs = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil))?.filter { $0.pathExtension.lowercased() == "png" } ?? []
-
-            if !pngs.isEmpty {
-                icon_logmsg("found png-s: \(url.path)")
-                for png in pngs { icon_logmsg("png: \(png.lastPathComponent)") }
-                return url
-            } else { icon_logmsg("no png-s: \(url.lastPathComponent)") }
+            guard !isArchiveMetadataURL(url),
+                  (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+                continue
+            }
+            consider(url)
         }
-        icon_logmsg("no directories found containing .png-s")
-        return nil
+
+        if let bestDirectory {
+            icon_logmsg("selected icon directory: \(bestDirectory.path) (\(bestIconCount) valid PNGs)")
+        } else {
+            icon_logmsg("no directories found containing readable PNG icons")
+        }
+        return bestDirectory
+    }
+
+    private func validIconPNGs(in directory: URL) -> [URL] {
+        let candidates = (try? fm.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        return candidates.filter { url in
+            guard !isArchiveMetadataURL(url),
+                  url.pathExtension.lowercased() == "png",
+                  let data = try? Data(contentsOf: url),
+                  UIImage(data: data) != nil else {
+                return false
+            }
+            return true
+        }
+    }
+
+    private func isArchiveMetadataURL(_ url: URL) -> Bool {
+        let components = url.standardizedFileURL.pathComponents
+        return components.contains("__MACOSX") ||
+            url.lastPathComponent == ".DS_Store" ||
+            url.lastPathComponent.hasPrefix("._")
     }
 
     private func sanitizedThemeName(_ name: String) -> String {
@@ -727,6 +1255,13 @@ final class IconThemeManager: ObservableObject {
             unzip_logmsg("entry: \(entry.path)")
 
             let normalizedPath = entry.path.replacingOccurrences(of: "\\", with: "/")
+            let pathComponents = normalizedPath.split(separator: "/").map(String.init)
+            if pathComponents.contains("__MACOSX") ||
+                pathComponents.last == ".DS_Store" ||
+                pathComponents.last?.hasPrefix("._") == true {
+                unzip_logmsg("skip archive metadata: \(normalizedPath)")
+                continue
+            }
             let outputURL = destination.appendingPathComponent(normalizedPath)
 
             unzip_logmsg("output: \(outputURL.path)")

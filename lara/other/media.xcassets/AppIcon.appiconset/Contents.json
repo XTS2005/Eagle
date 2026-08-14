@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "square.png",
+      "filename" : "Eagle-Light.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "square-dark 1.png",
+      "filename" : "Eagle-Dark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "out.png",
+      "filename" : "Eagle-Tinted.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LaraHomeView: View {
     @ObservedObject private var mgr = laramgr.shared
+    @ObservedObject private var sceneManager = EagleSceneManager.shared
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
 
     var body: some View {
@@ -10,11 +11,28 @@ struct LaraHomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     header
 
+                    if sceneManager.hasPendingShortcut {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label(
+                                LaraL10n.text(en: "Scene waiting", es: "Scene en espera"),
+                                systemImage: "bolt.shield.fill"
+                            )
+                            .font(.headline)
+                            .foregroundStyle(.indigo)
+                            LaraAccessView(compact: true) {
+                                sceneManager.applyPendingShortcutIfNeeded()
+                            }
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 20) {
                         NavigationLink(destination: CompleteStylesView()) {
                             LaraFeatureCard(
-                                title: "Estilos",
-                                subtitle: "Un aspecto completo para el fondo, el código y tu tarjeta.",
+                                title: LaraL10n.text(en: "Styles", es: "Estilos"),
+                                subtitle: LaraL10n.text(
+                                    en: "A complete look for your wallpaper, passcode, and card.",
+                                    es: "Un aspecto completo para el fondo, el código y tu tarjeta."
+                                ),
                                 systemImage: "sparkles",
                                 accent: Color(red: 0.33, green: 0.25, blue: 0.82),
                                 artwork: .styles
@@ -22,16 +40,57 @@ struct LaraHomeView: View {
                         }
                         .buttonStyle(.plain)
 
+                        NavigationLink(destination: EagleSystemView()) {
+                            HStack(spacing: 15) {
+                                ZStack {
+                                    LinearGradient(
+                                        colors: [.indigo, .purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                    Image(systemName: "checkmark.shield.fill")
+                                        .font(.title2.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(width: 54, height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Eagle System")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text(LaraL10n.text(
+                                        en: "Guardian, Scenes, and safe sharing",
+                                        es: "Guardian, Scenes y uso compartido seguro"
+                                    ))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(15)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Personalizar una parte")
+                            Text(LaraL10n.text(en: "Customize one part", es: "Personalizar una parte"))
                                 .font(.headline)
                                 .padding(.horizontal, 2)
 
                             VStack(spacing: 0) {
                                 NavigationLink(destination: AnimatedWallpapersView()) {
                                     LaraToolRow(
-                                        title: "Fondos",
-                                        subtitle: "Explora o crea",
+                                        title: LaraL10n.text(en: "Wallpapers", es: "Fondos"),
+                                        subtitle: LaraL10n.text(en: "Explore or create", es: "Explora o crea"),
                                         systemImage: "photo.on.rectangle.angled",
                                         accent: Color(red: 0.34, green: 0.31, blue: 0.88)
                                     )
@@ -41,8 +100,8 @@ struct LaraHomeView: View {
 
                                 NavigationLink(destination: CardView()) {
                                     LaraToolRow(
-                                        title: "Tarjetas",
-                                        subtitle: "Diseño de Wallet",
+                                        title: LaraL10n.text(en: "Cards", es: "Tarjetas"),
+                                        subtitle: LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet"),
                                         systemImage: "creditcard.fill",
                                         accent: Color(red: 0.08, green: 0.48, blue: 0.52)
                                     )
@@ -52,10 +111,46 @@ struct LaraHomeView: View {
 
                                 NavigationLink(destination: PasscodeView(mgr: mgr)) {
                                     LaraToolRow(
-                                        title: "Código",
-                                        subtitle: "Números de desbloqueo",
+                                        title: LaraL10n.text(en: "Passcode", es: "Código"),
+                                        subtitle: LaraL10n.text(en: "Unlock key styles", es: "Números de desbloqueo"),
                                         systemImage: "circle.grid.3x3.fill",
                                         accent: Color(red: 0.56, green: 0.28, blue: 0.72)
+                                    )
+                                }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: DarkBoardView()) {
+                                    LaraToolRow(
+                                        title: LaraL10n.text(en: "Icons", es: "Iconos"),
+                                        subtitle: LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android"),
+                                        systemImage: "square.grid.2x2.fill",
+                                        accent: Color(red: 0.18, green: 0.60, blue: 0.42)
+                                    )
+                                }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: DockCustomizerView()) {
+                                    LaraToolRow(
+                                        title: "Dock",
+                                        subtitle: LaraL10n.text(en: "Fit up to six apps", es: "Hasta seis apps"),
+                                        systemImage: "dock.rectangle",
+                                        accent: Color(red: 0.12, green: 0.46, blue: 0.86)
+                                    )
+                                }
+
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: IslandAuraView()) {
+                                    LaraToolRow(
+                                        title: "Island Aura",
+                                        subtitle: LaraL10n.text(
+                                            en: "Neon for Dynamic Island",
+                                            es: "Neón para Dynamic Island"
+                                        ),
+                                        systemImage: "capsule.fill",
+                                        accent: Color(red: 0.10, green: 0.78, blue: 1.00)
                                     )
                                 }
                             }
@@ -79,6 +174,24 @@ struct LaraHomeView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .tint(.blue)
+        .alert(item: $sceneManager.notice) { notice in
+            Alert(
+                title: Text("Eagle Scenes"),
+                message: Text(notice.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .overlay {
+            if sceneManager.isApplying {
+                EagleBlockingProgress(
+                    title: LaraL10n.text(
+                        en: "Applying Scene safely",
+                        es: "Aplicando Scene de forma segura"
+                    ),
+                    progress: sceneManager.progress
+                )
+            }
+        }
     }
 
     private var header: some View {
@@ -137,7 +250,10 @@ struct LaraHomeView: View {
                 )
             }
 
-            Text("Personaliza lo que realmente ves.")
+            Text(LaraL10n.text(
+                en: "Customize what you actually see.",
+                es: "Personaliza lo que realmente ves."
+            ))
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -149,9 +265,12 @@ struct LaraHomeView: View {
                 .foregroundStyle(.green)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Tú mantienes el control")
+                Text(LaraL10n.text(en: "You stay in control", es: "Tú mantienes el control"))
                     .font(.subheadline.weight(.semibold))
-                Text("Eagle solicita acceso solo cuando eliges aplicar un cambio.")
+                Text(LaraL10n.text(
+                    en: "Eagle requests access only when you choose to apply a change.",
+                    es: "Eagle solicita acceso solo cuando eliges aplicar un cambio."
+                ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -169,8 +288,8 @@ private struct LaraFeatureCard: View {
         case passcode
     }
 
-    let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
+    let title: String
+    let subtitle: String
     let systemImage: String
     let accent: Color
     let artwork: Artwork
@@ -353,8 +472,8 @@ private struct LaraFeatureCard: View {
 }
 
 private struct LaraToolRow: View {
-    let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
+    let title: String
+    let subtitle: String
     let systemImage: String
     let accent: Color
 

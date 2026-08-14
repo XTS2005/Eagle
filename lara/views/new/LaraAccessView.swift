@@ -41,7 +41,7 @@ struct LaraAccessView: View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.shield.fill")
                 .foregroundStyle(.green)
-            Text("Eagle está lista")
+            Text(LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista"))
                 .font(.subheadline.weight(.semibold))
             Spacer()
         }
@@ -58,9 +58,12 @@ struct LaraAccessView: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Preparar acceso")
+                    Text(LaraL10n.text(en: "Prepare access", es: "Preparar acceso"))
                         .font(.headline)
-                    Text("Eagle necesita acceso temporal para realizar este cambio. Nada se aplica sin tu confirmación.")
+                    Text(LaraL10n.text(
+                        en: "Eagle needs temporary access to make this change. Nothing is applied without your confirmation.",
+                        es: "Eagle necesita acceso temporal para realizar este cambio. Nada se aplica sin tu confirmación."
+                    ))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -96,12 +99,26 @@ struct LaraAccessView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(isBusy || isunsupported())
+            .disabled(isBusy || isunsupported() || isdebugged())
 
             if isunsupported() {
-                Text("Este dispositivo o esta versión de iOS no es compatible con el motor actual de Eagle.")
+                Text(LaraL10n.text(
+                    en: "This device or iOS version is not compatible with Eagle's current engine.",
+                    es: "Este dispositivo o esta versión de iOS no es compatible con el motor actual de Eagle."
+                ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            } else if isdebugged() {
+                Label {
+                    Text(LaraL10n.text(
+                        en: "Do not prepare access while Xcode is attached. Press Stop in Xcode, then open Eagle manually from the Home Screen.",
+                        es: "No prepares el acceso mientras Xcode esté conectado. Pulsa Stop en Xcode y después abre Eagle manualmente desde la pantalla de inicio."
+                    ))
+                } icon: {
+                    Image(systemName: "cable.connector.slash")
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.orange)
             }
         }
         .padding(compact ? 16 : 20)
@@ -115,12 +132,13 @@ struct LaraAccessView: View {
 
     private var buttonTitle: String {
         if isBusy { return LaraL10n.text(en: "Preparing…", es: "Preparando…") }
+        if isdebugged() { return LaraL10n.text(en: "Disconnect Xcode", es: "Desconecta Xcode") }
         if case .failed = state { return LaraL10n.text(en: "Try again", es: "Intentar otra vez") }
         return LaraL10n.text(en: "Continue", es: "Continuar")
     }
 
     private func prepare() {
-        guard !isBusy, !isunsupported() else { return }
+        guard !isBusy, !isunsupported(), !isdebugged() else { return }
         state = .preparing(LaraL10n.text(
             en: "Checking compatibility",
             es: "Comprobando compatibilidad"

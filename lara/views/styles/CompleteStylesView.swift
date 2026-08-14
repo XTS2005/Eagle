@@ -239,6 +239,21 @@ struct CompleteStyleSelection: Sendable {
     }
 }
 
+struct CompleteCustomStyleSelection {
+    let title: String
+    let wallpaperImage: UIImage?
+    let wallpaperFloatingImage: UIImage?
+    let passcodeImages: [String: Data]?
+    let cardImage: Data?
+    let visualPackID: String?
+
+    var selectedCount: Int {
+        [wallpaperImage != nil, passcodeImages != nil, cardImage != nil]
+            .filter { $0 }
+            .count
+    }
+}
+
 struct CompleteStyleFileSnapshot: Codable, Sendable {
     let path: String
     let data: Data
@@ -246,6 +261,8 @@ struct CompleteStyleFileSnapshot: Codable, Sendable {
 
 struct CompleteStyleUndoSnapshot: Codable, Sendable {
     let createdAt: Date
+    var transactionID: UUID? = nil
+    var displayName: String? = nil
     let previousActiveName: String?
     let previousActivePackID: String?
     let previousVisualPackID: String?
@@ -253,6 +270,12 @@ struct CompleteStyleUndoSnapshot: Codable, Sendable {
     var cardFile: CompleteStyleFileSnapshot?
     var installedWallpaperPaths: [String]
     var changedComponents: [String]
+    var wallpaperDirectoriesToRestore: [String]? = nil
+    var wallpaperFilesToRestore: [CompleteStyleFileSnapshot]? = nil
+    var previousDockCapacity: Int? = nil
+    var previousIconThemeNames: [String]? = nil
+    var previousIconShape: String? = nil
+    var changedLiveConfiguration: Bool? = nil
 }
 
 private struct CompleteStyleCachedResource: Sendable {
@@ -468,7 +491,7 @@ private final class CompleteStyleResourceCache {
 }
 
 @MainActor
-private final class CompleteStyleUndoStore {
+final class CompleteStyleUndoStore {
     static let shared = CompleteStyleUndoStore()
 
     private let fm = FileManager.default
@@ -492,6 +515,11 @@ private final class CompleteStyleUndoStore {
         return try? PropertyListDecoder().decode(CompleteStyleUndoSnapshot.self, from: data)
     }
 
+    func loadPending() -> CompleteStyleUndoSnapshot? {
+        guard let data = try? Data(contentsOf: pendingURL) else { return nil }
+        return try? PropertyListDecoder().decode(CompleteStyleUndoSnapshot.self, from: data)
+    }
+
     func begin(_ snapshot: CompleteStyleUndoSnapshot) throws {
         try write(snapshot, to: pendingURL)
     }
@@ -499,6 +527,11 @@ private final class CompleteStyleUndoStore {
     func commit(_ snapshot: CompleteStyleUndoSnapshot) throws {
         try write(snapshot, to: finalURL)
         try? fm.removeItem(at: pendingURL)
+        do {
+            try EagleGuardianStore.shared.archive(snapshot)
+        } catch {
+            laramgr.shared.logmsg("(guardian) checkpoint archive failed: \(error.localizedDescription)")
+        }
     }
 
     func discardPending() {
@@ -684,6 +717,14 @@ final class CompleteStyleManager: ObservableObject {
                 installedWallpaperPaths: [],
                 changedComponents: []
             )
+            undoSnapshot.transactionID = UUID()
+            undoSnapshot.displayName = selection.title
+            undoSnapshot.previousDockCapacity = UserDefaults.standard.object(
+                forKey: "eagle.dock.capacity"
+            ) as? Int ?? 4
+            undoSnapshot.previousIconThemeNames = IconThemeManager.shared.selectedThemeNames
+            undoSnapshot.previousIconShape = IconThemeManager.shared.selectedIconShape.rawValue
+            undoSnapshot.changedLiveConfiguration = EagleGuardianTransactionContext.shared.consumeLiveChange()
 
             @MainActor func advance(_ nextStage: String) {
                 completed += 1
@@ -878,6 +919,261 @@ final class CompleteStyleManager: ObservableObject {
         }
     }
 
+    func apply(custom selection: CompleteCustomStyleSelection) {
+        guard !isWorking else { return }
+        guard laramgr.shared.sbxready else {
+            lastResult = CompleteStyleRunResult(
+                title: LaraL10n.text(en: "Eagle needs access", es: "Eagle necesita acceso"),
+                message: LaraL10n.text(
+                    en: "Prepare access before applying this composition.",
+                    es: "Prepara el acceso antes de aplicar esta composición."
+                ),
+                components: []
+            )
+            return
+        }
+
+        let selectedCount = selection.selectedCount
+        guard selectedCount > 0 else {
+            lastResult = CompleteStyleRunResult(
+                title: LaraL10n.text(en: "Choose at least one part", es: "Elige al menos una parte"),
+                message: LaraL10n.text(
+                    en: "Turn on Wallpaper, Passcode, or Card.",
+                    es: "Activa Fondo, Código o Tarjeta."
+                ),
+                components: []
+            )
+            return
+        }
+
+        isWorking = true
+        progress = 0
+        stage = LaraL10n.text(en: "Preparing your composition", es: "Preparando tu composición")
+        lastResult = nil
+
+        Task {
+            var completed = 0
+            var results: [CompleteStyleComponentResult] = []
+            var installedWallpaperPaths: [String] = []
+            var undoSaved = true
+            var undoSnapshot = CompleteStyleUndoSnapshot(
+                createdAt: Date(),
+                previousActiveName: activeStyleName,
+                previousActivePackID: activePackID,
+                previousVisualPackID: activeVisualPackID,
+                passcodeFiles: [],
+                cardFile: nil,
+                installedWallpaperPaths: [],
+                changedComponents: []
+            )
+            undoSnapshot.transactionID = UUID()
+            undoSnapshot.displayName = selection.title
+            undoSnapshot.previousDockCapacity = UserDefaults.standard.object(
+                forKey: "eagle.dock.capacity"
+            ) as? Int ?? 4
+            undoSnapshot.previousIconThemeNames = IconThemeManager.shared.selectedThemeNames
+            undoSnapshot.previousIconShape = IconThemeManager.shared.selectedIconShape.rawValue
+            undoSnapshot.changedLiveConfiguration = EagleGuardianTransactionContext.shared.consumeLiveChange()
+
+            @MainActor func advance(_ nextStage: String) {
+                completed += 1
+                progress = Double(completed) / Double(selectedCount)
+                stage = nextStage
+            }
+
+            @MainActor func persistUndoProgress() {
+                do {
+                    try CompleteStyleUndoStore.shared.commit(undoSnapshot)
+                    canUndo = true
+                    undoSaved = true
+                } catch {
+                    CompleteStyleUndoStore.shared.clear()
+                    canUndo = false
+                    undoSaved = false
+                }
+            }
+
+            do {
+                stage = LaraL10n.text(en: "Protecting the current design", es: "Protegiendo el diseño actual")
+                if selection.passcodeImages != nil,
+                   CompletePasscodeStyleEngine.basePath() != nil {
+                    undoSnapshot.passcodeFiles = try CompletePasscodeStyleEngine.snapshot()
+                    let originalFiles = undoSnapshot.passcodeFiles.map { file in
+                        CompleteStyleFileSnapshot(
+                            path: file.path,
+                            data: PasscodeThemeManager.shared.originalDataIfAvailable(targetPath: file.path)
+                                ?? file.data
+                        )
+                    }
+                    try CompletePasscodeOriginalStore.shared.saveIfNeeded(originalFiles)
+                }
+                if selection.cardImage != nil,
+                   CompleteCardStyleEngine.hasCompatibleCard() {
+                    undoSnapshot.cardFile = try CompleteCardStyleEngine.snapshot()
+                }
+                try CompleteStyleUndoStore.shared.begin(undoSnapshot)
+            } catch {
+                CompleteStyleUndoStore.shared.discardPending()
+                lastResult = CompleteStyleRunResult(
+                    title: LaraL10n.text(en: "No changes were made", es: "No se realizó ningún cambio"),
+                    message: LaraL10n.text(
+                        en: "Eagle could not prepare Undo, so your current files were left untouched.",
+                        es: "Eagle no pudo preparar Deshacer, por lo que tus archivos actuales no se modificaron."
+                    ),
+                    components: []
+                )
+                progress = 0
+                stage = LaraL10n.text(en: "No changes", es: "Sin cambios")
+                isWorking = false
+                return
+            }
+
+            if let images = selection.passcodeImages {
+                stage = LaraL10n.text(en: "Creating coordinated digits", es: "Creando números coordinados")
+                do {
+                    guard CompletePasscodeStyleEngine.basePath() != nil else {
+                        throw CompleteStyleEngineError.passcodeUnavailable
+                    }
+                    let count = try CompletePasscodeStyleEngine.apply(
+                        images: images,
+                        rollbackFiles: undoSnapshot.passcodeFiles
+                    )
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.passcode.rawValue)
+                    persistUndoProgress()
+                    results.append(.init(
+                        component: .passcode,
+                        state: .applied,
+                        detail: LaraL10n.text(
+                            en: "Ten custom digits generated; \(count) system files verified",
+                            es: "Diez números personalizados generados; \(count) archivos del sistema verificados"
+                        )
+                    ))
+                } catch CompleteStyleEngineError.passcodeUnavailable {
+                    results.append(.init(
+                        component: .passcode,
+                        state: .skipped,
+                        detail: LaraL10n.text(en: "Unavailable on this device", es: "No disponible en este dispositivo")
+                    ))
+                } catch {
+                    results.append(.init(component: .passcode, state: .failed, detail: error.localizedDescription))
+                }
+                advance(LaraL10n.text(en: "Passcode complete", es: "Código terminado"))
+            }
+
+            if let cardImage = selection.cardImage {
+                stage = LaraL10n.text(en: "Designing your Wallet card", es: "Diseñando tu tarjeta de Wallet")
+                do {
+                    try CompleteCardStyleEngine.apply(imageData: cardImage)
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.card.rawValue)
+                    persistUndoProgress()
+                    results.append(.init(
+                        component: .card,
+                        state: .applied,
+                        detail: LaraL10n.text(
+                            en: "Artwork generated from your image and verified",
+                            es: "Diseño generado desde tu imagen y verificado"
+                        )
+                    ))
+                } catch CompleteStyleEngineError.cardUnavailable {
+                    results.append(.init(
+                        component: .card,
+                        state: .skipped,
+                        detail: LaraL10n.text(en: "No compatible card in Wallet", es: "No hay una tarjeta compatible en Wallet")
+                    ))
+                } catch {
+                    results.append(.init(component: .card, state: .failed, detail: error.localizedDescription))
+                }
+                advance(LaraL10n.text(en: "Card complete", es: "Tarjeta terminada"))
+            }
+
+            if let wallpaperImage = selection.wallpaperImage {
+                stage = LaraL10n.text(en: "Building your wallpaper", es: "Creando tu fondo")
+                var workingRoot: URL?
+                do {
+                    let build = try AnimatedWallpaperBuilder.build(
+                        stillImage: wallpaperImage,
+                        floatingImage: selection.wallpaperFloatingImage,
+                        name: selection.title,
+                        targetSize: AnimatedWallpaperBuilder.recommendedPixelSize()
+                    )
+                    workingRoot = build.workingRoot
+                    let install = try PosterBoardWriter.install(descriptor: build.descriptorURL)
+                    installedWallpaperPaths = install.wasCreated ? [install.destination.path] : []
+                    undoSnapshot.installedWallpaperPaths = installedWallpaperPaths
+                    undoSnapshot.changedComponents.append(CompleteStyleComponent.wallpaper.rawValue)
+                    persistUndoProgress()
+                    results.append(.init(
+                        component: .wallpaper,
+                        state: .applied,
+                        detail: install.wasCreated
+                            ? (selection.wallpaperFloatingImage == nil
+                                ? LaraL10n.text(
+                                    en: "Your photo was added to the system wallpaper picker",
+                                    es: "Tu foto se agregó al selector de fondos del sistema"
+                                )
+                                : LaraL10n.text(
+                                    en: "Eagle Depth was added with separate background and floating-subject layers",
+                                    es: "Eagle Depth se agregó con capas separadas de fondo y sujeto flotante"
+                                ))
+                            : LaraL10n.text(en: "This wallpaper was already installed", es: "Este fondo ya estaba instalado")
+                    ))
+                } catch {
+                    results.append(.init(component: .wallpaper, state: .failed, detail: error.localizedDescription))
+                }
+                if let workingRoot {
+                    try? FileManager.default.removeItem(at: workingRoot)
+                }
+                advance(LaraL10n.text(en: "Wallpaper complete", es: "Fondo terminado"))
+            }
+
+            let applied = results.filter { $0.state == .applied }.count
+            let failed = results.filter { $0.state == .failed }.count
+            if applied > 0 {
+                persistUndoProgress()
+                setActiveStyle(name: selection.title, packID: nil, visualPackID: selection.visualPackID)
+                rememberWallpaperPaths(installedWallpaperPaths)
+            } else {
+                CompleteStyleUndoStore.shared.discardPending()
+            }
+
+            var message: String
+            if applied == selectedCount {
+                message = LaraL10n.text(
+                    en: "Your image now connects every selected part of the phone.",
+                    es: "Tu imagen ahora conecta cada parte seleccionada del teléfono."
+                )
+            } else if applied > 0 {
+                message = failed > 0
+                    ? LaraL10n.text(en: "The composition was partially applied. Review each result.", es: "La composición se aplicó parcialmente. Revisa cada resultado.")
+                    : LaraL10n.text(en: "Everything compatible with this iPhone was applied.", es: "Se aplicó todo lo compatible con este iPhone.")
+            } else {
+                message = LaraL10n.text(en: "None of the selected parts could be applied.", es: "No se pudo aplicar ninguna de las partes elegidas.")
+            }
+            if applied > 0, !undoSaved {
+                message += LaraL10n.text(
+                    en: " The originals remain protected, but Undo is unavailable for this action.",
+                    es: " Los originales siguen protegidos, pero Deshacer no está disponible para esta acción."
+                )
+            }
+
+            lastResult = CompleteStyleRunResult(
+                title: applied > 0
+                    ? LaraL10n.text(en: "Your composition is ready", es: "Tu composición está lista")
+                    : LaraL10n.text(en: "Composition not applied", es: "No se aplicó la composición"),
+                message: message,
+                components: results
+            )
+            progress = 1
+            stage = LaraL10n.text(en: "Done", es: "Listo")
+            isWorking = false
+            refreshCompatibility()
+
+            if results.contains(where: { $0.component == .wallpaper && $0.state == .applied }) {
+                _ = PosterBoardWriter.refreshCollections()
+            }
+        }
+    }
+
     func undoLastStyle() {
         guard !isWorking else { return }
         guard laramgr.shared.sbxready else {
@@ -941,17 +1237,45 @@ final class CompleteStyleManager: ObservableObject {
             progress = 0.67
 
             if changed.contains(CompleteStyleComponent.wallpaper.rawValue) {
-                let removed = CompleteWallpaperStyleEngine.removeTrackedDescriptors(
-                    paths: snapshot.installedWallpaperPaths
+                do {
+                    let directories = snapshot.wallpaperDirectoriesToRestore ?? []
+                    let files = snapshot.wallpaperFilesToRestore ?? []
+                    let restored = directories.isEmpty ? 0 : try CompleteWallpaperStyleEngine.restoreDescriptors(
+                        directories: directories,
+                        files: files
+                    )
+                    rememberWallpaperPaths(directories)
+                    let removed = CompleteWallpaperStyleEngine.removeTrackedDescriptors(
+                        paths: snapshot.installedWallpaperPaths
+                    )
+                    forgetWallpaperPaths(snapshot.installedWallpaperPaths)
+                    results.append(.init(
+                        component: .wallpaper,
+                        state: !directories.isEmpty || removed > 0 ? .applied : .skipped,
+                        detail: !directories.isEmpty
+                            ? LaraL10n.text(
+                                en: "Rebuilt \(directories.count) previous wallpaper package(s) from \(restored) files",
+                                es: "Se reconstruyeron \(directories.count) fondo(s) anteriores desde \(restored) archivos"
+                            )
+                            : (removed > 0
+                                ? LaraL10n.text(en: "The wallpaper from the latest change was removed", es: "Se retiró el fondo del último cambio")
+                                : LaraL10n.text(en: "That wallpaper already existed, so it was not removed", es: "Ese fondo ya existía; no fue necesario retirarlo"))
+                    ))
+                } catch {
+                    results.append(.init(component: .wallpaper, state: .failed, detail: error.localizedDescription))
+                }
+            }
+
+            let liveMessage: String?
+            if snapshot.changedLiveConfiguration == true {
+                liveMessage = await EagleLiveConfigurationController.shared.apply(
+                    dockCapacity: snapshot.previousDockCapacity,
+                    iconThemeNames: snapshot.previousIconThemeNames,
+                    iconShapeRaw: snapshot.previousIconShape,
+                    applyIcons: snapshot.previousIconThemeNames != nil || snapshot.previousIconShape != nil
                 )
-                forgetWallpaperPaths(snapshot.installedWallpaperPaths)
-                results.append(.init(
-                    component: .wallpaper,
-                    state: removed > 0 ? .applied : .skipped,
-                    detail: removed > 0
-                        ? LaraL10n.text(en: "The wallpaper from the latest change was removed", es: "Se retiró el fondo del último cambio")
-                        : LaraL10n.text(en: "That wallpaper already existed, so it was not removed", es: "Ese fondo ya existía; no fue necesario retirarlo")
-                ))
+            } else {
+                liveMessage = nil
             }
 
             let failed = results.contains { $0.state == .failed }
@@ -974,11 +1298,232 @@ final class CompleteStyleManager: ObservableObject {
                 title: failed
                     ? LaraL10n.text(en: "Could not undo everything", es: "No se pudo deshacer todo")
                     : LaraL10n.text(en: "Previous style restored", es: "Volviste al estilo anterior"),
-                message: failed
+                message: (failed
                     ? LaraL10n.text(en: "Some parts need another attempt. Eagle kept the snapshot.", es: "Algunas partes necesitan otro intento. Eagle conservó la instantánea.")
-                    : LaraL10n.text(en: "Eagle recovered the exact state from before the latest change.", es: "Eagle recuperó el estado exacto que existía antes del último cambio."),
+                    : LaraL10n.text(en: "Eagle recovered the exact state from before the latest change.", es: "Eagle recuperó el estado exacto que existía antes del último cambio.")) +
+                    (liveMessage.map { " \($0)" } ?? ""),
                 components: results
             )
+            _ = PosterBoardWriter.refreshCollections()
+        }
+    }
+
+    func restoreGuardianCheckpoint(_ checkpoint: EagleGuardianCheckpoint) {
+        guard !isWorking else { return }
+        guard laramgr.shared.sbxready else {
+            lastResult = CompleteStyleRunResult(
+                title: LaraL10n.text(en: "Eagle needs access", es: "Eagle necesita acceso"),
+                message: LaraL10n.text(
+                    en: "Prepare access before restoring a Guardian checkpoint.",
+                    es: "Prepara el acceso antes de restaurar un punto de Guardian."
+                ),
+                components: []
+            )
+            return
+        }
+
+        let target: CompleteStyleUndoSnapshot
+        do {
+            target = try checkpoint.verifiedSnapshot()
+        } catch {
+            lastResult = CompleteStyleRunResult(
+                title: LaraL10n.text(en: "Checkpoint blocked", es: "Punto bloqueado"),
+                message: error.localizedDescription,
+                components: []
+            )
+            return
+        }
+
+        isWorking = true
+        progress = 0
+        stage = LaraL10n.text(en: "Creating a recovery point", es: "Creando un punto de recuperación")
+        lastResult = nil
+
+        Task {
+            var rescue = CompleteStyleUndoSnapshot(
+                createdAt: Date(),
+                previousActiveName: activeStyleName,
+                previousActivePackID: activePackID,
+                previousVisualPackID: activeVisualPackID,
+                passcodeFiles: [],
+                cardFile: nil,
+                installedWallpaperPaths: [],
+                changedComponents: []
+            )
+            rescue.transactionID = UUID()
+            rescue.displayName = LaraL10n.text(
+                en: "Before restoring \(checkpoint.title)",
+                es: "Antes de restaurar \(checkpoint.title)"
+            )
+            rescue.previousDockCapacity = UserDefaults.standard.object(
+                forKey: "eagle.dock.capacity"
+            ) as? Int ?? 4
+            rescue.previousIconThemeNames = IconThemeManager.shared.selectedThemeNames
+            rescue.previousIconShape = IconThemeManager.shared.selectedIconShape.rawValue
+            rescue.changedLiveConfiguration = target.changedLiveConfiguration
+
+            do {
+                if !target.passcodeFiles.isEmpty {
+                    rescue.passcodeFiles = try CompletePasscodeStyleEngine.snapshot()
+                    rescue.changedComponents.append(CompleteStyleComponent.passcode.rawValue)
+                }
+                if target.cardFile != nil {
+                    rescue.cardFile = try CompleteCardStyleEngine.snapshot()
+                    rescue.changedComponents.append(CompleteStyleComponent.card.rawValue)
+                }
+                let wallpaperTargets = Array(Set(
+                    target.installedWallpaperPaths + (target.wallpaperDirectoriesToRestore ?? [])
+                ))
+                if !wallpaperTargets.isEmpty {
+                    let existing = wallpaperTargets.filter {
+                        FileManager.default.fileExists(atPath: $0)
+                    }
+                    let absent = wallpaperTargets.filter { !existing.contains($0) }
+                    rescue.wallpaperDirectoriesToRestore = existing
+                    rescue.wallpaperFilesToRestore = try CompleteWallpaperStyleEngine.snapshotDescriptors(
+                        paths: existing
+                    )
+                    rescue.installedWallpaperPaths = absent
+                    rescue.changedComponents.append(CompleteStyleComponent.wallpaper.rawValue)
+                }
+                if target.changedLiveConfiguration == true {
+                    rescue.changedComponents.append("homeScreen")
+                }
+                try CompleteStyleUndoStore.shared.begin(rescue)
+                try CompleteStyleUndoStore.shared.commit(rescue)
+                canUndo = !rescue.changedComponents.isEmpty
+            } catch {
+                CompleteStyleUndoStore.shared.discardPending()
+                progress = 0
+                stage = LaraL10n.text(en: "Restore stopped", es: "Restauración detenida")
+                isWorking = false
+                lastResult = CompleteStyleRunResult(
+                    title: LaraL10n.text(en: "Nothing was changed", es: "No se cambió nada"),
+                    message: LaraL10n.text(
+                        en: "Guardian could not protect the current state, so the checkpoint was not restored.",
+                        es: "Guardian no pudo proteger el estado actual, así que no restauró el punto."
+                    ),
+                    components: []
+                )
+                return
+            }
+
+            var results: [CompleteStyleComponentResult] = []
+            stage = LaraL10n.text(en: "Restoring verified files", es: "Restaurando archivos verificados")
+
+            if !target.passcodeFiles.isEmpty {
+                do {
+                    let count = try CompletePasscodeStyleEngine.restoreSnapshot(target.passcodeFiles)
+                    results.append(.init(
+                        component: .passcode,
+                        state: .applied,
+                        detail: LaraL10n.text(
+                            en: "Restored and verified \(count) passcode files",
+                            es: "Se restauraron y verificaron \(count) archivos del código"
+                        )
+                    ))
+                } catch {
+                    results.append(.init(component: .passcode, state: .failed, detail: error.localizedDescription))
+                }
+            }
+            progress = 0.34
+
+            if let cardFile = target.cardFile {
+                do {
+                    try CompleteCardStyleEngine.restoreSnapshot(cardFile)
+                    results.append(.init(
+                        component: .card,
+                        state: .applied,
+                        detail: LaraL10n.text(
+                            en: "Previous Wallet artwork restored",
+                            es: "Se restauró el diseño anterior de Wallet"
+                        )
+                    ))
+                } catch {
+                    results.append(.init(component: .card, state: .failed, detail: error.localizedDescription))
+                }
+            }
+            progress = 0.67
+
+            if let directories = target.wallpaperDirectoriesToRestore,
+               let files = target.wallpaperFilesToRestore,
+               !directories.isEmpty {
+                do {
+                    let count = try CompleteWallpaperStyleEngine.restoreDescriptors(
+                        directories: directories,
+                        files: files
+                    )
+                    rememberWallpaperPaths(directories)
+                    results.append(.init(
+                        component: .wallpaper,
+                        state: .applied,
+                        detail: LaraL10n.text(
+                            en: "Rebuilt \(directories.count) wallpaper package(s) from \(count) verified files",
+                            es: "Se reconstruyeron \(directories.count) fondo(s) desde \(count) archivos verificados"
+                        )
+                    ))
+                } catch {
+                    results.append(.init(component: .wallpaper, state: .failed, detail: error.localizedDescription))
+                }
+            }
+
+            if !target.installedWallpaperPaths.isEmpty {
+                let removed = CompleteWallpaperStyleEngine.removeTrackedDescriptors(
+                    paths: target.installedWallpaperPaths
+                )
+                forgetWallpaperPaths(target.installedWallpaperPaths)
+                results.append(.init(
+                    component: .wallpaper,
+                    state: removed > 0 ? .applied : .skipped,
+                    detail: LaraL10n.text(
+                        en: removed > 0
+                            ? "Removed \(removed) wallpaper addition(s) from that change"
+                            : "Those wallpaper additions were already absent",
+                        es: removed > 0
+                            ? "Se retiraron \(removed) fondo(s) agregados por ese cambio"
+                            : "Esos fondos ya no estaban instalados"
+                    )
+                ))
+            }
+
+            setActiveStyle(
+                name: target.previousActiveName,
+                packID: target.previousActivePackID,
+                visualPackID: target.previousVisualPackID
+            )
+
+            let liveMessage: String
+            if target.changedLiveConfiguration == true {
+                liveMessage = await EagleLiveConfigurationController.shared.apply(
+                    dockCapacity: target.previousDockCapacity,
+                    iconThemeNames: target.previousIconThemeNames,
+                    iconShapeRaw: target.previousIconShape,
+                    applyIcons: target.previousIconThemeNames != nil || target.previousIconShape != nil
+                )
+            } else {
+                liveMessage = LaraL10n.text(
+                    en: "Dock and icons were not part of this recovery point.",
+                    es: "Dock e iconos no formaban parte de este punto."
+                )
+            }
+
+            let failed = results.contains { $0.state == .failed }
+            progress = 1
+            stage = failed
+                ? LaraL10n.text(en: "Restore incomplete", es: "Restauración incompleta")
+                : LaraL10n.text(en: "Checkpoint restored", es: "Punto restaurado")
+            isWorking = false
+            lastResult = CompleteStyleRunResult(
+                title: failed
+                    ? LaraL10n.text(en: "Some files need another attempt", es: "Algunos archivos necesitan otro intento")
+                    : LaraL10n.text(en: "Guardian restore complete", es: "Restauración de Guardian terminada"),
+                message: LaraL10n.text(
+                    en: "Eagle restored only files whose checkpoint passed verification. \(liveMessage)",
+                    es: "Eagle restauró solo archivos cuyo punto pasó la verificación. \(liveMessage)"
+                ),
+                components: results
+            )
+            EagleGuardianStore.shared.refresh()
             _ = PosterBoardWriter.refreshCollections()
         }
     }
@@ -1058,6 +1603,10 @@ final class CompleteStyleManager: ObservableObject {
 
     func clearResult() {
         lastResult = nil
+    }
+
+    func refreshUndoAvailability() {
+        canUndo = CompleteStyleUndoStore.shared.hasSnapshot
     }
 
     func openWallpaperPicker() {
@@ -1425,8 +1974,15 @@ enum CompleteCardStyleEngine {
     }
 
     static func apply(pack: CompleteStylePack) throws {
-        guard let card = firstCard() else { throw CompleteStyleEngineError.cardUnavailable }
         guard let imageData = renderCard(pack: pack) else {
+            throw CompleteStyleEngineError.cardImageFailed
+        }
+        try apply(imageData: imageData)
+    }
+
+    static func apply(imageData: Data) throws {
+        guard let card = firstCard() else { throw CompleteStyleEngineError.cardUnavailable }
+        guard let image = UIImage(data: imageData), image.size.width > 0, image.size.height > 0 else {
             throw CompleteStyleEngineError.cardImageFailed
         }
 
@@ -1641,16 +2197,91 @@ enum CompleteCardStyleEngine {
     }
 }
 
-private enum CompleteWallpaperStyleEngine {
+enum CompleteWallpaperStyleEngine {
+    static func snapshotDescriptors(paths: [String]) throws -> [CompleteStyleFileSnapshot] {
+        var result: [CompleteStyleFileSnapshot] = []
+        var totalBytes = 0
+
+        for path in paths where isSafeDescriptorRoot(path) {
+            let root = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: root.path),
+                  let enumerator = FileManager.default.enumerator(
+                    at: root,
+                    includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+                    options: []
+                  ) else { continue }
+
+            for case let fileURL as URL in enumerator {
+                let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+                let normalized = fileURL.standardizedFileURL.path
+                guard normalized.hasPrefix(root.path + "/"), result.count < 512 else {
+                    throw EagleGuardianError.unsafeSnapshot
+                }
+                let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+                totalBytes += data.count
+                guard !data.isEmpty, data.count <= 64 * 1024 * 1024,
+                      totalBytes <= 192 * 1024 * 1024 else {
+                    throw EagleGuardianError.unsafeSnapshot
+                }
+                result.append(.init(path: normalized, data: data))
+            }
+        }
+        return result
+    }
+
+    static func restoreDescriptors(
+        directories: [String],
+        files: [CompleteStyleFileSnapshot]
+    ) throws -> Int {
+        var safeRoots: [String] = []
+        for directory in directories where isSafeDescriptorRoot(directory) {
+            safeRoots.append(
+                URL(fileURLWithPath: directory, isDirectory: true).standardizedFileURL.path
+            )
+        }
+        guard safeRoots.count == directories.count,
+              files.count <= 512,
+              files.allSatisfy({ file in
+                  !file.data.isEmpty && safeRoots.contains(where: {
+                      URL(fileURLWithPath: file.path).standardizedFileURL.path.hasPrefix($0 + "/")
+                  })
+              }) else {
+            throw EagleGuardianError.unsafeSnapshot
+        }
+
+        for root in safeRoots {
+            if FileManager.default.fileExists(atPath: root) {
+                try FileManager.default.removeItem(atPath: root)
+            }
+            try FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: root, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+
+        var restored = 0
+        for file in files {
+            let normalized = URL(fileURLWithPath: file.path).standardizedFileURL.path
+            let url = URL(fileURLWithPath: normalized)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try file.data.write(to: url, options: .atomic)
+            guard let verification = try? Data(contentsOf: url), verification == file.data else {
+                throw EagleGuardianError.integrity
+            }
+            restored += 1
+        }
+        return restored
+    }
+
     static func removeTrackedDescriptors(paths: [String]) -> Int {
         var removed = 0
         for path in paths {
             let url = URL(fileURLWithPath: path, isDirectory: true)
-            let normalized = url.standardizedFileURL.path
-            guard normalized.contains("/Library/Application Support/PRBPosterExtensionDataStore/"),
-                  normalized.contains("/Extensions/"),
-                  normalized.contains("/descriptors/"),
-                  url.lastPathComponent.lowercased() != "descriptors" else { continue }
+            guard isSafeDescriptorRoot(path) else { continue }
             do {
                 try FileManager.default.removeItem(at: url)
                 removed += 1
@@ -1659,6 +2290,16 @@ private enum CompleteWallpaperStyleEngine {
             }
         }
         return removed
+    }
+
+    private static func isSafeDescriptorRoot(_ path: String) -> Bool {
+        let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        let normalized = url.path
+        return normalized.contains("/Library/Application Support/PRBPosterExtensionDataStore/") &&
+            normalized.contains("/Extensions/") &&
+            normalized.contains("/descriptors/") &&
+            url.lastPathComponent.lowercased() != "descriptors" &&
+            !normalized.contains("../")
     }
 }
 
@@ -1709,10 +2350,13 @@ struct CompleteStylesView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Eagle Match")
+                            Text("Eagle Composer")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
-                            Text("Crea un estilo desde una foto o video")
+                            Text(LaraL10n.text(
+                                en: "One image becomes your whole phone",
+                                es: "Una imagen se convierte en todo tu teléfono"
+                            ))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -1727,6 +2371,57 @@ struct CompleteStylesView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 21, style: .continuous)
                             .strokeBorder(Color.purple.opacity(0.12), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    EagleResonanceView()
+                } label: {
+                    HStack(spacing: 15) {
+                        ZStack {
+                            LinearGradient(
+                                colors: [.purple, .pink, .orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            Image(systemName: "waveform.path.ecg.rectangle.fill")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 7) {
+                                Text("Eagle Resonance")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text(LaraL10n.text(en: "NEW", es: "NUEVO"))
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.pink)
+                                    .padding(.horizontal, 6)
+                                    .frame(height: 19)
+                                    .background(.pink.opacity(0.10), in: Capsule())
+                            }
+                            Text(LaraL10n.text(
+                                en: "A sound becomes your visual signature",
+                                es: "Un sonido se convierte en tu firma visual"
+                            ))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(15)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 21, style: .continuous)
+                            .strokeBorder(Color.pink.opacity(0.14), lineWidth: 1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -2216,11 +2911,7 @@ private struct CompleteStylePreview: View {
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding(4)
 
-            VStack(spacing: 2) {
-                Text("jueves, 13 de agosto")
-                    .font(.system(size: 7, weight: .semibold))
-                Text("9:41")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+            VStack {
                 Spacer()
                 VStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { row in

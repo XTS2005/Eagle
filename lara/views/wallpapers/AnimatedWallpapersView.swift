@@ -726,6 +726,109 @@ enum AnimatedWallpaperBuilder {
         }
     }
 
+    static func build(
+        stillImage: UIImage,
+        floatingImage: UIImage? = nil,
+        name: String,
+        targetSize: CGSize
+    ) throws -> BuildResult {
+        let fm = FileManager.default
+        let workingRoot = fm.temporaryDirectory.appendingPathComponent("EagleStill-\(UUID().uuidString)", isDirectory: true)
+        let descriptorURL = workingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fm.createDirectory(at: descriptorURL, withIntermediateDirectories: true)
+
+        do {
+            let identifier = Int.random(in: 100_000...999_999)
+            let wallpaperName = "9183.Eagle-810w-1080h@2x~ipad.wallpaper"
+            let contents = descriptorURL.appendingPathComponent("versions/1/contents", isDirectory: true)
+            let wallpaper = contents.appendingPathComponent(wallpaperName, isDirectory: true)
+            let backgroundName = "9183.Eagle_Background-810w-1080h@2x~ipad.ca"
+            let floatingName = "9183.Eagle_Floating-810w-1080h@2x~ipad.ca"
+            let background = wallpaper.appendingPathComponent(backgroundName, isDirectory: true)
+            let floating = wallpaper.appendingPathComponent(floatingName, isDirectory: true)
+            let assets = background.appendingPathComponent("assets", isDirectory: true)
+            let floatingAssets = floating.appendingPathComponent("assets", isDirectory: true)
+            try fm.createDirectory(at: assets, withIntermediateDirectories: true)
+            try fm.createDirectory(at: floating, withIntermediateDirectories: true)
+
+            try Data("\(identifier)".utf8).write(to: descriptorURL.appendingPathComponent("com.apple.posterkit.provider.descriptor.identifier"))
+            try Data("PRPosterRoleLockScreen".utf8).write(to: descriptorURL.appendingPathComponent("com.apple.posterkit.role.identifier"))
+            guard let providerInfo = Data(base64Encoded: providerInfoBase64) else {
+                throw AnimatedWallpaperError.installationFailed
+            }
+            try providerInfo.write(to: descriptorURL.appendingPathComponent("providerInfo.plist"))
+
+            let userInfo: [String: Any] = [
+                "posterEnvironmentOverrides": Data("{}".utf8),
+                "wallpaperRepresentingFileName": wallpaperName,
+                "wallpaperRepresentingIdentifier": identifier
+            ]
+            try plistData(userInfo).write(to: contents.appendingPathComponent("com.apple.posterkit.provider.contents.userInfo"))
+
+            let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Eagle Composer" : name
+            let wallpaperPlist: [String: Any] = [
+                "appearanceAware": true,
+                "assets": [
+                    "lockAndHome": [
+                        "default": [
+                            "backgroundAnimationFileName": backgroundName,
+                            "floatingAnimationFileNameKey": floatingName,
+                            "identifier": identifier,
+                            "name": displayName,
+                            "type": "LayeredAnimation"
+                        ]
+                    ]
+                ],
+                "contentVersion": 2.01,
+                "family": "Eagle",
+                "identifier": identifier,
+                "logicalScreenClass": "810w-1080h@2x~ipad",
+                "name": displayName,
+                "preferredProminentColor": ["dark": "#000000", "default": "#FFFFFF"],
+                "version": 1
+            ]
+            try plistData(wallpaperPlist).write(to: wallpaper.appendingPathComponent("Wallpaper.plist"))
+
+            let width = max(1, Int(targetSize.width.rounded()))
+            let height = max(1, Int(targetSize.height.rounded()))
+            if let floatingImage,
+               let subject = pngAspectFill(floatingImage, size: targetSize) {
+                try fm.createDirectory(at: floatingAssets, withIntermediateDirectories: true)
+                try subject.write(to: floatingAssets.appendingPathComponent("subject.png"))
+                try depthFloatingCAML(width: width, height: height)
+                    .data(using: .utf8)!
+                    .write(to: floating.appendingPathComponent("main.caml"))
+            } else {
+                try emptyFloatingCAML(width: width, height: height)
+                    .data(using: .utf8)!
+                    .write(to: floating.appendingPathComponent("main.caml"))
+            }
+            try indexXML(width: width, height: height).data(using: .utf8)!.write(to: floating.appendingPathComponent("index.xml"))
+
+            guard let cgImage = stillImage.cgImage,
+                  let frame = jpegAspectFill(cgImage, size: targetSize) else {
+                throw AnimatedWallpaperError.noFrames
+            }
+            try frame.write(to: assets.appendingPathComponent("0.jpg"))
+            try frame.write(to: assets.appendingPathComponent("1.jpg"))
+            let values = "\t\t\t<CGImage src=\"assets/0.jpg\"/>\n\t\t\t<CGImage src=\"assets/1.jpg\"/>\n"
+            let main = animatedCAML(
+                width: width,
+                height: height,
+                duration: 8,
+                autoReverses: false,
+                values: values
+            )
+            try main.data(using: .utf8)!.write(to: background.appendingPathComponent("main.caml"))
+            try indexXML(width: width, height: height).data(using: .utf8)!.write(to: background.appendingPathComponent("index.xml"))
+
+            return BuildResult(workingRoot: workingRoot, descriptorURL: descriptorURL)
+        } catch {
+            try? fm.removeItem(at: workingRoot)
+            throw error
+        }
+    }
+
     private static func plistData(_ object: Any) throws -> Data {
         try PropertyListSerialization.data(fromPropertyList: object, format: .xml, options: 0)
     }
@@ -741,6 +844,24 @@ enum AnimatedWallpaperBuilder {
             source.draw(in: CGRect(origin: origin, size: drawSize))
         }
         return rendered.jpegData(compressionQuality: 0.72)
+    }
+
+    private static func pngAspectFill(_ image: UIImage, size: CGSize) -> Data? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            let sourceSize = image.size
+            guard sourceSize.width > 0, sourceSize.height > 0 else { return }
+            let scale = max(size.width / sourceSize.width, size.height / sourceSize.height)
+            let drawSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+            let origin = CGPoint(
+                x: (size.width - drawSize.width) / 2,
+                y: (size.height - drawSize.height) / 2
+            )
+            image.draw(in: CGRect(origin: origin, size: drawSize))
+        }
+        return rendered.pngData()
     }
 
     private static func indexXML(width: Int, height: Int) -> String {
@@ -787,6 +908,26 @@ enum AnimatedWallpaperBuilder {
           <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" hidden="0" name="_BACKGROUND" position="\(width / 2) \(height / 2)">
             <sublayers>
               <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" anchorPoint="0 0" bounds="0 0 0 0" contentsFormat="RGBA8" cornerCurve="circular" name="_CENTER_BACKGROUND" position="\(width / 2) \(height / 2)"/>
+            </sublayers>
+            \(stateMarkup)
+          </CALayer>
+        </caml>
+        """
+    }
+
+    private static func depthFloatingCAML(width: Int, height: Int) -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <caml xmlns="http://www.apple.com/CoreAnimation/1.0">
+          <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" hidden="0" name="_FLOATING" position="\(width / 2) \(height / 2)">
+            <sublayers>
+              <CATransformLayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Eagle Depth" position="\(width / 2) \(height / 2)">
+                <sublayers>
+                  <CALayer allowsEdgeAntialiasing="1" allowsGroupOpacity="1" bounds="0 0 \(width) \(height)" contentsFormat="RGBA8" cornerCurve="circular" name="Eagle Subject" position="\(width / 2) \(height / 2)">
+                    <contents type="CGImage" src="assets/subject.png"/>
+                  </CALayer>
+                </sublayers>
+              </CATransformLayer>
             </sublayers>
             \(stateMarkup)
           </CALayer>

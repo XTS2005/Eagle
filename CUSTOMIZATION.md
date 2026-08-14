@@ -1,46 +1,43 @@
-# Lara Custom
+# Eagle architecture notes
 
-This is an independent working copy of Lara. The upstream source project is not
-modified, and pushes to the `upstream` remote are disabled intentionally.
+Eagle is an independent AGPL-3.0 modification of Lara. The `upstream` remote is
+kept read-only so Eagle changes cannot accidentally be pushed to Lara.
 
 ## App identity
 
-- Display name: `Lara Custom`
+- Display name and product: `Eagle`
 - Bundle identifier: `com.leonardobaptiste.laracustom`
-- Xcode scheme: `lara`
+- Xcode project and scheme: `lara.xcodeproj` / `lara`
+- Primary navigation: `LaraHomeView`
+- Interface languages: English and Spanish through `LaraL10n`
 
-## Current experience
+Internal Lara-prefixed Swift symbols and the `lara.log` filename remain where a
+rename would add risk without changing the user experience. New user-facing
+copy should say Eagle.
 
-The original tab interface is no longer mounted. `LaraHomeView` is the only
-root experience and intentionally exposes three destinations:
+## Public beta features
 
-- **Wallpapers** — browses the official Nugget Wallpapers community and Apple
-  catalogs, imports compatible `.tendies` descriptors, or converts a video of
-  up to 12 seconds into a Pocket Poster-compatible descriptor.
-- **Cards** — keeps Lara's existing Wallet card discovery, backup, overwrite,
-  restore, and card-number-suffix engine behind a simpler interface.
-- **Passcode style** — browses the official community passcode catalog, imports
-  `.passthm` files, previews each key, applies individual replacements, and
-  preserves Lara's original restore engine.
+- Complete Styles and Eagle Match
+- Animated and community wallpapers
+- Wallet card artwork
+- Passcode themes
+- Icon Studio (beta)
+- Six-app Dock experiments
+- Island Aura (experimental native route plus compact fallback)
+- Eagle System: Guardian, Scenes and safe sharing
 
-Legacy feature views remain in the source tree as dormant implementation
-references, but they are not reachable from the app. This keeps upstream code
-available as an engine for future features without exposing unused options to
-the user.
+## Adding a feature
 
-## Adding a tweak
+1. Start with a repeated user need, not a private API name.
+2. Identify the minimum capability: exploit, VFS, sandbox escape or RemoteCall.
+3. Keep every mutation behind an explicit user action.
+4. Use `LaraAccessView` for prerequisites and fail before changing anything
+   when the required capability is unavailable.
+5. Verify the result before reporting success and provide a reversible restore
+   path whenever the underlying operation permits it.
+6. Add English and Spanish text together.
+7. Test cancellation, retry, debugger attachment and unsupported-device paths.
+8. Document experimental behavior in the README and bug-report template.
 
-1. Identify the minimum capability it needs: `exploit`, `vfs`, `sandbox`, or
-   `remoteCall`.
-2. Implement the operation in its own focused view or service. Reuse `laramgr`
-   for exploit and filesystem primitives.
-3. Add one intentional feature card to `LaraHomeView`; do not restore the old
-   toolbox-style navigation.
-4. Use `LaraAccessView` before any operation that needs sandbox access.
-5. Test failure, cancellation, retry, and unsupported-device paths in addition
-   to the successful path.
-
-Do not present a tweak as available when its required capability has not been
-initialized. Avoid making kernel or filesystem operations automatically on app
-launch; keep them behind an explicit user action and report the result in the
-existing logger.
+Do not automatically run kernel or filesystem mutations at launch. Never report
+a private SpringBoard change as applied solely because its write call returned.

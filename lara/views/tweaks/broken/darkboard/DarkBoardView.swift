@@ -22,13 +22,42 @@ private struct OverrideChoice: Identifiable {
     var id: String { theme.name }
 }
 
+private struct PendingSingleIconImport: Identifiable {
+    let id = UUID()
+    let fileName: String
+    let data: Data
+}
+
+private struct EagleIconShapePreviewMask: Shape {
+    let style: EagleIconShape
+
+    func path(in rect: CGRect) -> Path {
+        switch style {
+        case .original:
+            return RoundedRectangle(
+                cornerRadius: rect.width * 0.23,
+                style: .continuous
+            ).path(in: rect)
+        case .circle:
+            return Circle().path(in: rect)
+        case .material:
+            return RoundedRectangle(
+                cornerRadius: rect.width * 0.18,
+                style: .circular
+            ).path(in: rect)
+        }
+    }
+}
+
 struct DarkBoardView: View {
     @ObservedObject private var manager = IconThemeManager.shared
     @ObservedObject private var mgr = laramgr.shared
 
     @State private var showImporter = false
+    @State private var showRestoreConfirmation = false
     @State private var alert: DarkBoardAlert?
     @State private var pendingImportURL: URL?
+    @State private var pendingSingleIconImport: PendingSingleIconImport?
 
     private let previewBundleIDs = [
         "com.apple.mobilephone",
@@ -48,36 +77,44 @@ struct DarkBoardView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     helperCards
+                    shapePicker
                     themeGrid
                 }
                 .padding()
                 .padding(.bottom, 90)
             }
 
-            if !manager.themes.isEmpty {
+            if !manager.themes.isEmpty || manager.selectedIconShape != .original {
                 Button {
                     applyThemes()
                 } label: {
-                    Text("Apply Themes")
+                    Text(LaraL10n.text(en: "Apply Icons", es: "Aplicar iconos"))
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(manager.selectedThemeNames.isEmpty ? Color.secondary.opacity(0.25) : Color.accentColor)
+                        .background(
+                            !hasChosenArtwork && manager.selectedIconShape == .original
+                                ? Color.secondary.opacity(0.25)
+                                : Color.accentColor
+                        )
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .padding()
                 }
-                .disabled(manager.selectedThemeNames.isEmpty || manager.isApplying)
+                .disabled(
+                    (!hasChosenArtwork && manager.selectedIconShape == .original) ||
+                    manager.isApplying
+                )
             }
         }
-        .navigationTitle("DarkBoard")
+        .navigationTitle(LaraL10n.text(en: "Icon Studio", es: "Iconos"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(role: .destructive) {
-                    manager.clearSelectionsForFullReset()
-                    applyThemes()
+                    showRestoreConfirmation = true
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
+                .accessibilityLabel(LaraL10n.text(en: "Restore original icons", es: "Restaurar iconos originales"))
                 .disabled(manager.isApplying)
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -86,18 +123,73 @@ struct DarkBoardView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
+                .accessibilityLabel(LaraL10n.text(en: "Import icons", es: "Importar iconos"))
                 .disabled(manager.isApplying)
             }
         }
         .sheet(isPresented: $showImporter) {
             ThemeImportPicker(selectedURL: $pendingImportURL)
         }
+        .sheet(item: $pendingSingleIconImport) { pendingIcon in
+            SingleIconAppPicker(
+                fileName: pendingIcon.fileName,
+                apps: manager.installedApps.filter { !$0.hiddenFromSpringboard },
+                onSelect: { app in
+                    do {
+                        _ = try manager.importSingleIcon(
+                            data: pendingIcon.data,
+                            for: app.bundleIdentifier
+                        )
+                        pendingSingleIconImport = nil
+                        alert = DarkBoardAlert(message: LaraL10n.text(
+                            en: "Custom icon assigned to \(app.name). Tap Apply Icons to put it on the Home Screen.",
+                            es: "Icono personalizado asignado a \(app.name). Toca Aplicar iconos para verlo en la pantalla de inicio."
+                        ))
+                    } catch {
+                        pendingSingleIconImport = nil
+                        alert = DarkBoardAlert(message: error.localizedDescription)
+                    }
+                },
+                onCancel: {
+                    pendingSingleIconImport = nil
+                }
+            )
+            .interactiveDismissDisabled()
+        }
+        .confirmationDialog(
+            LaraL10n.text(en: "Restore Original Icons?", es: "¿Restaurar los iconos originales?"),
+            isPresented: $showRestoreConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(
+                LaraL10n.text(en: "Restore Original Icons", es: "Restaurar iconos originales"),
+                role: .destructive
+            ) {
+                manager.selectedIconShape = .original
+                manager.clearSelectionsForFullReset()
+                applyThemes()
+            }
+            Button(LaraL10n.text(en: "Cancel", es: "Cancelar"), role: .cancel) {}
+        } message: {
+            Text(LaraL10n.text(
+                en: "Eagle will remove theme choices and return supported apps to their original icons.",
+                es: "Eagle quitará los temas seleccionados y devolverá las apps compatibles a sus iconos originales."
+            ))
+        }
         .alert(item: $alert) { alert in
-            Alert(title: Text("DarkBoard"), message: Text(alert.message), dismissButton: .default(Text("OK")))
+            Alert(
+                title: Text(LaraL10n.text(en: "Icon Studio", es: "Iconos")),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
         .overlay {
             if manager.isApplying {
-                progressOverlay(title: "Applying Icons", message: manager.applyMessage, progress: manager.applyProgress)
+                progressOverlay(
+                    title: LaraL10n.text(en: "Applying Icons", es: "Aplicando iconos"),
+                    message: manager.applyMessage,
+                    progress: manager.applyProgress
+                )
             }
         }
         .onAppear {
@@ -114,8 +206,11 @@ struct DarkBoardView: View {
 
     private var helperCards: some View {
         VStack(spacing: 12) {
-            if !mgr.sbxready {
-                Text("Initialize SBX first. This icon themer uses SBX-backed file reads and writes, then restores backups after the respring fixup.")
+            if !mgr.dsready {
+                Text(LaraL10n.text(
+                    en: "Complete Eagle setup before applying icons. Theme imports are saved privately and do not require SBX.",
+                    es: "Completa la preparación de Eagle antes de aplicar iconos. Los temas se guardan de forma privada y no requieren SBX."
+                ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding()
@@ -126,18 +221,21 @@ struct DarkBoardView: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Themes")
+                    Text(LaraL10n.text(en: "Themes", es: "Temas"))
                         .font(.headline)
-                    Text("\(manager.themes.count) imported")
+                    Text(LaraL10n.text(
+                        en: "\(manager.themes.count) imported",
+                        es: "\(manager.themes.count) importados"
+                    ))
                         .foregroundStyle(.secondary)
                         .font(.caption)
                 }
                 Spacer()
-                NavigationLink("Explore") {
+                NavigationLink(LaraL10n.text(en: "Explore", es: "Explorar")) {
                     DarkBoardExploreView()
                 }
                 .buttonStyle(.bordered)
-                NavigationLink("Overrides") {
+                NavigationLink(LaraL10n.text(en: "Apps", es: "Apps")) {
                     IconOverridesView()
                 }
                 .buttonStyle(.bordered)
@@ -147,7 +245,10 @@ struct DarkBoardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
 
             if manager.themes.isEmpty {
-                Text("Import a folder, `.theme`, or `.zip` containing `IconBundles/<bundle-id>.png` icons.")
+                Text(LaraL10n.text(
+                    en: "Explore community themes, import a `.theme`, `.zip`, or folder, or assign one PNG to an app.",
+                    es: "Explora temas, importa un `.theme`, `.zip` o carpeta, o asigna un PNG a una app."
+                ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding()
@@ -158,12 +259,92 @@ struct DarkBoardView: View {
         }
     }
 
+    private var shapePicker: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(LaraL10n.text(en: "Icon Shape", es: "Forma del icono"))
+                    .font(.headline)
+                Text(LaraL10n.text(
+                    en: "Choose one shape for every supported Home Screen icon.",
+                    es: "Elige una forma para cada icono compatible de la pantalla de inicio."
+                ))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 9) {
+                ForEach(EagleIconShape.allCases) { shape in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            manager.selectedIconShape = shape
+                        }
+                    } label: {
+                        VStack(spacing: 9) {
+                            ZStack {
+                                LinearGradient(
+                                    colors: [Color.indigo, Color.cyan],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 19, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .frame(width: 50, height: 50)
+                            .clipShape(EagleIconShapePreviewMask(style: shape))
+
+                            Text(shape.title)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(
+                            manager.selectedIconShape == shape
+                                ? Color.accentColor.opacity(0.12)
+                                : Color(uiColor: .tertiarySystemGroupedBackground),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(
+                                    manager.selectedIconShape == shape
+                                        ? Color.accentColor
+                                        : Color.primary.opacity(0.06),
+                                    lineWidth: manager.selectedIconShape == shape ? 1.5 : 1
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(shape.title)
+                    .accessibilityValue(
+                        manager.selectedIconShape == shape
+                            ? LaraL10n.text(en: "Selected", es: "Seleccionado")
+                            : ""
+                    )
+                }
+            }
+
+            Label(manager.selectedIconShape.summary, systemImage: "checkmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+        }
+    }
+
     private var themeGrid: some View {
         LazyVGrid(columns: grid, spacing: 12) {
             ForEach(manager.themes) { theme in
                 ThemeCardView(
                     theme: theme,
                     previews: manager.icons(forAppIDs: previewBundleIDs, from: theme),
+                    shape: manager.selectedIconShape,
                     selectionIndex: manager.selectedThemeNames.firstIndex(of: theme.name),
                     onToggle: { manager.toggleThemeSelection(theme) },
                     onDelete: { removeTheme(theme) }
@@ -173,25 +354,32 @@ struct DarkBoardView: View {
     }
 
     private func applyThemes() {
-        guard mgr.sbxready else {
-            alert = DarkBoardAlert(message: "SBX is not initialized. Run the exploit, initialize SBX, then apply again.")
-            return
-        }
+        manager.applyLiveIcons { liveResult in
+            switch liveResult {
+            case .success(let live):
+                var message = LaraL10n.text(
+                    en: "Applied to \(live.shapedIconCount) Home Screen icons.",
+                    es: "Aplicado a \(live.shapedIconCount) iconos de la pantalla de inicio."
+                )
+                if live.themedIconCount > 0 {
+                    message += LaraL10n.text(
+                        en: " Custom artwork is live on \(live.themedIconCount) icons.",
+                        es: " El diseño personalizado está activo en \(live.themedIconCount) iconos."
+                    )
+                } else if hasChosenArtwork {
+                    message += LaraL10n.text(
+                        en: " None of the loaded apps matched this theme's bundle identifiers.",
+                        es: " Ninguna app cargada coincidió con los identificadores de este tema."
+                    )
+                }
+                message += LaraL10n.text(
+                    en: " Changes are immediate and safely reset after a respring or reboot.",
+                    es: " Los cambios son inmediatos y se restablecen de forma segura tras un respring o reinicio."
+                )
+                alert = DarkBoardAlert(message: message)
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let errors = try manager.applyThemes()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    if errors.isEmpty {
-                        alert = DarkBoardAlert(message: "Icons applied. Respring now. After reopening Eagle, initialize SBX again so the post-respring icon fixup can restore the original bundle files.")
-                    } else {
-                        alert = DarkBoardAlert(message: "Applied with some errors:\n\n" + errors.joined(separator: "\n\n"))
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    alert = DarkBoardAlert(message: error.localizedDescription)
-                }
+            case .failure(let error):
+                alert = DarkBoardAlert(message: error.localizedDescription)
             }
         }
     }
@@ -205,10 +393,42 @@ struct DarkBoardView: View {
         }
 
         do {
-            try manager.importTheme(from: url)
+            if url.pathExtension.lowercased() == "png" {
+                let data = try Data(contentsOf: url)
+                guard UIImage(data: data) != nil else {
+                    throw NSError(
+                        domain: "IconThemer",
+                        code: 11,
+                        userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                            en: "This PNG could not be read as an image.",
+                            es: "Este PNG no se pudo leer como imagen."
+                        )]
+                    )
+                }
+                if manager.installedApps.isEmpty {
+                    try manager.refreshApps()
+                }
+                let pendingIcon = PendingSingleIconImport(
+                    fileName: url.lastPathComponent,
+                    data: data
+                )
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    pendingSingleIconImport = pendingIcon
+                }
+            } else {
+                try manager.importTheme(from: url)
+                alert = DarkBoardAlert(message: LaraL10n.text(
+                    en: "Theme imported and selected. Tap Apply Icons.",
+                    es: "Tema importado y seleccionado. Toca Aplicar iconos."
+                ))
+            }
         } catch {
             alert = DarkBoardAlert(message: error.localizedDescription)
         }
+    }
+
+    private var hasChosenArtwork: Bool {
+        !manager.selectedThemeNames.isEmpty || !manager.iconOverrides.isEmpty
     }
 
     private func removeTheme(_ theme: LaraIconTheme) {
@@ -242,6 +462,7 @@ struct DarkBoardView: View {
 private struct ThemeCardView: View {
     let theme: LaraIconTheme
     let previews: [UIImage?]
+    let shape: EagleIconShape
     let selectionIndex: Int?
     let onToggle: () -> Void
     let onDelete: () -> Void
@@ -267,7 +488,7 @@ private struct ThemeCardView: View {
                         }
                     }
                 } else {
-                    Text("Not enough icons for preview")
+                    Text(LaraL10n.text(en: "Preview unavailable", es: "Vista no disponible"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -284,7 +505,9 @@ private struct ThemeCardView: View {
             }
 
             Button(action: onToggle) {
-                Text(selectionIndex == nil ? "Select" : "Selected: \(selectionIndex! + 1)")
+                Text(selectionIndex == nil
+                    ? LaraL10n.text(en: "Select", es: "Seleccionar")
+                    : LaraL10n.text(en: "Selected: \(selectionIndex! + 1)", es: "Seleccionado: \(selectionIndex! + 1)"))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(selectionIndex == nil ? Color.secondary.opacity(0.2) : Color.accentColor)
@@ -293,7 +516,7 @@ private struct ThemeCardView: View {
             }
 
             Button(role: .destructive, action: onDelete) {
-                Text("Remove")
+                Text(LaraL10n.text(en: "Remove", es: "Eliminar"))
                     .font(.caption)
             }
         }
@@ -308,9 +531,9 @@ private struct ThemeCardView: View {
             Image(uiImage: image)
                 .resizable()
                 .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .clipShape(EagleIconShapePreviewMask(style: shape))
         } else {
-            RoundedRectangle(cornerRadius: 7)
+            EagleIconShapePreviewMask(style: shape)
                 .fill(Color.clear)
                 .frame(width: 28, height: 28)
         }
@@ -333,12 +556,12 @@ struct IconOverridesView: View {
                             Image(uiImage: icon)
                                 .resizable()
                                 .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
+                                .clipShape(EagleIconShapePreviewMask(style: manager.selectedIconShape))
                         } else {
                             Image("unknown")
                                 .resizable()
                                 .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
+                                .clipShape(EagleIconShapePreviewMask(style: manager.selectedIconShape))
                         }
                         VStack(alignment: .leading) {
                             Text(app.name)
@@ -355,8 +578,11 @@ struct IconOverridesView: View {
                 }
             }
         }
-        .navigationTitle("Overrides")
-        .searchable(text: $search)
+        .navigationTitle(LaraL10n.text(en: "Choose by App", es: "Elegir por app"))
+        .searchable(
+            text: $search,
+            prompt: LaraL10n.text(en: "Search apps", es: "Buscar apps")
+        )
         .onAppear {
             try? manager.refreshApps()
         }
@@ -385,7 +611,7 @@ private struct OverrideSelectionView: View {
                     manager.removeOverride(for: app.bundleIdentifier)
                     dismiss()
                 } label: {
-                    Text("Remove Override")
+                    Text(LaraL10n.text(en: "Use Theme Default", es: "Usar el tema predeterminado"))
                 }
             }
 
@@ -398,10 +624,12 @@ private struct OverrideSelectionView: View {
                         Image(uiImage: choice.image)
                             .resizable()
                             .frame(width: 60, height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .clipShape(EagleIconShapePreviewMask(style: manager.selectedIconShape))
                         VStack(alignment: .leading) {
                             Text(choice.theme.name)
-                            Text(choice.theme.name == manager.iconOverrides[app.bundleIdentifier] ? "Current override" : "Tap to set")
+                            Text(choice.theme.name == manager.iconOverrides[app.bundleIdentifier]
+                                ? LaraL10n.text(en: "Current choice", es: "Selección actual")
+                                : LaraL10n.text(en: "Tap to choose", es: "Toca para elegir"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -425,6 +653,81 @@ private extension Array {
     }
 }
 
+private struct SingleIconAppPicker: View {
+    let fileName: String
+    let apps: [LaraThemedApp]
+    let onSelect: (LaraThemedApp) -> Void
+    let onCancel: () -> Void
+
+    @State private var search = ""
+
+    var body: some View {
+        NavigationStack {
+            List(filteredApps) { app in
+                Button {
+                    onSelect(app)
+                } label: {
+                    HStack(spacing: 12) {
+                        Group {
+                            if let image = app.loadPreviewIcon() {
+                                Image(uiImage: image)
+                                    .resizable()
+                            } else {
+                                Image("unknown")
+                                    .resizable()
+                            }
+                        }
+                        .frame(width: 42, height: 42)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(app.name)
+                                .foregroundStyle(.primary)
+                            Text(app.bundleIdentifier)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(LaraL10n.text(en: "Choose an App", es: "Elige una app"))
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $search,
+                prompt: LaraL10n.text(en: "Search apps", es: "Buscar apps")
+            )
+            .safeAreaInset(edge: .top) {
+                Text(LaraL10n.text(
+                    en: "Where should Eagle use \(fileName)?",
+                    es: "¿Dónde debe usar Eagle \(fileName)?"
+                ))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(LaraL10n.text(en: "Cancel", es: "Cancelar")) {
+                        onCancel()
+                    }
+                }
+            }
+        }
+    }
+
+    private var filteredApps: [LaraThemedApp] {
+        guard !search.isEmpty else { return apps }
+        return apps.filter {
+            $0.name.localizedCaseInsensitiveContains(search) ||
+                $0.bundleIdentifier.localizedCaseInsensitiveContains(search)
+        }
+    }
+}
+
 private struct ThemeImportPicker: UIViewControllerRepresentable {
     @Binding var selectedURL: URL?
     @Environment(\.dismiss) private var dismiss
@@ -434,13 +737,15 @@ private struct ThemeImportPicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        var documentTypes = [UTType.folder.identifier]
-        documentTypes.append(UTType.zip.identifier)
-        if let themeType = UTType(filenameExtension: "theme")?.identifier {
+        var documentTypes: [UTType] = [.folder, .zip, .png]
+        if let themeType = UTType(filenameExtension: "theme") {
             documentTypes.append(themeType)
         }
 
-        let picker = UIDocumentPickerViewController(documentTypes: documentTypes, in: .open)
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: documentTypes,
+            asCopy: true
+        )
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false
         return picker

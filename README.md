@@ -1,139 +1,95 @@
 <div align="center">
-  <br>
-  <a href="https://discord.gg/gw8PcRF3Jr"><img src="https://github.com/rooootdev/lara/blob/main/lara.png?raw=true" alt="JESSI Logo" width="200"></a>
-  <br>
-  <h1>LARA</h1>
-
-  <p>A customization toolbox that utilizes DarkSword. iOS 17.0 - iOS 18.7.1 & iOS 26.0.x, excluding M5 and A19.</p>
-  <p>iOS 16.7.2 has been tested on A12 (iPhone XS Max). Other iOS 16.x versions may also work, but have not been tested yet.</p>
-  <p>star this repo please :P</p>
+  <img src="lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png" alt="Eagle icon" width="150">
+  <h1>Eagle</h1>
+  <p>Focused iOS personalization powered by DarkSword.</p>
+  <p><strong>Public beta — expect unfinished features and SpringBoard resprings.</strong></p>
 </div>
 
-<p align="center">
-  <a href="https://discord.gg/gw8PcRF3Jr">
-    <img src="https://img.shields.io/badge/Discord-Join%20Server-7289DA.svg" alt="Discord">
-  </a>
-  <a href="https://github.com/rooootdev/lara/stargazers">
-    <img src="https://img.shields.io/github/stars/rooootdev/lara?style=social" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/rooootdev/lara/issues">
-    <img src="https://img.shields.io/github/issues/rooootdev/lara" alt="GitHub issues">
-  </a>
-  <a href="https://github.com/rooootdev/lara/releases">
-    <img src="https://img.shields.io/github/v/release/rooootdev/lara" alt="Release">
-  </a>
-  <a href="https://github.com/rooootdev/lara/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/rooootdev/lara/build.yml?branch=main&style=flat&logo=github" alt="GitHub Actions">
-  </a>
-</p>
+> [!WARNING]
+> Eagle uses kernel-level and private SpringBoard capabilities. A failed or incompatible operation can respring or reboot the device. Back up important data, test one change at a time, and do not treat this beta as a production-safe utility.
 
-<p align="center">
-  <a href="#support">support</a> •
-  <a href="#features">features</a> •
-  <a href="#known-issues">known issues</a> •
-  <a href="#tips">tips</a> •
-  <a href="#credits">credits</a>
-</p>
+## Status
 
-## Support
-| iOS Version | Support Status |
-| - | - |
-| iOS 16.x |  Possible ¹ |
-| iOS 16.7.2 |  Tested, needs more testing |
-| iOS 17.0 - iOS 18.7.1 | Supported |
-| iOS 18.7.2+ | Not Supported |
-| iOS 26.0 - iOS 26.0.1 | Supported |
-| iOS 26.1+ | Not Supported |
+The current beta has been developed and tested primarily on an **iPhone 16 Pro (iPhone17,1) running iOS 18.6.2 (22G100)**. Other combinations are not claimed as verified merely because the underlying exploit may support them.
 
-¹ While *technically* affected by the exploit lara abuses, offsets havent been found for these versions and lara therefore doesnt support them.
+Eagle is a modified version of [Lara](https://github.com/rooootdev/lara). The Eagle interface and feature set began diverging from Lara in August 2026. It remains distributed under the **GNU AGPL-3.0** license; see [LICENSE](LICENSE) and the acknowledgements below.
 
-Important Notes:
-- This tool does **not** work on M5 or A19 (Pro) devices regardless of iOS version because of MIE.
-- YMMV on M-series CPUs. If you are on an M-series device, try going to lara settings, selecting `Modify Offsets`, and setting `t1sz_boot` to `0x11`.
-- Issues involving lara not working on either unsupported or *technically* supported versions will be closed immediately.
+## What is included
 
-## Releases
-<p align="center">
-  <h3>Latest Stable</h3>
-  <a href="https://celloserenity.github.io/altdirect/?url=https://raw.githubusercontent.com/rooootdev/lara/refs/heads/main/source.json" target="_blank">
-    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200">
-  </a>
-  <a href="https://github.com/rooootdev/lara/releases/download/0.2/lara_v0.2.ipa" target="_blank">
-    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/Download_White.png?raw=true" alt="Download .ipa" width="200">
-  </a>
+- **Styles** — coordinated wallpaper, passcode and Wallet-card experiences.
+- **Wallpapers** — community browsing, compatible package import and short-video conversion for Pocket Poster.
+- **Cards** — preview, apply, back up and restore supported Wallet card artwork.
+- **Passcode** — browse, import, preview, apply and restore compatible key themes.
+- **Icon Studio (beta)** — icon-theme import and alternate icon shapes.
+- **Dock (beta)** — layouts supporting up to six apps where SpringBoard accepts them.
+- **Island Aura (experimental)** — native adaptive neon when iOS exposes the System Aperture surface, with a verified compact fallback.
+- **Eagle System** — Guardian checks, Scenes and shareable personalization recipes.
+- English and Spanish interface text.
 
-  <h3>Latest Nightly</h3>
-  <a href="https://celloserenity.github.io/altdirect/?url=https://raw.githubusercontent.com/rooootdev/lara/refs/heads/main/source_nightly.json" target="_blank">
-    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200">
-  </a>
-  <a href="https://github.com/rooootdev/lara/releases/download/nightly/lara.ipa" target="_blank">
-    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/Download_White.png?raw=true" alt="Download .ipa" width="200">
-  </a>
-</p>
+## Known limitations
 
-## Features
-### Implemented
-- Font Overwrite
-- Custom Overwrite
-- Card Overwrite
-- File Manager (Full Disk r/w)
-- MobileGestalt Editor
-- 3 App Bypass
-- DirtyZero 2
-- 5 App Dock
-- Status Bar Tweaks
-- Hide labels
-- Upside Down
-- Floating Dock (Broken)
-- Grid App Switcher
-- Performance HUD
-- JIT Enabler (only for apps with `get-task-allow`)
-- OTA Update Disabler
-- Screen Time Disabler 
-- App Decrypt
+- If Island Aura reports **Safe Compact Halo**, it will not expand with music, screen recording or timers. Only **Adaptive Aura** follows those layouts.
+- Icon theme importing and nonstandard masks remain device- and SpringBoard-dependent.
+- Community wallpaper and passcode packages can contain unsupported structures.
+- Some changes end after a respring or reboot; others require a respring before becoming visible.
+- Running kernel or SpringBoard operations while the Xcode debugger is attached is intentionally blocked.
 
+Please report what actually happened rather than repeating an operation that keeps rebooting or respringing the device.
 
-### Coming Soon
-- FTP Server
+## Try the beta
 
-## Known Issues
-- wont work on M5, A19 and A19 Pro due to MTE
-- the kernel may panic when lara is closed from the app switcher.
-- dirtyzero does not work.
-- apps don't detect JIT enabled however they are enabled.
-- remotecall is super bugged and may not work properly.
+1. Download the newest prerelease IPA from [Releases](https://github.com/leonardob8777-bit/Eagle/releases).
+2. Sign and install it using your preferred personal-device sideloading method.
+3. Open Eagle manually from the Home Screen. If you installed through Xcode, press **Stop** before preparing Eagle access.
+4. Apply one feature at a time and keep its result message.
 
-### Fixes
-**kernelcache download fix (manual fallback):**
+The release IPA is provided unsigned. Eagle does not include a signing certificate or provisioning profile.
 
-1. Download the IPSW tool for your device [here](https://github.com/blacktop/ipsw/releases/tag/v3.1.671).
-2. Extract the archive.
-3. Open Terminal.
-4. Navigate to the extracted folder:
-   ```sh
-   cd /path/to/ipsw_3.1.671_something_something/
-   ```
-5. Extract the kernel:
-   ```sh
-   ./ipsw extract --kernel [drag your ipsw here]
-   ```
-6. Get the kernelcache file.
-7. Transfer the kernelcache to your iPhone.
-8. In the Files app:
-   - Go to "On My iPhone" > "lara"
-   - Place the kernelcache file there.
-9. Rename the file to `kernelcache` (without extension).
+## Build from source
 
-## Tips
-- deleting and redownloading kernelcache is known to fix many issues. do this before asking me for support.
-- closing and reopening the app can fix font change issues.
-- respringing is needed to apply springboard changes such as font changes.
+Requirements:
 
-## Credits
-- opa334 for the kernel exploit poc, ChOma and XPF
-- AppInstaller iOS for help with offsets
-- AlfieCG for libgrabkernel2
-- Everyone who contributed! (Visible <a href="https://github.com/rooootdev/lara/graphs/contributors">Here</a>)
+- macOS with Xcode
+- `ldid` for packaging an unsigned IPA (`brew install ldid`)
 
-<br> 
-<div align="center">a beautiful kexploit ❤️</div>
+Compile without installing on a device:
+
+```sh
+xcodebuild -project lara.xcodeproj \
+  -scheme lara \
+  -configuration Debug \
+  -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+Package the release IPA:
+
+```sh
+./scripts/build_ipa.sh
+```
+
+The result is written to `build/Eagle.ipa`.
+
+## Reporting a problem
+
+Use the [bug report form](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md) and include:
+
+- exact iPhone/iPad model;
+- iOS version and build number;
+- Eagle version or commit;
+- the feature and selected mode;
+- the exact result message;
+- a screenshot when the problem is visual;
+- the relevant end of `Documents/lara.log` from Eagle's Files container, with personal paths removed.
+
+Do not publish tokens, certificates, provisioning profiles or unrelated personal files.
+
+## Español
+
+Eagle es una beta pública de personalización avanzada para iOS. Ha sido probada principalmente en un **iPhone 16 Pro con iOS 18.6.2**. Descarga el IPA sin firmar desde [Releases](https://github.com/leonardob8777-bit/Eagle/releases), fírmalo con tu método habitual y prueba una función a la vez. Un fallo puede provocar un respring o reinicio; conserva el mensaje mostrado y adjúntalo al reporte.
+
+## License and acknowledgements
+
+Eagle is licensed as a whole under [GNU AGPL-3.0](LICENSE), preserving Lara's license and notices. Source distributions and modified builds must continue to comply with that license.
+
+Core acknowledgements include the Lara contributors, rooootdev, opa334, ChOma, XPF, AlfieCG/libgrabkernel2, DarkSword contributors, AppInstaller iOS, and the upstream projects whose license notices are kept in [`lara/licenses`](lara/licenses). See Lara's [contributor history](https://github.com/rooootdev/lara/graphs/contributors) for the complete upstream record.

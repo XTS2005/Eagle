@@ -1,30 +1,30 @@
 {
-  "name": "lara nightly",
-  "subtitle": "A customization toolbox that utilizes DarkSword.",
-  "description": "",
-  "iconURL": "https://raw.githubusercontent.com/rooootdev/lara/refs/heads/main/lara.png",
-  "headerURL": "https://raw.githubusercontent.com/rooootdev/lara/refs/heads/main/icon.png",
-  "website": "https://github.com/rooootdev/lara",
-  "tintColor": "#4185A9",
+  "name": "Eagle Nightly",
+  "subtitle": "Automatic, unsigned development builds.",
+  "description": "Nightly builds may be less stable than the public beta and are intended for testing recent changes.",
+  "iconURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+  "headerURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+  "website": "https://github.com/leonardob8777-bit/Eagle",
+  "tintColor": "#20BDE9",
   "featuredApps": [
-    "com.roooot.lara"
+    "com.leonardobaptiste.laracustom"
   ],
   "apps": [
     {
-      "name": "lara (Nightly)",
-      "bundleIdentifier": "com.roooot.lara",
-      "developerName": "rooootdev & lara team",
-      "subtitle": "This is the nightly testing build for lara.",
-      "localizedDescription": "This is the nightly testing build for lara. Only use this if you're interested in new features and do not care about stability. lara is a customization toolbox that utilizes DarkSword. Supports iOS 16.0 - iOS 18.7.1 & iOS 26.0.x, excluding M5 and A19.\n\nFor more information, check out our GitHub! https://github.com/rooootdev/lara. Join the Discord if you'd like to report any bugs! https://discord.gg/gw8PcRF3Jr.",
-      "iconURL": "https://raw.githubusercontent.com/rooootdev/lara/refs/heads/main/lara.png",
-      "tintColor": "#5CA399",
+      "name": "Eagle Nightly",
+      "bundleIdentifier": "com.leonardobaptiste.laracustom",
+      "developerName": "Leonardo Baptiste and Eagle contributors",
+      "subtitle": "The newest automated Eagle test build.",
+      "localizedDescription": "This channel follows the main branch and can contain unfinished changes. Use the regular Eagle Beta source unless you specifically want to test the newest code.",
+      "iconURL": "https://raw.githubusercontent.com/leonardob8777-bit/Eagle/main/lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png",
+      "tintColor": "#20BDE9",
       "versions": [
         {
-          "version": "0.2",
-          "date": "2026-05-5",
-          "size": 3450675,
-          "downloadURL": "https://github.com/rooootdev/lara/releases/download/nightly/lara.ipa",
-          "localizedDescription": "",
+          "version": "0.3.0",
+          "date": "2026-08-14",
+          "size": 11762062,
+          "downloadURL": "https://github.com/leonardob8777-bit/Eagle/releases/download/nightly/Eagle.ipa",
+          "localizedDescription": "Unsigned development build generated from the current main branch.",
           "minOSVersion": "16.0"
         }
       ],

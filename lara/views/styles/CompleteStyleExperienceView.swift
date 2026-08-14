@@ -40,13 +40,20 @@ struct CompleteStyleLivePreviewView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(title)
                         .font(.title2.bold())
-                    Text("Recursos reales, antes de cambiar tu iPhone")
+                    Text(LaraL10n.text(
+                        en: "Real assets and compatibility before changing your iPhone",
+                        es: "Recursos reales y compatibilidad antes de cambiar tu iPhone"
+                    ))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+
+                preflightBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
 
                 TabView(selection: $selectedPage) {
                     ForEach(Array(components.enumerated()), id: \.element.id) { index, component in
@@ -91,7 +98,10 @@ struct CompleteStyleLivePreviewView: View {
                     }
 
                     Label(
-                        "Eagle guarda el estado anterior para que puedas deshacerlo.",
+                        LaraL10n.text(
+                            en: "Guardian protects the current state before applying.",
+                            es: "Guardian protege el estado actual antes de aplicar."
+                        ),
                         systemImage: "arrow.uturn.backward.circle.fill"
                     )
                     .font(.footnote)
@@ -103,10 +113,63 @@ struct CompleteStyleLivePreviewView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cerrar") { dismiss() }
+                    Button(LaraL10n.text(en: "Close", es: "Cerrar")) { dismiss() }
                 }
             }
+            .onAppear {
+                manager.refreshCompatibility()
+            }
         }
+    }
+
+    private var preflightBar: some View {
+        HStack(spacing: 8) {
+            ForEach(components) { component in
+                HStack(spacing: 5) {
+                    Image(systemName: preflightSymbol(for: component))
+                    Text(preflightTitle(for: component))
+                        .lineLimit(1)
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(preflightColor(for: component))
+                .padding(.horizontal, 9)
+                .frame(height: 29)
+                .background(
+                    preflightColor(for: component).opacity(0.10),
+                    in: Capsule()
+                )
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "checkmark.shield.fill")
+                .foregroundStyle(.green)
+                .accessibilityLabel(LaraL10n.text(en: "Guardian ready", es: "Guardian listo"))
+        }
+    }
+
+    private func preflightIsReady(_ component: CompleteStyleComponent) -> Bool {
+        guard mgr.sbxready else { return false }
+        switch component {
+        case .wallpaper: return true
+        case .passcode: return manager.passcodeAvailable
+        case .card: return manager.cardAvailable
+        }
+    }
+
+    private func preflightTitle(for component: CompleteStyleComponent) -> String {
+        guard mgr.sbxready else { return LaraL10n.text(en: "Access", es: "Acceso") }
+        return preflightIsReady(component)
+            ? LaraL10n.text(en: "Ready", es: "Listo")
+            : LaraL10n.text(en: "Will skip", es: "Se omitirá")
+    }
+
+    private func preflightSymbol(for component: CompleteStyleComponent) -> String {
+        guard mgr.sbxready else { return "lock.fill" }
+        return preflightIsReady(component) ? "checkmark.circle.fill" : "minus.circle.fill"
+    }
+
+    private func preflightColor(for component: CompleteStyleComponent) -> Color {
+        guard mgr.sbxready else { return .orange }
+        return preflightIsReady(component) ? .green : .secondary
     }
 
     @ViewBuilder
@@ -146,30 +209,12 @@ private struct CompleteWallpaperLivePage: View {
                 )
                     .clipShape(RoundedRectangle(cornerRadius: 37, style: .continuous))
                     .padding(5)
-
-                VStack(spacing: 2) {
-                    Text("jueves, 13 de agosto")
-                        .font(.caption2.weight(.semibold))
-                    Text("9:41")
-                        .font(.system(size: 52, weight: .semibold, design: .rounded))
-                    Spacer()
-                    HStack {
-                        Circle().fill(.ultraThinMaterial).frame(width: 38, height: 38)
-                        Spacer()
-                        Circle().fill(.ultraThinMaterial).frame(width: 38, height: 38)
-                    }
-                }
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.55), radius: 7, y: 2)
-                .padding(.horizontal, 21)
-                .padding(.top, 34)
-                .padding(.bottom, 20)
             }
             .frame(width: 242, height: 486)
             .shadow(color: pack.primary.color.opacity(0.28), radius: 24, y: 14)
 
             VStack(spacing: 3) {
-                Label("Fondo animado real", systemImage: "livephoto")
+                Label(LaraL10n.text(en: "Real animated wallpaper", es: "Fondo animado real"), systemImage: "livephoto")
                     .font(.headline)
                 Text("\(pack.wallpaperName) · \(pack.wallpaperAuthor)")
                     .font(.subheadline)
@@ -207,7 +252,7 @@ private struct CompletePasscodeLivePage: View {
             .shadow(color: pack.secondary.color.opacity(0.2), radius: 22, y: 12)
 
             VStack(spacing: 3) {
-                Label("Números exactos del paquete", systemImage: "circle.grid.3x3.fill")
+                Label(LaraL10n.text(en: "Exact digits from the package", es: "Números exactos del paquete"), systemImage: "circle.grid.3x3.fill")
                     .font(.headline)
                 Text("\(pack.passcodeName) · \(pack.passcodeAuthor)")
                     .font(.subheadline)
@@ -222,7 +267,7 @@ private struct CompletePasscodeLivePage: View {
         VStack(spacing: 10) {
             Image(systemName: "photo.badge.exclamationmark")
                 .font(.largeTitle)
-            Text("Vista previa no disponible")
+            Text(LaraL10n.text(en: "Preview unavailable", es: "Vista previa no disponible"))
                 .font(.subheadline)
         }
         .foregroundStyle(.white.opacity(0.72))
@@ -261,9 +306,9 @@ private struct CompleteCardLivePage: View {
             .shadow(color: pack.primary.color.opacity(0.28), radius: 25, y: 14)
 
             VStack(spacing: 3) {
-                Label("Render final de Wallet", systemImage: "creditcard.fill")
+                Label(LaraL10n.text(en: "Final Wallet render", es: "Render final de Wallet"), systemImage: "creditcard.fill")
                     .font(.headline)
-                Text("Generado localmente por Eagle")
+                Text(LaraL10n.text(en: "Generated locally by Eagle", es: "Generado localmente por Eagle"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -298,9 +343,12 @@ struct CompleteStyleMixerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("Tres piezas. Una identidad.")
+                    Text(LaraL10n.text(en: "Three parts. One identity.", es: "Tres piezas. Una identidad."))
                         .font(.title2.bold())
-                    Text("Mezcla solamente lo que importa. Eagle mantiene la aplicación coordinada y reversible.")
+                    Text(LaraL10n.text(
+                        en: "Mix only what matters. Eagle keeps the application coordinated and reversible.",
+                        es: "Mezcla solamente lo que importa. Eagle mantiene la aplicación coordinada y reversible."
+                    ))
                         .foregroundStyle(.secondary)
                 }
 
@@ -355,7 +403,7 @@ struct CompleteStyleMixerView: View {
                     Button {
                         showLivePreview = true
                     } label: {
-                        Label("Vista previa real", systemImage: "eye.fill")
+                        Label(LaraL10n.text(en: "Real preview", es: "Vista previa real"), systemImage: "eye.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -364,7 +412,7 @@ struct CompleteStyleMixerView: View {
                     Button {
                         manager.apply(selection: selection)
                     } label: {
-                        Label("Aplicar combinación", systemImage: "wand.and.sparkles")
+                        Label(LaraL10n.text(en: "Apply combination", es: "Aplicar combinación"), systemImage: "wand.and.sparkles")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)

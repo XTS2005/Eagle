@@ -13,17 +13,24 @@ struct DarkBoardExploreView: View {
     @State private var searchTerm = ""
     @State private var alert: DarkBoardExploreAlert?
     @State private var displayedThemes: [GalleryTheme] = []
+    @State private var activeImportName: String?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 filterBar
+                if let activeImportName {
+                    importStatusCard(themeName: activeImportName)
+                }
                 content
             }
             .padding()
         }
-        .navigationTitle("Explore")
-        .searchable(text: $searchTerm, prompt: "Search themes or authors")
+        .navigationTitle(LaraL10n.text(en: "Explore Themes", es: "Explorar temas"))
+        .searchable(
+            text: $searchTerm,
+            prompt: LaraL10n.text(en: "Search themes or authors", es: "Buscar temas o autores")
+        )
         .refreshable {
             await gallery.loadThemes(forceRefresh: true)
             updateDisplayedThemes()
@@ -38,12 +45,64 @@ struct DarkBoardExploreView: View {
         .onChange(of: filter)         { _ in updateDisplayedThemes() }
         .onChange(of: gallery.themes) { _ in updateDisplayedThemes() }
         .alert(item: $alert) { a in
-            Alert(title: Text("Theme Gallery"), message: Text(a.message), dismissButton: .default(Text("OK")))
+            Alert(
+                title: Text(LaraL10n.text(en: "Theme Gallery", es: "Galería de temas")),
+                message: Text(a.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
     private func updateDisplayedThemes() {
         displayedThemes = gallery.filteredThemes(searchTerm: searchTerm, filter: filter)
+    }
+
+    private func startImport(_ theme: GalleryTheme) {
+        guard activeImportName == nil else { return }
+
+        activeImportName = theme.name
+        themes.icon_logmsg("gallery button tapped: \(theme.name)")
+
+        Task { @MainActor in
+            do {
+                try await gallery.downloadAndImport(theme)
+                themes.refreshThemes()
+                let count = themes.theme(named: theme.name)?.iconCount ?? 0
+                activeImportName = nil
+                alert = DarkBoardExploreAlert(message: LaraL10n.text(
+                    en: "Imported \(theme.name) with \(count) icons. It is selected and ready to apply.",
+                    es: "Se importó \(theme.name) con \(count) iconos. Está seleccionado y listo para aplicar."
+                ))
+            } catch {
+                activeImportName = nil
+                alert = DarkBoardExploreAlert(message: LaraL10n.text(
+                    en: "Eagle could not import \(theme.name):\n\n\(error.localizedDescription)",
+                    es: "Eagle no pudo importar \(theme.name):\n\n\(error.localizedDescription)"
+                ))
+            }
+        }
+    }
+
+    private func importStatusCard(themeName: String) -> some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LaraL10n.text(en: "Importing Theme", es: "Importando tema"))
+                    .font(.headline)
+                Text(LaraL10n.text(
+                    en: "Downloading and checking \(themeName)…",
+                    es: "Descargando y comprobando \(themeName)…"
+                ))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private var filterBar: some View {
@@ -54,14 +113,14 @@ struct DarkBoardExploreView: View {
                         filter = candidate
                     } label: {
                         if filter == candidate {
-                            Label(candidate.rawValue, systemImage: "checkmark")
+                            Label(candidate.title, systemImage: "checkmark")
                         } else {
-                            Text(candidate.rawValue)
+                            Text(candidate.title)
                         }
                     }
                 }
             } label: {
-                Label(filter.rawValue, systemImage: "line.3.horizontal.decrease.circle")
+                Label(filter.title, systemImage: "line.3.horizontal.decrease.circle")
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.thinMaterial)
@@ -79,12 +138,15 @@ struct DarkBoardExploreView: View {
     private var content: some View {
         if let loadError = gallery.loadError, gallery.themes.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Could not load the Cowabunga gallery.")
+                Text(LaraL10n.text(
+                    en: "The community gallery could not be loaded.",
+                    es: "No se pudo cargar la galería de la comunidad."
+                ))
                     .font(.headline)
                 Text(loadError)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Button("Retry") {
+                Button(LaraL10n.text(en: "Try Again", es: "Intentar de nuevo")) {
                     Task {
                         await gallery.loadThemes(forceRefresh: true)
                         updateDisplayedThemes()
@@ -100,14 +162,17 @@ struct DarkBoardExploreView: View {
             VStack(spacing: 12) {
                 ProgressView()
                     .controlSize(.large)
-                Text("Loading themes...")
+                Text(LaraL10n.text(en: "Loading themes…", es: "Cargando temas…"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 80)
         } else if displayedThemes.isEmpty {
-            Text("No themes matched your search.")
+            Text(LaraL10n.text(
+                en: "No themes match your search.",
+                es: "Ningún tema coincide con tu búsqueda."
+            ))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
@@ -115,15 +180,14 @@ struct DarkBoardExploreView: View {
         } else {
             LazyVStack(spacing: 14) {
                 ForEach(displayedThemes) { theme in
-                    GalleryThemeCard(theme: theme, previewURL: gallery.previewURL(for: theme), isImported: themes.theme(named: theme.name) != nil, isDownloading: gallery.isDownloading(theme)) {
-                        Task {
-                            do {
-                                try await gallery.downloadAndImport(theme)
-                                alert = DarkBoardExploreAlert(message: "Imported \(theme.name).")
-                            } catch {
-                                alert = DarkBoardExploreAlert(message: error.localizedDescription)
-                            }
-                        }
+                    GalleryThemeCard(
+                        theme: theme,
+                        previewURL: gallery.previewURL(for: theme),
+                        isImported: themes.theme(named: theme.name) != nil,
+                        isDownloading: activeImportName == theme.name || gallery.isDownloading(theme),
+                        isImportDisabled: activeImportName != nil
+                    ) {
+                        startImport(theme)
                     }
                 }
             }
@@ -136,6 +200,7 @@ private struct GalleryThemeCard: View {
     let previewURL: URL?
     let isImported: Bool
     let isDownloading: Bool
+    let isImportDisabled: Bool
     let onDownload: () -> Void
 
     var body: some View {
@@ -171,16 +236,14 @@ private struct GalleryThemeCard: View {
                     }
                     Spacer()
                     if isImported {
-                        Text("Imported")
+                        Text(LaraL10n.text(en: "Imported", es: "Importado"))
                             .font(.caption.bold())
                             .foregroundStyle(.green)
                     }
                 }
                 Text(theme.description)
 
-                Button {
-                    Task { await onDownload() }
-                } label: {
+                Button(action: onDownload) {
                     HStack {
                         if isDownloading {
                             ProgressView()
@@ -192,14 +255,24 @@ private struct GalleryThemeCard: View {
                                   : "arrow.down.circle")
                         }
 
-                        Text(isImported ? "Reimport Theme" : "Import Theme")
+                        Text(isImported
+                            ? LaraL10n.text(en: "Reimport Theme", es: "Volver a importar")
+                            : LaraL10n.text(en: "Import Theme", es: "Importar tema"))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .frame(minHeight: 48)
+                    .foregroundStyle(.white)
+                    .background(Color.accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isDownloading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .disabled(isImportDisabled)
+                .opacity(isImportDisabled && !isDownloading ? 0.55 : 1)
+                .accessibilityHint(LaraL10n.text(
+                    en: "Downloads and adds this theme to Icon Studio.",
+                    es: "Descarga y añade este tema a Iconos."
+                ))
             }
             .padding()
         }

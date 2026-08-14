@@ -1,51 +1,47 @@
 ---
 name: Bug report
-about: This is for all bugs/issues.
-title: "[BUG] Insert Title Here"
+about: Report a reproducible Eagle beta problem
+title: "[Bug] "
 labels: bug
 assignees: ''
-
 ---
 
-### Describe the bug:
-<!-- A clear and concise description of what the bug is. -->
-``[Insert here]``
+## What happened?
 
-### To Reproduce:
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Tap '...'
-3. Scroll down to '...'
-4. See error
+Describe the visible result and copy Eagle's exact alert or error message.
 
-### Expected behavior:
-<!-- What you expected to happen. -->
-``[Insert here]``
+## Steps to reproduce
 
-### Screenshots:
-<!-- If applicable, add screenshots to help explain your problem. -->
+1.
+2.
+3.
 
-### Device Info:
-- **Device:** ``[Insert here]`` <!-- e.g. iPhone 13 Pro, iPad Air 5 -->
-- **Chip:** ``[Insert here]`` <!-- e.g. A15, A14, M1 -->
-- **iOS Version:** ``[Insert here]`` <!-- e.g. 16.5 (20F66) — include the build number -->
-- **Jailbroken before?** ``[Insert here]`` <!-- Yes / No / First attempt on this device -->
-- **Lara version / commit:** ``[Insert here]`` <!-- e.g. v0.3 or commit hash -->
+## Device
 
-### Logs:
-<!-- Paste crash logs, console output, or kernel panic text. Use ``` fences. -->
+- Device model:
+- iOS version and build number:
+- Eagle version or commit:
+- Installation method:
+- Was Xcode fully stopped before opening Eagle? Yes / No / Not applicable
+
+## Feature details
+
+- Feature (Styles, Wallpapers, Cards, Passcode, Icons, Dock, Island Aura, Eagle System):
+- Selected theme/mode/package:
+- Did SpringBoard respring or did the whole device reboot?
+- Can it be reproduced once after reopening Eagle?
+
+## Evidence
+
+Attach a screenshot for visual issues. Paste only the relevant ending of `Documents/lara.log` below and remove personal paths or identifiers.
+
+```text
+log here
 ```
-(logs here)
-```
 
-### Additional context:
-<!-- Anything else — recent iOS updates, tweaks installed, prior jailbreak state, etc. -->
-``[Insert here]``
+## Safety checklist
 
-### Pre-submission checklist:
-<!-- Please confirm all of the following before submitting. Issues missing these may be closed. -->
-- [ ] I have searched existing issues (open and closed) and confirmed this is not a duplicate
-- [ ] I can reproduce this on the latest version / commit of Lara
-- [ ] I have provided sufficient detail (device info, logs, reproduction steps) for a maintainer to investigate
-- [ ] I agree to communicate respectfully with the developers and understand that harassment may result in restricted support
-<!-- To Mark a check Put an "x" inside the brackets like so [x] -->
+- [ ] I tested on the newest beta or commit.
+- [ ] I searched existing issues.
+- [ ] I did not repeatedly trigger a feature that keeps rebooting or respringing.
+- [ ] I removed tokens, certificates, provisioning profiles and personal data.

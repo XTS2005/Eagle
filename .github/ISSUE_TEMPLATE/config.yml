@@ -1,14 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Lara Discord
-    url: https://discord.gg/gw8PcRF3Jr
-    about: Ask questions, get install help, or chat with the community before filing an issue.
-  - name: README & Documentation
-    url: https://github.com/rooootdev/lara#readme
-    about: Check the README for install instructions, supported devices, and common issues.
-  - name: Existing Issues
-    url: https://github.com/rooootdev/lara/issues?q=is%3Aissue
-    about: Search open and closed issues before submitting — your problem may already be reported or fixed.
-  - name: Source & Releases
-    url: https://github.com/rooootdev/lara/releases
-    about: Make sure you're on the latest release before reporting a bug.
+  - name: Eagle README and safety notes
+    url: https://github.com/leonardob8777-bit/Eagle#readme
+    about: Check tested devices, known limitations and installation notes first.
+  - name: Existing Eagle issues
+    url: https://github.com/leonardob8777-bit/Eagle/issues
+    about: Search for the same device, iOS version and feature before reporting.
