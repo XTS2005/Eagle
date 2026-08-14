@@ -34,6 +34,7 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
     case glow = 1
     case pulse = 2
     case tint = 3
+    case rainbow = 4
 
     var id: Int { rawValue }
 
@@ -42,6 +43,7 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
         case .glow: return LaraL10n.text(en: "Glow", es: "Brillo")
         case .pulse: return LaraL10n.text(en: "Pulse", es: "Pulso")
         case .tint: return LaraL10n.text(en: "Tint", es: "Color")
+        case .rainbow: return LaraL10n.text(en: "Rainbow", es: "Arcoíris")
         }
     }
 
@@ -61,6 +63,11 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
             return LaraL10n.text(
                 en: "Adds a subtle color wash inside compact surfaces.",
                 es: "Añade un tono sutil dentro de las superficies compactas."
+            )
+        case .rainbow:
+            return LaraL10n.text(
+                en: "A vivid spectrum moves continuously through every selected light.",
+                es: "Un espectro intenso recorre continuamente cada luz seleccionada."
             )
         }
     }
@@ -101,6 +108,7 @@ struct AuraStudioView: View {
 
     @State private var isApplying = false
     @State private var previewPulse = false
+    @State private var previewRainbowHue = 0.0
     @State private var notice: AuraStudioNotice?
 
     private var selectedMode: AuraStudioMode {
@@ -110,6 +118,12 @@ struct AuraStudioView: View {
 
     private var auraColor: Color {
         Color(red: red, green: green, blue: blue)
+    }
+
+    private var previewLightColor: Color {
+        selectedMode == .rainbow
+            ? Color(hue: previewRainbowHue, saturation: 0.96, brightness: 1.0)
+            : auraColor
     }
 
     private var selectedFlags: UInt32 {
@@ -197,6 +211,9 @@ struct AuraStudioView: View {
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
             }
+            withAnimation(.linear(duration: 5.2).repeatForever(autoreverses: false)) {
+                previewRainbowHue = 1.0
+            }
         }
     }
 
@@ -218,7 +235,7 @@ struct AuraStudioView: View {
                 LinearGradient(
                     colors: [
                         Color(red: 0.025, green: 0.035, blue: 0.07),
-                        auraColor.opacity(0.18),
+                        previewLightColor.opacity(0.22),
                         Color(red: 0.018, green: 0.02, blue: 0.04),
                     ],
                     startPoint: .topLeading,
@@ -227,9 +244,9 @@ struct AuraStudioView: View {
 
                 if screenEnabled {
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(auraColor, lineWidth: 2.2)
+                        .stroke(previewLightColor, lineWidth: 3)
                         .padding(5)
-                        .shadow(color: auraColor.opacity(0.9), radius: 9)
+                        .shadow(color: previewLightColor, radius: 14)
                 }
 
                 VStack {
@@ -245,8 +262,8 @@ struct AuraStudioView: View {
                                 .overlay {
                                     if batteryEnabled {
                                         Capsule()
-                                            .stroke(auraColor, lineWidth: 1.5)
-                                            .shadow(color: auraColor, radius: 5)
+                                            .stroke(previewLightColor, lineWidth: 2)
+                                            .shadow(color: previewLightColor, radius: 8)
                                     }
                                 }
                         }
@@ -266,23 +283,31 @@ struct AuraStudioView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
+                        .background {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(previewLightColor.opacity(0.18))
+                                }
+                                .shadow(color: previewLightColor.opacity(0.95), radius: 14)
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(auraColor, lineWidth: 1.5)
+                                .stroke(previewLightColor, lineWidth: 2.2)
                         }
-                        .shadow(color: auraColor.opacity(0.7), radius: 7)
+                        .shadow(color: previewLightColor, radius: 11)
                     }
                 }
                 .padding(14)
 
                 if islandEnabled {
                     Capsule()
-                        .fill(selectedMode == .tint ? auraColor.opacity(0.28) : .black)
+                        .fill(selectedMode == .tint ? previewLightColor.opacity(0.32) : .black)
                         .frame(width: 94, height: 28)
-                        .overlay { Capsule().stroke(auraColor, lineWidth: 1.8) }
-                        .shadow(color: auraColor, radius: 8)
+                        .overlay { Capsule().stroke(previewLightColor, lineWidth: 2.4) }
+                        .shadow(color: previewLightColor, radius: 12)
                         .opacity(selectedMode == .pulse ? (previewPulse ? 1 : 0.55) : 1)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 7)
@@ -334,6 +359,8 @@ struct AuraStudioView: View {
                 supportsOpacity: false
             )
             .font(.subheadline.weight(.semibold))
+            .disabled(selectedMode == .rainbow)
+            .opacity(selectedMode == .rainbow ? 0.45 : 1)
 
             HStack(spacing: 11) {
                 ForEach(presets, id: \.name) { preset in
@@ -354,7 +381,49 @@ struct AuraStudioView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(preset.name)
                 }
+
+                Button {
+                    selectedMode = .rainbow
+                } label: {
+                    Circle()
+                        .fill(
+                            AngularGradient(
+                                colors: [
+                                    .red, .orange, .yellow, .green, .cyan,
+                                    .blue, .purple, .pink, .red,
+                                ],
+                                center: .center
+                            )
+                        )
+                        .frame(width: 34, height: 34)
+                        .overlay {
+                            Circle().strokeBorder(.white.opacity(0.72), lineWidth: 1.2)
+                            if selectedMode == .rainbow {
+                                Image(systemName: "checkmark")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .shadow(color: .black.opacity(0.75), radius: 2)
+                            }
+                        }
+                        .shadow(color: previewLightColor.opacity(0.9), radius: 8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    LaraL10n.text(en: "Animated rainbow", es: "Arcoíris animado")
+                )
                 Spacer()
+            }
+
+            if selectedMode == .rainbow {
+                Label(
+                    LaraL10n.text(
+                        en: "Rainbow uses its own moving spectrum.",
+                        es: "Arcoíris utiliza su propio espectro en movimiento."
+                    ),
+                    systemImage: "wand.and.stars"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(18)
@@ -419,9 +488,9 @@ struct AuraStudioView: View {
                 HStack(spacing: 12) {
                     Image(systemName: module.symbol)
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(auraColor)
+                        .foregroundStyle(previewLightColor)
                         .frame(width: 32, height: 32)
-                        .background(auraColor.opacity(0.12))
+                        .background(previewLightColor.opacity(0.14))
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -434,7 +503,7 @@ struct AuraStudioView: View {
                     Spacer(minLength: 8)
                     Toggle("", isOn: binding(for: module.id))
                         .labelsHidden()
-                        .tint(auraColor)
+                        .tint(previewLightColor)
                 }
                 .padding(.vertical, 10)
             }
@@ -447,7 +516,7 @@ struct AuraStudioView: View {
     private var adaptiveNote: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "waveform.path.ecg.rectangle.fill")
-                .foregroundStyle(auraColor)
+                .foregroundStyle(previewLightColor)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
                 Text(LaraL10n.text(en: "Adaptive signals are next", es: "Las señales adaptativas serán lo próximo"))
@@ -476,7 +545,7 @@ struct AuraStudioView: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(auraColor.gradient)
+            .background(previewLightColor.gradient)
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
         .buttonStyle(.plain)
