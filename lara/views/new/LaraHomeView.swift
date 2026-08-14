@@ -142,29 +142,15 @@ struct LaraHomeView: View {
 
                                 Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: IslandAuraView()) {
+                                NavigationLink(destination: AuraStudioView()) {
                                     LaraToolRow(
-                                        title: "Island Aura",
+                                        title: "Aura Studio",
                                         subtitle: LaraL10n.text(
-                                            en: "Neon for Dynamic Island",
-                                            es: "Neón para Dynamic Island"
+                                            en: "Every system neon in one place",
+                                            es: "Todos los neones en un solo lugar"
                                         ),
-                                        systemImage: "capsule.fill",
+                                        systemImage: "sparkles",
                                         accent: Color(red: 0.10, green: 0.78, blue: 1.00)
-                                    )
-                                }
-
-                                Divider().padding(.leading, 62)
-
-                                NavigationLink(destination: BatteryAuraView()) {
-                                    LaraToolRow(
-                                        title: "Battery Aura",
-                                        subtitle: LaraL10n.text(
-                                            en: "Color and neon battery",
-                                            es: "Color y neón para la batería"
-                                        ),
-                                        systemImage: "battery.75percent",
-                                        accent: Color(red: 0.24, green: 0.84, blue: 0.48)
                                     )
                                 }
                             }
