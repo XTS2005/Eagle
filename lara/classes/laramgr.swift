@@ -92,6 +92,7 @@ final class laramgr: ObservableObject {
     @Published var showLogs: Bool = false
     
     var sbProc: RemoteCall?
+    private var rcGeneration: UInt64 = 0
     var ytProc = RemoteCall(process: "youtube", useMigFilterBypass: false)
     
     static let shared = laramgr()
@@ -684,21 +685,78 @@ final class laramgr: ObservableObject {
     
     #if !DISABLE_REMOTECALL
     func rcinit(process: String, migbypass: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        guard dsready, !rcready else {
+        guard dsready else {
             completion?(false)
             return
         }
+        if rcready, sbProc != nil {
+            completion?(true)
+            return
+        }
+        guard !rcrunning else {
+            completion?(false)
+            return
+        }
+        // Repair split state left by an interrupted RemoteCall lifecycle before
+        // creating another session. Never overwrite a live object and leak its
+        // exception ports/thread state.
+        if let staleSession = sbProc {
+            rcGeneration &+= 1
+            let repairGeneration = rcGeneration
+            sbProc = nil
+            rcready = false
+            rcrunning = true
+            logmsg("repairing incomplete remote call session...")
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                staleSession.destroy()
+                DispatchQueue.main.async {
+                    guard let self else {
+                        completion?(false)
+                        return
+                    }
+                    guard self.rcGeneration == repairGeneration else {
+                        self.rcrunning = false
+                        completion?(false)
+                        return
+                    }
+                    self.rcrunning = false
+                    self.rcinit(
+                        process: process,
+                        migbypass: migbypass,
+                        completion: completion
+                    )
+                }
+            }
+            return
+        }
+        rcready = false
         
         rcrunning = true
+        rcGeneration &+= 1
+        let generation = rcGeneration
         rcLastError = nil
         logmsg("initializing remote call on \(process)...")
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.sbProc = RemoteCall(process: process, useMigFilterBypass: migbypass)
+            let candidate = RemoteCall(
+                process: process,
+                useMigFilterBypass: migbypass
+            )
             
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                let success = self.sbProc != nil
+                guard self.rcGeneration == generation else {
+                    self.rcrunning = false
+                    if let candidate {
+                        DispatchQueue.global(qos: .utility).async {
+                            candidate.destroy()
+                        }
+                    }
+                    completion?(false)
+                    return
+                }
+                self.sbProc = candidate
+                let success = candidate != nil
                 if success {
                     self.logmsg("remote call initialized on \(process)")
                     self.rcLastError = nil
@@ -758,7 +816,10 @@ final class laramgr: ObservableObject {
     }
     
     func rcdestroy(completion: (() -> Void)? = nil) {
+        rcGeneration &+= 1
+        let generation = rcGeneration
         guard rcready || sbProc != nil else {
+            rcready = false
             completion?()
             return
         }
@@ -774,7 +835,9 @@ final class laramgr: ObservableObject {
             
             DispatchQueue.main.async {
                 self?.logmsg("remote call session destroyed")
-                self?.rcrunning = false
+                if self?.rcGeneration == generation {
+                    self?.rcrunning = false
+                }
                 completion?()
             }
         }
