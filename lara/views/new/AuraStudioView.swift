@@ -257,7 +257,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.15-r6"
+    private let auraEngineBuild = "2026.08.15-r7"
 
     private var selectedTarget: AuraStudioTarget {
         get { AuraStudioTarget(rawValue: selectedTargetRaw) ?? .island }
@@ -1381,6 +1381,40 @@ struct AuraStudioView: View {
             ))
         }
 
+        func finishVerifiedRollback(
+            _ result: Int32,
+            step: AuraStudioOperationStep,
+            reason: String
+        ) {
+            // -12 is a native, fail-closed Island contract: the candidate
+            // could not be read back, so native code synchronously removes it
+            // (or restores the previously committed Island) before returning.
+            // Reaching this path also means PID and RemoteCall health were
+            // already revalidated above. Keep the error visible, preserve the
+            // previously verified state, and permit a fresh manual retry.
+            retainedVerified |= previouslyVerified & step.flag
+            let finalFlags = retainedVerified | newlyApplied
+            activeFlagsRaw = Int(finalFlags)
+            activeSpringBoardPID = finalFlags == 0
+                ? 0
+                : Int(operationSpringBoardPID)
+            AuraStudioDiagnostics.log(
+                "step.rollback-verified",
+                "op=\(operationID) module=\(step.englishName) " +
+                "result=\(result) previous=0x\(String(previouslyVerified, radix: 16)) " +
+                "retained=0x\(String(finalFlags, radix: 16)) retry=fresh-session"
+            )
+            diagnosticsURL = makeDiagnosticsReport(summary: reason)
+            resetOperationUI()
+            AuraStudioApplyGate.end()
+            notice = AuraStudioNotice(
+                message: message(for: result) + " " + LaraL10n.text(
+                    en: "SpringBoard and the protected call session remained healthy. No restart is required; you may retry this profile, and the other aura was not changed.",
+                    es: "SpringBoard y la sesión protegida permanecieron en buen estado. No necesitas reiniciar; puedes volver a intentar este perfil y no se cambió la otra aura."
+                )
+            )
+        }
+
         func completeSuccess(deadlineWarning: Bool = false) {
             let finalFlags = retainedVerified | newlyApplied
             activeFlagsRaw = Int(finalFlags)
@@ -1744,6 +1778,14 @@ struct AuraStudioView: View {
                             }
                             return
                         }
+                        if result == -12 && !hardDeadlineExceeded {
+                            finishVerifiedRollback(
+                                result,
+                                step: step,
+                                reason: "\(step.englishName) rejected candidate and verified native rollback (result -12)"
+                            )
+                            return
+                        }
                         guard result >= 0 else {
                             retainedVerified &= ~step.flag
                             failAfterNativeCall(
@@ -1936,8 +1978,8 @@ struct AuraStudioView: View {
         switch result {
         case -2:
             return LaraL10n.text(
-                en: "Aura Studio did not receive a valid single-surface request. Nothing was changed.",
-                es: "Aura Studio no recibió una solicitud válida para una sola superficie. No se cambió nada."
+                en: "SpringBoard did not expose a safe, visible Dynamic Island host in its current state. Nothing was changed; unlock the iPhone, visit the Home or Lock Screen once, and try again.",
+                es: "SpringBoard no expuso un host seguro y visible de Dynamic Island en su estado actual. No se cambió nada; desbloquea el iPhone, visita una vez la pantalla de Inicio o Bloqueo y vuelve a intentarlo."
             )
         case -3:
             return LaraL10n.text(en: "The selected aura style is invalid.", es: "El estilo de aura seleccionado no es válido.")
@@ -1983,8 +2025,8 @@ struct AuraStudioView: View {
             )
         case -12:
             return LaraL10n.text(
-                en: "The Island view was created but could not be read back safely. Eagle removed it instead of leaving a partial effect.",
-                es: "La vista de Island se creó, pero no pudo verificarse de forma segura. Eagle la eliminó para no dejar un efecto parcial."
+                en: "The new Island candidate could not be read back safely, so Eagle rejected and removed it instead of reporting a partial effect as applied. Any previously verified Island was preserved.",
+                es: "El nuevo candidato de Island no pudo verificarse de forma segura, por lo que Eagle lo rechazó y eliminó en vez de marcar un efecto parcial como aplicado. Se conservó cualquier Island verificada anteriormente."
             )
         case -13:
             return LaraL10n.text(
@@ -2040,6 +2082,11 @@ struct AuraStudioView: View {
             return LaraL10n.text(
                 en: "The protected SpringBoard session became unavailable before this surface could be changed. Nothing was reported as applied. Export the report, fully close Eagle, and reopen it before retrying.",
                 es: "La sesión protegida de SpringBoard dejó de estar disponible antes de cambiar esta superficie. No se indicó nada como aplicado. Exporta el informe, cierra Eagle completamente y vuelve a abrirlo antes de intentarlo de nuevo."
+            )
+        case -24:
+            return LaraL10n.text(
+                en: "Island rejected the new candidate, but SpringBoard did not provide enough read-back to verify the previous appearance. Eagle stopped and safety locked this run; export the report, then fully close and reopen Eagle.",
+                es: "Island rechazó el nuevo candidato, pero SpringBoard no proporcionó suficiente lectura para verificar la apariencia anterior. Eagle se detuvo y bloqueó esta ejecución por seguridad; exporta el informe y luego cierra y vuelve a abrir Eagle."
             )
         default:
             return LaraL10n.text(
