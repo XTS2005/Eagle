@@ -42,6 +42,7 @@ private final class EagleAccessCoordinator: ObservableObject {
 
     private let mgr = laramgr.shared
     private let defaults = UserDefaults.standard
+    private let retryCooldown: TimeInterval = 60
     private var activeID: UUID?
     private var activeStage: EagleAccessStage = .idle
     private var completion: (() -> Void)?
@@ -258,13 +259,7 @@ private final class EagleAccessCoordinator: ObservableObject {
         )
         let failures = min(defaults.integer(forKey: DefaultsKey.consecutiveFailures) + 1, 10)
         defaults.set(failures, forKey: DefaultsKey.consecutiveFailures)
-        let cooldown: TimeInterval
-        switch failures {
-        case 1: cooldown = 60
-        case 2: cooldown = 180
-        default: cooldown = 300
-        }
-        let until = Date().addingTimeInterval(cooldown)
+        let until = Date().addingTimeInterval(retryCooldown)
         defaults.set(until.timeIntervalSince1970, forKey: DefaultsKey.cooldownUntil)
         closeAttempt(id, stage: failedStage, outcome: "failed", failure: message)
         state = .cooldown(message, until)
@@ -310,7 +305,9 @@ private final class EagleAccessCoordinator: ObservableObject {
 
     private func recoverPersistedState() {
         let now = Date()
-        let existingCooldown = Date(timeIntervalSince1970: defaults.double(forKey: DefaultsKey.cooldownUntil))
+        let storedCooldown = Date(timeIntervalSince1970: defaults.double(forKey: DefaultsKey.cooldownUntil))
+        // Migrate older builds that could persist a three- or five-minute pause.
+        let existingCooldown = min(storedCooldown, now.addingTimeInterval(retryCooldown))
 
         if let interruptedID = defaults.string(forKey: DefaultsKey.activeID) {
             let interruptedStage = defaults.string(forKey: DefaultsKey.activeStage) ?? EagleAccessStage.checking.rawValue
@@ -318,7 +315,7 @@ private final class EagleAccessCoordinator: ObservableObject {
                 en: "The previous preparation ended before Eagle received a result. Share the crash report before another attempt.",
                 es: "La preparación anterior terminó antes de que Eagle recibiera un resultado. Comparte el reporte del fallo antes de realizar otro intento."
             )
-            let until = max(existingCooldown, now.addingTimeInterval(300))
+            let until = now.addingTimeInterval(retryCooldown)
             defaults.set(interruptedID, forKey: DefaultsKey.lastID)
             defaults.set(interruptedStage, forKey: DefaultsKey.lastStage)
             defaults.set("interrupted", forKey: DefaultsKey.lastOutcome)
