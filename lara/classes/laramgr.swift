@@ -87,12 +87,16 @@ final class laramgr: ObservableObject {
     @Published var sbxrunning: Bool = false
     @Published var rcready: Bool = false
     @Published var rcfailed: Bool = false
+    @Published private(set) var rcSafetyLocked: Bool = false
+    @Published private(set) var rcSafetyReason: String?
     @Published var showrespring: Bool = false
     
     @Published var showLogs: Bool = false
     
     var sbProc: RemoteCall?
     private var rcGeneration: UInt64 = 0
+    private var rcFreshSessionInFlight = false
+    private var rcNativeCallInFlight = false
     var ytProc = RemoteCall(process: "youtube", useMigFilterBypass: false)
     
     static let shared = laramgr()
@@ -689,6 +693,11 @@ final class laramgr: ObservableObject {
             completion?(false)
             return
         }
+        guard !rcSafetyLocked else {
+            rcLastError = rcSafetyReason ?? "RemoteCall is safety locked for this app run"
+            completion?(false)
+            return
+        }
         if rcready, sbProc != nil {
             completion?(true)
             return
@@ -777,9 +786,177 @@ final class laramgr: ObservableObject {
             }
         }
     }
+
+    /// Builds a brand-new RemoteCall session without ever overlapping teardown
+    /// and initialization. Aura Studio uses this before every individual
+    /// SpringBoard module so a stale exception port cannot leak into the next
+    /// mutation. A timeout invalidates the generation; late work is discarded
+    /// and never starts another session.
+    func prepareFreshRemoteCall(
+        process: String,
+        migbypass: Bool = false,
+        timeout: TimeInterval = 12,
+        completion: @escaping (RemoteCall?, String?) -> Void
+    ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.prepareFreshRemoteCall(
+                    process: process,
+                    migbypass: migbypass,
+                    timeout: timeout,
+                    completion: completion
+                )
+            }
+            return
+        }
+        guard dsready else {
+            completion(nil, "Eagle access is not ready")
+            return
+        }
+        guard !rcSafetyLocked else {
+            completion(
+                nil,
+                rcSafetyReason ?? "RemoteCall is safety locked for this app run"
+            )
+            return
+        }
+        guard !rcFreshSessionInFlight, !rcrunning else {
+            completion(nil, "Another RemoteCall lifecycle operation is still running")
+            return
+        }
+
+        rcFreshSessionInFlight = true
+        rcrunning = true
+        rcready = false
+        rcfailed = false
+        rcLastError = nil
+        rcGeneration &+= 1
+        let generation = rcGeneration
+        let previousSession = sbProc
+        sbProc = nil
+        var completed = false
+
+        func complete(_ session: RemoteCall?, _ error: String?) {
+            precondition(Thread.isMainThread)
+            guard !completed else {
+                if let session {
+                    DispatchQueue.global(qos: .utility).async {
+                        session.destroy()
+                    }
+                }
+                return
+            }
+            completed = true
+            rcFreshSessionInFlight = false
+            rcrunning = false
+            if let session {
+                sbProc = session
+                rcready = true
+                rcfailed = false
+                rcLastError = nil
+            } else {
+                rcready = false
+                rcfailed = true
+                rcLastError = error
+            }
+            completion(session, error)
+        }
+
+        let deadline = max(4, timeout)
+        DispatchQueue.main.asyncAfter(deadline: .now() + deadline) { [weak self] in
+            guard let self,
+                  self.rcGeneration == generation,
+                  !completed else { return }
+            self.rcGeneration &+= 1
+            complete(
+                nil,
+                "Fresh SpringBoard session timed out after \(Int(deadline)) seconds"
+            )
+        }
+
+        logmsg("preparing a fresh remote call session on \(process)...")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            previousSession?.destroy()
+            DispatchQueue.main.async {
+                guard let self,
+                      self.rcGeneration == generation,
+                      !completed else { return }
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    let candidate = RemoteCall(
+                        process: process,
+                        useMigFilterBypass: migbypass
+                    )
+                    DispatchQueue.main.async {
+                        guard let self,
+                              self.rcGeneration == generation,
+                              !completed else {
+                            if let candidate {
+                                DispatchQueue.global(qos: .utility).async {
+                                    candidate.destroy()
+                                }
+                            }
+                            return
+                        }
+                        if let candidate {
+                            self.logmsg("fresh remote call initialized on \(process)")
+                            complete(candidate, nil)
+                        } else {
+                            let detail = RemoteCall.lastInitError()
+                            let error = detail?.isEmpty == false
+                                ? detail!
+                                : "Fresh RemoteCall initialization failed on \(process)"
+                            self.logmsg(error)
+                            complete(nil, error)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Prevents any retry after an unverified native mutation. The live object
+    /// is deliberately retained and not destroyed here because it may still be
+    /// unwinding a timed-out remote call. Closing and reopening Eagle is the
+    /// only reset, which keeps a late callback from starting another mutation.
+    func quarantineRemoteCall(reason: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.quarantineRemoteCall(reason: reason)
+            }
+            return
+        }
+        rcGeneration &+= 1
+        rcFreshSessionInFlight = false
+        rcrunning = false
+        rcready = false
+        rcfailed = true
+        rcSafetyLocked = true
+        rcSafetyReason = reason
+        rcLastError = reason
+        logmsg("remote call safety lock: \(reason)")
+    }
+
+    func beginExclusiveRemoteCall(label: String) -> Bool {
+        precondition(Thread.isMainThread)
+        guard rcready, sbProc != nil, !rcrunning,
+              !rcNativeCallInFlight, !rcSafetyLocked else {
+            return false
+        }
+        rcNativeCallInFlight = true
+        rcrunning = true
+        logmsg("remote call operation started: \(label)")
+        return true
+    }
+
+    func endExclusiveRemoteCall(label: String) {
+        precondition(Thread.isMainThread)
+        rcNativeCallInFlight = false
+        rcrunning = false
+        logmsg("remote call operation finished: \(label)")
+    }
     
     func rcinitDaemon(serviceName: String, framework: String? = nil, process: String, migbypass: Bool = false, completion: ((RemoteCall?) -> Void)? = nil) {
-        guard dsready, let sbProc else {
+        guard dsready, !rcrunning, !rcSafetyLocked, let sbProc else {
             completion?(nil)
             return
         }
@@ -816,6 +993,12 @@ final class laramgr: ObservableObject {
     }
     
     func rcdestroy(completion: (() -> Void)? = nil) {
+        guard !rcrunning, !rcFreshSessionInFlight,
+              !rcNativeCallInFlight, !rcSafetyLocked else {
+            rcLastError = "A serialized or quarantined RemoteCall operation is still running"
+            completion?()
+            return
+        }
         rcGeneration &+= 1
         let generation = rcGeneration
         guard rcready || sbProc != nil else {
@@ -882,7 +1065,7 @@ final class laramgr: ObservableObject {
     //  - timeout: timeout in ms
     //  ret: return value from rc
     func rccall(name: String, args: [UInt64] = [], timeout: Int32 = 100) -> UInt64 {
-        guard rcready else { return 0 }
+        guard rcready, !rcrunning, !rcSafetyLocked else { return 0 }
         let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
         let ptr = dlsym(RTLD_DEFAULT, name)
         var argsCopy = args

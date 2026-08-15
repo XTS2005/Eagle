@@ -98,15 +98,21 @@ private enum AuraStudioDiagnostics {
 @MainActor
 private enum AuraStudioApplyGate {
     private static var operationInFlight = false
+    private static var safetyLocked = false
 
     static func begin() -> Bool {
-        guard !operationInFlight else { return false }
+        guard !operationInFlight, !safetyLocked else { return false }
         operationInFlight = true
         return true
     }
 
     static func end() {
         operationInFlight = false
+    }
+
+    static func lock() {
+        operationInFlight = false
+        safetyLocked = true
     }
 }
 
@@ -194,8 +200,12 @@ struct AuraStudioView: View {
     @State private var previewPulse = false
     @State private var previewRainbowHue = 0.0
     @State private var notice: AuraStudioNotice?
+    @State private var applyStage = ""
+    @State private var applySafetyBlocked = false
+    @State private var activeOperationID: String?
+    @State private var diagnosticsURL: URL?
 
-    private let auraEngineBuild = "2026.08.15-r2"
+    private let auraEngineBuild = "2026.08.15-r3"
 
     private var selectedMode: AuraStudioMode {
         get { AuraStudioMode(rawValue: selectedModeRaw) ?? .glow }
@@ -294,6 +304,7 @@ struct AuraStudioView: View {
 
                 applyButton
                 restoreButton
+                diagnosticsCard
             }
             .padding(20)
         }
@@ -313,10 +324,12 @@ struct AuraStudioView: View {
                     Color.black.opacity(0.14).ignoresSafeArea()
                     VStack(spacing: 12) {
                         ProgressView()
-                        Text(LaraL10n.text(
-                            en: "Building your system aura…",
-                            es: "Creando tu aura del sistema…"
-                        ))
+                        Text(applyStage.isEmpty
+                             ? LaraL10n.text(
+                                en: "Preparing a safe system update…",
+                                es: "Preparando una actualización segura…"
+                             )
+                             : applyStage)
                         .font(.headline)
                     }
                     .padding(22)
@@ -335,8 +348,7 @@ struct AuraStudioView: View {
             // toggle from an earlier beta must not silently add a second
             // SpringBoard operation to the first Island verification.
             dockEnabled = false
-            activeFlagsRaw &= Int(Flag.island)
-            if activeFlagsRaw == 0 { activeModeRaw = 0 }
+            if mgr.rcSafetyLocked { applySafetyBlocked = true }
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
             }
@@ -716,11 +728,15 @@ struct AuraStudioView: View {
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(isApplying || selectedFlags == 0)
+        .disabled(
+            isApplying || selectedFlags == 0 ||
+            applySafetyBlocked || mgr.rcSafetyLocked
+        )
+        .opacity(applySafetyBlocked || mgr.rcSafetyLocked ? 0.48 : 1)
     }
 
     private var restoreButton: some View {
-        Button { apply(mode: 0, flags: 0) } label: {
+        Button { requestSafeRemoval() } label: {
             Label(
                 LaraL10n.text(
                     en: "Remove Island & Dock Auras",
@@ -734,7 +750,58 @@ struct AuraStudioView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.large)
-        .disabled(isApplying)
+        .disabled(isApplying || applySafetyBlocked || mgr.rcSafetyLocked)
+    }
+
+    private var diagnosticsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if applySafetyBlocked || mgr.rcSafetyLocked {
+                Label(
+                    LaraL10n.text(
+                        en: "Safety lock active for this Eagle run",
+                        es: "Bloqueo de seguridad activo durante esta ejecución de Eagle"
+                    ),
+                    systemImage: "exclamationmark.shield.fill"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+
+                Text(LaraL10n.text(
+                    en: "Aura Studio will not retry after an unverified call, timeout, SpringBoard restart, or main-thread error. Export the report, then fully close and reopen Eagle before another test.",
+                    es: "Aura Studio no volverá a intentarlo después de una llamada no verificada, un tiempo agotado, un reinicio de SpringBoard o un error del hilo principal. Exporta el informe y luego cierra y abre Eagle completamente antes de otra prueba."
+                ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    diagnosticsURL = makeDiagnosticsReport(
+                        summary: mgr.rcSafetyReason ?? "Manual Aura Studio export"
+                    )
+                } label: {
+                    Label(
+                        LaraL10n.text(en: "Build Report", es: "Crear informe"),
+                        systemImage: "doc.text.magnifyingglass"
+                    )
+                }
+                .buttonStyle(.bordered)
+
+                if let diagnosticsURL {
+                    ShareLink(item: diagnosticsURL) {
+                        Label(
+                            LaraL10n.text(en: "Share", es: "Compartir"),
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var presets: [(name: String, red: Double, green: Double, blue: Double)] {
@@ -762,28 +829,31 @@ struct AuraStudioView: View {
 
     private func apply(mode: Int, flags: UInt32) {
         let version = ProcessInfo.processInfo.operatingSystemVersion
-        let versionString = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+        let requestedFlags = flags & Flag.supported
+        let operationID = String(UUID().uuidString.prefix(8))
         let display = displayGeometry
         let islandFrame = display.compactIslandFrame
         let dockFrame = display.dockAuraFrame
         AuraStudioDiagnostics.log(
             "request",
-            "engine=\(auraEngineBuild) mode=\(mode) flags=0x\(String(flags, radix: 16)) device=\(devicemachine()) ios=\(versionString) " +
+            "op=\(operationID) engine=\(auraEngineBuild) mode=\(mode) " +
+            "flags=0x\(String(requestedFlags, radix: 16)) device=\(devicemachine()) " +
+            "ios=\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) " +
             "display=\(display.isDisplayZoomed ? "zoomed" : "standard") " +
-            "logical=\(Int(display.logicalSize.width))x\(Int(display.logicalSize.height)) " +
-            "standard=\(String(format: "%.1f", display.standardLogicalSize.width))x" +
-            "\(String(format: "%.1f", display.standardLogicalSize.height)) " +
-            "native=\(Int(display.nativePixelSize.width))x\(Int(display.nativePixelSize.height)) " +
-            "renderScale=\(String(format: "%.4f", display.renderScale)) " +
-            "nativeScale=\(String(format: "%.4f", display.nativeScale)) " +
-            "factor=\(String(format: "%.4f", display.xFactor)),\(String(format: "%.4f", display.yFactor)) " +
+            "factor=\(String(format: "%.4f", display.xFactor))," +
+            "\(String(format: "%.4f", display.yFactor)) " +
             "island=\(String(format: "%.2f,%.2f,%.2f,%.2f", islandFrame.minX, islandFrame.minY, islandFrame.width, islandFrame.height)) " +
-            "dock=\(String(format: "%.2f,%.2f,%.2f,%.2f", dockFrame.minX, dockFrame.minY, dockFrame.width, dockFrame.height)) " +
-            "dsready=\(mgr.dsready) rcrunning=\(mgr.rcrunning) rcready=\(mgr.rcready) session=\(mgr.sbProc != nil)"
+            "dock=\(String(format: "%.2f,%.2f,%.2f,%.2f", dockFrame.minX, dockFrame.minY, dockFrame.width, dockFrame.height))"
         )
 
+        guard !applySafetyBlocked, !mgr.rcSafetyLocked else {
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Aura Studio is safety locked after the previous unverified attempt. Export the report, fully close Eagle, and reopen it before testing again.",
+                es: "Aura Studio está bloqueado por seguridad después del intento anterior no verificado. Exporta el informe, cierra Eagle completamente y vuelve a abrirlo antes de probar otra vez."
+            ))
+            return
+        }
         guard !isApplying, AuraStudioApplyGate.begin() else {
-            AuraStudioDiagnostics.log("rejected", "reason=already-applying")
             notice = AuraStudioNotice(message: LaraL10n.text(
                 en: "Aura Studio is still finishing the previous system update.",
                 es: "Aura Studio todavía está terminando la actualización anterior."
@@ -808,197 +878,371 @@ struct AuraStudioView: View {
             finish(message: message(for: -17))
             return
         }
-        guard mgr.dsready else {
+        guard mgr.dsready, requestedFlags != 0 else {
             finish(message: LaraL10n.text(
-                en: "Prepare Eagle access before applying system auras.",
-                es: "Prepara el acceso de Eagle antes de aplicar auras del sistema."
+                en: "Prepare Eagle access and select at least one verified surface before applying.",
+                es: "Prepara el acceso de Eagle y selecciona al menos una superficie verificada antes de aplicar."
             ))
             return
         }
 
+        struct ApplyStep {
+            let flag: UInt32
+            let name: String
+        }
+        var steps: [ApplyStep] = []
+        if requestedFlags & Flag.island != 0 {
+            steps.append(ApplyStep(flag: Flag.island, name: "Island"))
+        }
+        if requestedFlags & Flag.dock != 0 {
+            steps.append(ApplyStep(flag: Flag.dock, name: "Dock"))
+        }
+
+        let redValue = Int32(max(0, min(255, Int((red * 255).rounded()))))
+        let greenValue = Int32(max(0, min(255, Int((green * 255).rounded()))))
+        let blueValue = Int32(max(0, min(255, Int((blue * 255).rounded()))))
+        let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        var retainedVerified = previouslyVerified
+        var newlyApplied: UInt32 = 0
+        var motionDegraded = false
+        var firstUnavailableResult: Int32?
+        var verifiedFallbackResult: Int32?
+
         isApplying = true
-        let performNativeCall: (RemoteCall) -> Void = { process in
-            let redValue = Int32(max(0, min(255, Int((self.red * 255).rounded()))))
-            let greenValue = Int32(max(0, min(255, Int((self.green * 255).rounded()))))
-            let blueValue = Int32(max(0, min(255, Int((self.blue * 255).rounded()))))
+        activeOperationID = operationID
+        applyStage = LaraL10n.text(
+            en: "Preparing a fresh SpringBoard session…",
+            es: "Preparando una sesión nueva de SpringBoard…"
+        )
+
+        func fail(_ reason: String, result: Int32? = nil) {
+            let resultText = result.map { " result=\($0)" } ?? ""
             AuraStudioDiagnostics.log(
-                "session.ready",
-                "pid=\(process.pid) isolatedThread=\(process.creatingExtraThread) mode=\(mode) flags=0x\(String(flags, radix: 16))"
+                "breaker.open",
+                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16))" +
+                resultText + " reason=\(reason)"
             )
-
-            DispatchQueue.global(qos: .userInitiated).async {
-                AuraStudioDiagnostics.log("native-call.begin")
-                let result = autoreleasepool {
-                    eagle_set_aura_studio(
-                        process,
-                        redValue,
-                        greenValue,
-                        blueValue,
-                        Int32(mode),
-                        flags
-                    )
-                }
-                AuraStudioDiagnostics.log("native-call.end", "result=\(result)")
-                DispatchQueue.main.async {
-                    AuraStudioApplyGate.end()
-                    self.isApplying = false
-                    if result >= 0 {
-                        let rawResult = UInt32(bitPattern: result)
-                        let appliedFlags = rawResult & Flag.supported
-                        let motionDegraded =
-                            rawResult & Flag.motionDegraded != 0
-                        self.activeFlagsRaw = Int(appliedFlags)
-                        self.activeModeRaw = mode == 0 || appliedFlags == 0
-                            ? 0
-                            : ((appliedFlags & Flag.island) != 0
-                               ? mode
-                               : self.activeModeRaw)
-                        self.notice = AuraStudioNotice(
-                            message: self.successMessage(
-                                appliedFlags: appliedFlags,
-                                requestedFlags: flags,
-                                restoring: mode == 0,
-                                motionDegraded: motionDegraded
-                            )
-                        )
-                    } else {
-                        if result == -15 || result == -16 {
-                            // Rainbow and Tint both guarantee a verified black
-                            // Glow remains after their optional native feature
-                            // is rejected.
-                            self.activeFlagsRaw = Int(Flag.island)
-                            self.activeModeRaw = AuraStudioMode.glow.rawValue
-                        } else if result != -17 {
-                            // Any failed reconciliation clears the requested
-                            // verified bits. -17 is non-mutating and preserves
-                            // an already active Glow exactly as reported.
-                            if mode == 0 {
-                                self.activeFlagsRaw = 0
-                            } else {
-                                self.activeFlagsRaw &= ~Int(flags & Flag.supported)
-                            }
-                            if UInt32(max(self.activeFlagsRaw, 0)) &
-                                Flag.island == 0 {
-                                self.activeModeRaw = 0
-                            }
-                        }
-                        self.notice = AuraStudioNotice(message: self.message(for: result))
-                    }
-                }
+            activeFlagsRaw = Int(retainedVerified | newlyApplied)
+            if newlyApplied & Flag.island != 0 {
+                activeModeRaw = mode
+            } else if activeFlagsRaw & Int(Flag.island) == 0 {
+                activeModeRaw = 0
             }
+            mgr.quarantineRemoteCall(reason: reason)
+            applySafetyBlocked = true
+            isApplying = false
+            applyStage = ""
+            AuraStudioApplyGate.lock()
+            diagnosticsURL = makeDiagnosticsReport(summary: reason)
+            activeOperationID = nil
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Aura Studio stopped after an unverified system call: \(reason). No second module or automatic respring was attempted. Share the diagnostic report, then fully close and reopen Eagle before another test.",
+                es: "Aura Studio se detuvo después de una llamada del sistema no verificada: \(reason). No se intentó un segundo módulo ni un respring automático. Comparte el informe de diagnóstico y luego cierra y abre Eagle completamente antes de otra prueba."
+            ))
         }
 
-        func probeRemotePID(_ process: RemoteCall) -> pid_t {
-            let rtldDefault = UnsafeMutableRawPointer(bitPattern: -2)
-            let pointer = dlsym(rtldDefault, "getpid")
-            var arguments: [UInt64] = []
-            let value = "getpid".withCString { name in
-                arguments.withUnsafeMutableBufferPointer { buffer in
-                    process.doStable(
-                        withTimeout: 750,
-                        functionName: UnsafeMutablePointer(mutating: name),
-                        functionPointer: pointer,
-                        args: buffer.baseAddress,
-                        argCount: 0
-                    )
-                }
+        func completeSuccess() {
+            let finalFlags = retainedVerified | newlyApplied
+            activeFlagsRaw = Int(finalFlags)
+            if newlyApplied & Flag.island != 0 { activeModeRaw = mode }
+            AuraStudioDiagnostics.log(
+                "sequence.success",
+                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16)) degraded=\(motionDegraded)"
+            )
+            isApplying = false
+            applyStage = ""
+            AuraStudioApplyGate.end()
+            diagnosticsURL = makeDiagnosticsReport(summary: "Apply completed")
+            activeOperationID = nil
+            let resultMessage: String
+            if let verifiedFallbackResult {
+                resultMessage = message(for: verifiedFallbackResult)
+            } else if newlyApplied == 0, let firstUnavailableResult {
+                resultMessage = message(for: firstUnavailableResult)
+            } else {
+                resultMessage = successMessage(
+                    appliedFlags: newlyApplied,
+                    requestedFlags: requestedFlags,
+                    restoring: false,
+                    motionDegraded: motionDegraded
+                )
             }
-            return pid_t(value)
+            notice = AuraStudioNotice(message: resultMessage)
         }
 
-        func ensureHealthySession(allowRepair: Bool) {
-            guard let process = self.mgr.sbProc else {
-                self.finish(message: LaraL10n.text(
-                    en: "Eagle connected to SpringBoard but did not receive a live session.",
-                    es: "Eagle se conectó a SpringBoard, pero no recibió una sesión activa."
-                ))
+        func runStep(_ index: Int) {
+            guard activeOperationID == operationID, isApplying else { return }
+            guard index < steps.count else {
+                completeSuccess()
                 return
             }
-            DispatchQueue.global(qos: .userInitiated).async {
-                let targetPID = process.pid
-                let firstRemotePID = probeRemotePID(process)
-                let remotePID = firstRemotePID == targetPID
-                    ? firstRemotePID
-                    : probeRemotePID(process)
-                let currentSpringBoardPID = "SpringBoard".withCString {
-                    find_process_pid($0)
+            let step = steps[index]
+            applyStage = LaraL10n.text(
+                en: "Preparing \(step.name) safely…",
+                es: "Preparando \(step.name) de forma segura…"
+            )
+            AuraStudioDiagnostics.log(
+                "step.session.begin",
+                "op=\(operationID) index=\(index) module=\(step.name) flag=0x\(String(step.flag, radix: 16))"
+            )
+            mgr.prepareFreshRemoteCall(
+                process: "SpringBoard",
+                timeout: 12
+            ) { process, sessionError in
+                guard activeOperationID == operationID, isApplying else { return }
+                guard let process else {
+                    fail(sessionError ?? "Fresh SpringBoard session was unavailable")
+                    return
                 }
-                let probeResult = targetPID > 0
-                    ? Darwin.kill(targetPID, 0)
-                    : -1
-                let probeError = errno
-                let processAlive = probeResult == 0 || probeError == EPERM
-                let currentProcessMatches = currentSpringBoardPID <= 0 ||
-                    currentSpringBoardPID == targetPID
-                let mainThreadHealthy = !(process.lastError?.contains(
-                    "main-thread"
-                ) ?? false)
-                let healthy = targetPID > 0 && processAlive &&
-                    remotePID == targetPID &&
-                    currentProcessMatches &&
-                    mainThreadHealthy &&
-                    process.creatingExtraThread
-                AuraStudioDiagnostics.log(
-                    "session.health",
-                    "healthy=\(healthy) target=\(targetPID) remote=\(remotePID) current=\(currentSpringBoardPID) thread=\(process.creatingExtraThread) main=\(mainThreadHealthy) errno=\(probeError)"
+
+                let targetPID = process.pid
+                let currentPID = "SpringBoard".withCString { find_process_pid($0) }
+                guard targetPID > 0,
+                      currentPID == targetPID,
+                      process.creatingExtraThread else {
+                    fail(
+                        "Fresh session identity check failed " +
+                        "(target \(targetPID), current \(currentPID), " +
+                        "isolated \(process.creatingExtraThread))"
+                    )
+                    return
+                }
+                guard mgr.beginExclusiveRemoteCall(
+                    label: "Aura \(step.name) \(operationID)"
+                ) else {
+                    fail("Could not acquire the serialized \(step.name) session")
+                    return
+                }
+                // A new attempt replaces the verification claim for this
+                // module. It is added back only after read-back succeeds; a
+                // non-mutating Tint preflight may explicitly preserve it.
+                retainedVerified &= ~step.flag
+
+                applyStage = LaraL10n.text(
+                    en: "Applying \(step.name) only…",
+                    es: "Aplicando solo \(step.name)…"
                 )
-                DispatchQueue.main.async {
-                    guard self.isApplying else { return }
-                    if healthy {
-                        performNativeCall(process)
-                    } else if allowRepair {
-                        AuraStudioDiagnostics.log(
-                            "session.repair.begin",
-                            "reason=failed-live-getpid"
+                AuraStudioDiagnostics.log(
+                    "step.native.begin",
+                    "op=\(operationID) module=\(step.name) pid=\(targetPID) flag=0x\(String(step.flag, radix: 16))"
+                )
+                let started = Date()
+                var nativeFinished = false
+                let timeoutWork = DispatchWorkItem {
+                    guard activeOperationID == operationID,
+                          isApplying,
+                          !nativeFinished else { return }
+                    nativeFinished = true
+                    fail("\(step.name) exceeded the 12-second native deadline")
+                }
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + 12,
+                    execute: timeoutWork
+                )
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let result = autoreleasepool {
+                        eagle_set_aura_studio(
+                            process,
+                            redValue,
+                            greenValue,
+                            blueValue,
+                            Int32(mode),
+                            step.flag
                         )
-                        self.mgr.rcdestroy {
-                            self.mgr.rcinit(process: "SpringBoard") { success in
-                                AuraStudioDiagnostics.log(
-                                    "session.repair.end",
-                                    "success=\(success)"
-                                )
-                                if success {
-                                    ensureHealthySession(allowRepair: false)
-                                } else {
-                                    self.finish(message: LaraL10n.text(
-                                        en: "Eagle replaced a stale SpringBoard session, but the fresh connection could not be verified. Reopen Eagle once and try again.",
-                                        es: "Eagle reemplazó una sesión obsoleta de SpringBoard, pero no pudo verificar la conexión nueva. Abre Eagle nuevamente e inténtalo otra vez."
-                                    ))
-                                }
+                    }
+                    let elapsed = Date().timeIntervalSince(started)
+                    let processError = process.lastError
+                    let springBoardPID = "SpringBoard".withCString {
+                        find_process_pid($0)
+                    }
+                    AuraStudioDiagnostics.log(
+                        "step.native.end",
+                        "op=\(operationID) module=\(step.name) result=\(result) " +
+                        "elapsed=\(String(format: "%.3f", elapsed)) target=\(targetPID) " +
+                        "current=\(springBoardPID) error=\(processError ?? "none")"
+                    )
+                    DispatchQueue.main.async {
+                        guard activeOperationID == operationID,
+                              isApplying,
+                              !nativeFinished else {
+                            AuraStudioDiagnostics.log(
+                                "step.native.late",
+                                "op=\(operationID) module=\(step.name) result=\(result)"
+                            )
+                            if springBoardPID != targetPID {
+                                activeFlagsRaw = 0
+                                activeModeRaw = 0
                             }
+                            mgr.endExclusiveRemoteCall(
+                                label: "Aura \(step.name) \(operationID) late"
+                            )
+                            return
                         }
-                    } else {
-                        self.finish(message: LaraL10n.text(
-                            en: "The fresh SpringBoard session failed its live health check. Nothing was changed.",
-                            es: "La sesión nueva de SpringBoard no superó la comprobación activa. No se cambió nada."
-                        ))
+                        nativeFinished = true
+                        timeoutWork.cancel()
+                        mgr.endExclusiveRemoteCall(
+                            label: "Aura \(step.name) \(operationID)"
+                        )
+
+                        if springBoardPID != targetPID {
+                            activeFlagsRaw = 0
+                            activeModeRaw = 0
+                            retainedVerified = 0
+                            newlyApplied = 0
+                            fail(
+                                "SpringBoard restarted during \(step.name) " +
+                                "(PID \(targetPID) → \(springBoardPID))",
+                                result: result
+                            )
+                            return
+                        }
+                        if let processError,
+                           processError.localizedCaseInsensitiveContains("main-thread") ||
+                           processError.localizedCaseInsensitiveContains("timed out") ||
+                           processError.localizedCaseInsensitiveContains("restore") {
+                            fail("\(step.name) RemoteCall error: \(processError)", result: result)
+                            return
+                        }
+                        if result == -15 || result == -16 {
+                            // These results explicitly guarantee that the
+                            // static black Glow core was restored and verified.
+                            // Keep that truthful state without opening the
+                            // circuit breaker or attempting to reapply Tint.
+                            newlyApplied |= Flag.island
+                            activeFlagsRaw = Int(retainedVerified | newlyApplied)
+                            activeModeRaw = AuraStudioMode.glow.rawValue
+                            verifiedFallbackResult = result
+                            AuraStudioDiagnostics.log(
+                                "step.fallback",
+                                "op=\(operationID) module=\(step.name) result=\(result) verified=glow"
+                            )
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                runStep(index + 1)
+                            }
+                            return
+                        }
+                        if result == -2 || result == -17 || result == -20 {
+                            // The native contract defines these as read-only
+                            // host/preflight misses. They are safe to report as
+                            // unavailable and must not prevent the other
+                            // independently selected module from being tried.
+                            if firstUnavailableResult == nil {
+                                firstUnavailableResult = result
+                            }
+                            if result == -17 {
+                                retainedVerified |= previouslyVerified & step.flag
+                            }
+                            activeFlagsRaw = Int(retainedVerified | newlyApplied)
+                            if activeFlagsRaw & Int(Flag.island) == 0 {
+                                activeModeRaw = 0
+                            }
+                            AuraStudioDiagnostics.log(
+                                "step.unavailable",
+                                "op=\(operationID) module=\(step.name) result=\(result) mutation=none"
+                            )
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                runStep(index + 1)
+                            }
+                            return
+                        }
+                        guard result >= 0 else {
+                            fail("\(step.name) returned unverified native error \(result)", result: result)
+                            return
+                        }
+                        let rawResult = UInt32(bitPattern: result)
+                        guard rawResult & step.flag != 0 else {
+                            fail("\(step.name) did not verify its requested host", result: result)
+                            return
+                        }
+
+                        newlyApplied |= step.flag
+                        motionDegraded = motionDegraded ||
+                            rawResult & Flag.motionDegraded != 0
+                        activeFlagsRaw = Int(retainedVerified | newlyApplied)
+                        if step.flag == Flag.island { activeModeRaw = mode }
+                        AuraStudioDiagnostics.log(
+                            "step.success",
+                            "op=\(operationID) module=\(step.name) applied=0x\(String(newlyApplied, radix: 16))"
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            runStep(index + 1)
+                        }
                     }
                 }
             }
         }
 
-        if mgr.rcready, mgr.sbProc != nil {
-            AuraStudioDiagnostics.log("session.reuse")
-            ensureHealthySession(allowRepair: true)
-        } else {
-            AuraStudioDiagnostics.log("session.init.begin", "process=SpringBoard")
-            mgr.rcinit(process: "SpringBoard") { success in
-                AuraStudioDiagnostics.log(
-                    "session.init.end",
-                    "success=\(success) rcready=\(self.mgr.rcready) session=\(self.mgr.sbProc != nil)"
-                )
-                if success || (self.mgr.rcready && self.mgr.sbProc != nil) {
-                    ensureHealthySession(allowRepair: false)
-                } else {
-                    let detail = self.mgr.rcLastError?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.finish(message: detail?.isEmpty == false
-                        ? detail!
-                        : LaraL10n.text(
-                            en: "Eagle could not start the live SpringBoard session.",
-                            es: "Eagle no pudo iniciar la sesión activa con SpringBoard."
-                        ))
+        runStep(0)
+    }
+
+    private func requestSafeRemoval() {
+        AuraStudioDiagnostics.log(
+            "remove.blocked",
+            "engine=\(auraEngineBuild) reason=scoped-native-remove-unavailable"
+        )
+        diagnosticsURL = makeDiagnosticsReport(
+            summary: "Scoped Remove was withheld; no native call was sent"
+        )
+        notice = AuraStudioNotice(message: LaraL10n.text(
+            en: "This safety build did not send the old flags=0 global cleanup call. That route touches Island and Dock together and was causing repeated SpringBoard restarts. Nothing was changed and Eagle will never respring automatically. Until scoped native removal is available, a manual device restart removes these runtime-only auras.",
+            es: "Esta versión de seguridad no envió la antigua llamada global de limpieza con flags=0. Esa ruta toca Island y Dock juntos y estaba provocando reinicios repetidos de SpringBoard. No se cambió nada y Eagle nunca hará respring automáticamente. Hasta que exista una eliminación nativa por módulo, un reinicio manual del dispositivo elimina estas auras temporales."
+        ))
+    }
+
+    private func makeDiagnosticsReport(summary: String) -> URL? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: Date())
+        let relevantFragments = [
+            "eagle.aura",
+            "eagle.island",
+            "eagle.dock",
+            "(rc)",
+            "remote call",
+            "RemoteCall",
+        ]
+        let lines = globallogger.logs
+            .flatMap { $0.components(separatedBy: .newlines) }
+            .filter { line in
+                relevantFragments.contains { fragment in
+                    line.localizedCaseInsensitiveContains(fragment)
                 }
             }
+            .suffix(600)
+        let header = [
+            "Eagle Aura Studio diagnostics",
+            "timestamp=\(timestamp)",
+            "engine=\(auraEngineBuild)",
+            "operation=\(activeOperationID ?? "none")",
+            "summary=\(summary)",
+            "device=\(devicemachine())",
+            "ios=\(ProcessInfo.processInfo.operatingSystemVersionString)",
+            "dsready=\(mgr.dsready)",
+            "rcrunning=\(mgr.rcrunning)",
+            "rcready=\(mgr.rcready)",
+            "rcSafetyLocked=\(mgr.rcSafetyLocked)",
+            "rcError=\(mgr.rcLastError ?? "none")",
+            "--- filtered log ---",
+        ]
+        let report = (header + Array(lines)).joined(separator: "\n") + "\n"
+        let filename = "Eagle-Aura-Diagnostics-" +
+            timestamp.replacingOccurrences(of: ":", with: "-") + ".txt"
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(filename)
+        do {
+            try report.write(to: url, atomically: true, encoding: .utf8)
+            AuraStudioDiagnostics.log(
+                "diagnostics.ready",
+                "path=\(url.lastPathComponent) lines=\(lines.count)"
+            )
+            return url
+        } catch {
+            AuraStudioDiagnostics.log(
+                "diagnostics.failed",
+                "error=\(error.localizedDescription)"
+            )
+            return nil
         }
     }
 
@@ -1006,7 +1250,9 @@ struct AuraStudioView: View {
         AuraStudioDiagnostics.log("finish", "error=true")
         DispatchQueue.main.async {
             AuraStudioApplyGate.end()
+            self.activeOperationID = nil
             self.isApplying = false
+            self.applyStage = ""
             self.notice = AuraStudioNotice(message: message)
         }
     }
@@ -1056,8 +1302,8 @@ struct AuraStudioView: View {
         switch result {
         case -2:
             return LaraL10n.text(
-                en: "Aura Studio received no valid Island or Dock request. Nothing was changed.",
-                es: "Aura Studio no recibió una solicitud válida de Island o Dock. No se cambió nada."
+                en: "SpringBoard did not expose the exact Dynamic Island window. Nothing was changed; Dock can still be applied independently when selected.",
+                es: "SpringBoard no mostró la ventana exacta de Dynamic Island. No se cambió nada; el Dock aún puede aplicarse de forma independiente si está seleccionado."
             )
         case -3:
             return LaraL10n.text(en: "The selected aura style is invalid.", es: "El estilo de aura seleccionado no es válido.")
