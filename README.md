@@ -2,7 +2,7 @@
   <img src="lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png" alt="Eagle icon" width="150">
   <h1>Eagle</h1>
   <p>Focused iOS personalization powered by DarkSword.</p>
-  <p><strong>Public Beta 4 — Aura Engine r7; expect unfinished features and device-dependent SpringBoard behavior.</strong></p>
+  <p><strong>Public Beta 5 — Aura Engine r8 and a fail-closed Prepare pipeline; physical-device testing is still required.</strong></p>
 </div>
 
 > [!WARNING]
@@ -28,6 +28,8 @@ Eagle is a modified version of [Lara](https://github.com/rooootdev/lara). The Ea
 
 ## Known limitations
 
+- **Prepare support:** iOS 16.x is experimental (16.7.2 has limited testing); iOS 17.0–18.7.1 and 26.0–26.0.1 are accepted. iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ and current MIE devices are blocked.
+- Aura Studio live changes remain limited to verified iOS 17/18 SpringBoard routes even where the Prepare engine supports another release.
 - If Island Aura reports **Safe Compact Halo**, it will not expand with music, screen recording or timers. Only **Adaptive Aura** follows those layouts.
 - Aura Studio depends on private live SpringBoard surfaces. A surface can be unavailable even when another aura applies successfully.
 - Screen, Battery Halo and Lock experiments are not exposed in this beta while their live SpringBoard hosts remain unverified.
@@ -83,6 +85,7 @@ Use the [bug report form](https://github.com/leonardob8777-bit/Eagle/issues/new?
 - Eagle version or commit;
 - the feature and selected mode;
 - the exact result message;
+- the shareable Prepare or Aura diagnostic report when Eagle offers one;
 - a screenshot when the problem is visual;
 - the relevant end of `Documents/lara.log` from Eagle's Files container, with personal paths removed.
 
