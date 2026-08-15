@@ -27,10 +27,10 @@ struct AuraStudioDisplayGeometry {
 
     var compactIslandFrame: CGRect {
         scaleStandardFrame(CGRect(
-            x: (standardLogicalSize.width - 130) / 2,
-            y: 13,
-            width: 130,
-            height: 35
+            x: (standardLogicalSize.width - 132) / 2,
+            y: 12,
+            width: 132,
+            height: 37
         ))
     }
 
@@ -168,7 +168,9 @@ struct AuraStudioView: View {
         // Dock and Lock flag values after Volume/Notification Aura removal.
         static let dock: UInt32 = 1 << 5
         static let lock: UInt32 = 1 << 6
-        static let supported = island | screen | battery | dock | lock
+        // Aura Studio now exposes only device-verified surfaces. The reserved
+        // values stay intact so future rebuilt modules remain migration-safe.
+        static let supported = island | dock
     }
 
     @ObservedObject private var mgr = laramgr.shared
@@ -180,8 +182,8 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeFlags") private var activeFlagsRaw = 0
 
     @AppStorage("eagle.auraStudio.island") private var islandEnabled = true
-    @AppStorage("eagle.auraStudio.screen") private var screenEnabled = true
-    @AppStorage("eagle.auraStudio.battery") private var batteryEnabled = true
+    @AppStorage("eagle.auraStudio.screen") private var screenEnabled = false
+    @AppStorage("eagle.auraStudio.battery") private var batteryEnabled = false
     @AppStorage("eagle.auraStudio.dock") private var dockEnabled = false
     @AppStorage("eagle.auraStudio.lock") private var lockEnabled = false
 
@@ -209,13 +211,20 @@ struct AuraStudioView: View {
             : auraColor
     }
 
+    private var previewRingStyle: AnyShapeStyle {
+        if selectedMode == .rainbow {
+            return AnyShapeStyle(AngularGradient(
+                colors: [.pink, .orange, .yellow, .green, .cyan, .blue, .purple, .pink],
+                center: .center
+            ))
+        }
+        return AnyShapeStyle(auraColor)
+    }
+
     private var selectedFlags: UInt32 {
         var flags: UInt32 = 0
         if islandEnabled { flags |= Flag.island }
-        if screenEnabled { flags |= Flag.screen }
-        if batteryEnabled { flags |= Flag.battery }
         if dockEnabled { flags |= Flag.dock }
-        if lockEnabled { flags |= Flag.lock }
         return flags
     }
 
@@ -288,8 +297,11 @@ struct AuraStudioView: View {
             }
         }
         .onAppear {
-            // Do not keep removed Volume/Notification bits in the verified
-            // status shown to users upgrading from the first Aura Studio.
+            // Quarantine old experimental choices before a user can Apply.
+            // Only Island and Dock currently have verified live hosts.
+            screenEnabled = false
+            batteryEnabled = false
+            lockEnabled = false
             activeFlagsRaw &= Int(Flag.supported)
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
@@ -303,11 +315,11 @@ struct AuraStudioView: View {
     private var previewCard: some View {
         VStack(spacing: 16) {
             VStack(spacing: 5) {
-                Text(LaraL10n.text(en: "One color. One Apply.", es: "Un color. Un solo Apply."))
+                Text(LaraL10n.text(en: "Island Aura, rebuilt.", es: "Island Aura, reconstruida."))
                     .font(.title2.bold())
                 Text(LaraL10n.text(
-                    en: "Choose where the light appears without filling Eagle with separate tools.",
-                    es: "Elige dónde aparece la luz sin llenar Eagle de herramientas separadas."
+                    en: "A brighter dual-layer light that follows the live Dynamic Island.",
+                    es: "Una luz de dos capas, más intensa, que sigue a Dynamic Island en vivo."
                 ))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -325,13 +337,6 @@ struct AuraStudioView: View {
                     endPoint: .bottomTrailing
                 )
 
-                if screenEnabled {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(previewLightColor, lineWidth: 3)
-                        .padding(5)
-                        .shadow(color: previewLightColor, radius: 14)
-                }
-
                 VStack {
                     HStack {
                         Text("9:41")
@@ -340,15 +345,6 @@ struct AuraStudioView: View {
                             Image(systemName: "cellularbars")
                             Image(systemName: "wifi")
                             Image(systemName: "battery.75percent")
-                                .padding(.horizontal, batteryEnabled ? 4 : 0)
-                                .padding(.vertical, batteryEnabled ? 3 : 0)
-                                .overlay {
-                                    if batteryEnabled {
-                                        Capsule()
-                                            .stroke(previewLightColor, lineWidth: 2)
-                                            .shadow(color: previewLightColor, radius: 8)
-                                    }
-                                }
                         }
                     }
                     .font(.caption2.weight(.semibold))
@@ -386,14 +382,26 @@ struct AuraStudioView: View {
                 .padding(14)
 
                 if islandEnabled {
-                    Capsule()
-                        .fill(selectedMode == .tint ? previewLightColor.opacity(0.32) : .black)
-                        .frame(width: 94, height: 28)
-                        .overlay { Capsule().stroke(previewLightColor, lineWidth: 2.4) }
-                        .shadow(color: previewLightColor, radius: 12)
+                    ZStack {
+                        Capsule()
+                            .stroke(previewRingStyle, lineWidth: 11)
+                            .blur(radius: 7)
+                            .opacity(0.78)
+                        Capsule()
+                            .fill(selectedMode == .tint
+                                  ? previewLightColor.opacity(0.32)
+                                  : .black)
+                        Capsule()
+                            .stroke(previewRingStyle, lineWidth: 5)
+                    }
+                        .frame(width: 102, height: 31)
+                        .shadow(color: previewLightColor.opacity(0.95), radius: 18)
+                        .hueRotation(.degrees(selectedMode == .rainbow
+                                              ? previewRainbowHue * 360
+                                              : 0))
                         .opacity(selectedMode == .pulse ? (previewPulse ? 1 : 0.55) : 1)
                         .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 7)
+                        .padding(.top, 9)
                 }
             }
             .frame(height: 238)
@@ -518,8 +526,8 @@ struct AuraStudioView: View {
             if selectedMode == .rainbow {
                 Label(
                     LaraL10n.text(
-                        en: "Rainbow uses its own moving spectrum.",
-                        es: "Arcoíris utiliza su propio espectro en movimiento."
+                        en: "Rainbow drives the bright core and outer bloom in two moving color phases.",
+                        es: "Arcoíris mueve el núcleo brillante y la difusión exterior en dos fases de color."
                     ),
                     systemImage: "wand.and.stars"
                 )
@@ -534,25 +542,16 @@ struct AuraStudioView: View {
 
     private var alwaysOnCard: some View {
         moduleCard(
-            title: LaraL10n.text(en: "Core Aura", es: "Aura principal"),
+            title: LaraL10n.text(en: "Dynamic Island", es: "Dynamic Island"),
             modules: [
                 AuraStudioModule(
                     id: Flag.island,
                     title: LaraL10n.text(en: "Island Aura", es: "Aura de la isla"),
-                    subtitle: LaraL10n.text(en: "Adaptive Dynamic Island outline", es: "Contorno adaptable de Dynamic Island"),
+                    subtitle: LaraL10n.text(
+                        en: "Thick luminous core + diffused outer bloom",
+                        es: "Núcleo luminoso grueso + difusión exterior"
+                    ),
                     symbol: "capsule.fill"
-                ),
-                AuraStudioModule(
-                    id: Flag.screen,
-                    title: LaraL10n.text(en: "Screen Aura", es: "Aura de pantalla"),
-                    subtitle: LaraL10n.text(en: "A non-interactive edge around the display", es: "Un borde que no bloquea toques"),
-                    symbol: "rectangle.inset.filled"
-                ),
-                AuraStudioModule(
-                    id: Flag.battery,
-                    title: LaraL10n.text(en: "Battery Halo", es: "Halo de batería"),
-                    subtitle: LaraL10n.text(en: "A global halo around the battery area", es: "Un halo global alrededor de la batería"),
-                    symbol: "battery.75percent"
                 ),
             ]
         )
@@ -560,19 +559,13 @@ struct AuraStudioView: View {
 
     private var systemMomentsCard: some View {
         moduleCard(
-            title: LaraL10n.text(en: "Home & Lock", es: "Inicio y bloqueo"),
+            title: LaraL10n.text(en: "Verified Companion", es: "Complemento verificado"),
             modules: [
                 AuraStudioModule(
                     id: Flag.dock,
                     title: LaraL10n.text(en: "Dock Aura", es: "Aura del Dock"),
                     subtitle: LaraL10n.text(en: "Fits the visible Dock capsule without touching its icons", es: "Se ajusta a la cápsula visible sin tocar sus iconos"),
                     symbol: "dock.rectangle"
-                ),
-                AuraStudioModule(
-                    id: Flag.lock,
-                    title: LaraL10n.text(en: "Lock Aura", es: "Aura de bloqueo"),
-                    subtitle: LaraL10n.text(en: "A lock-screen halo near Face ID", es: "Un halo de bloqueo junto a Face ID"),
-                    symbol: "lock.fill"
                 ),
             ]
         )
@@ -616,15 +609,18 @@ struct AuraStudioView: View {
 
     private var adaptiveNote: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "waveform.path.ecg.rectangle.fill")
+            Image(systemName: "checkmark.shield.fill")
                 .foregroundStyle(previewLightColor)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(LaraL10n.text(en: "Adaptive signals are next", es: "Las señales adaptativas serán lo próximo"))
+                Text(LaraL10n.text(
+                    en: "Stable-surface rollout",
+                    es: "Lanzamiento por superficies estables"
+                ))
                     .font(.subheadline.weight(.semibold))
                 Text(LaraL10n.text(
-                    en: "Privacy Aura and Charging Aura need a persistent event bridge so they react only when the camera, microphone, recording, or charging state actually changes. They will live here—not as extra Home Screen tools.",
-                    es: "Privacy Aura y Charging Aura necesitan un puente persistente de eventos para reaccionar solo cuando cambie realmente la cámara, el micrófono, la grabación o la carga. Vivirán aquí, no como herramientas adicionales en Inicio."
+                    en: "Screen, Battery and Lock are temporarily isolated. This build cannot send them to SpringBoard while each host is rebuilt and verified one by one.",
+                    es: "Pantalla, batería y bloqueo están aislados temporalmente. Esta versión no puede enviarlos a SpringBoard mientras reconstruimos y verificamos cada host uno por uno."
                 ))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -639,7 +635,7 @@ struct AuraStudioView: View {
     private var applyButton: some View {
         Button { apply(mode: selectedMode.rawValue, flags: selectedFlags) } label: {
             Label(
-                LaraL10n.text(en: "Apply Aura Studio", es: "Aplicar Aura Studio"),
+                LaraL10n.text(en: "Apply Verified Auras", es: "Aplicar auras verificadas"),
                 systemImage: "sparkles"
             )
             .font(.headline)
@@ -656,7 +652,10 @@ struct AuraStudioView: View {
     private var restoreButton: some View {
         Button { apply(mode: 0, flags: 0) } label: {
             Label(
-                LaraL10n.text(en: "Remove Every Aura", es: "Eliminar todas las auras"),
+                LaraL10n.text(
+                    en: "Remove Island & Dock Auras",
+                    es: "Eliminar auras de Island y Dock"
+                ),
                 systemImage: "arrow.counterclockwise"
             )
             .font(.subheadline.weight(.semibold))
@@ -833,8 +832,8 @@ struct AuraStudioView: View {
     ) -> String {
         if restoring {
             return LaraL10n.text(
-                en: "Every Eagle aura was removed.",
-                es: "Se eliminaron todas las auras de Eagle."
+                en: "Island and Dock auras were removed.",
+                es: "Se eliminaron las auras de Island y Dock."
             )
         }
         let applied = names(for: appliedFlags)
@@ -855,8 +854,8 @@ struct AuraStudioView: View {
         switch result {
         case -2:
             return LaraL10n.text(
-                en: "SpringBoard did not expose any selected Aura Studio host. Nothing was reported as applied.",
-                es: "SpringBoard no mostró ningún contenedor seleccionado de Aura Studio. No se marcó nada como aplicado."
+                en: "SpringBoard did not expose the selected Island or Dock host. No partial light was left behind and nothing was reported as applied.",
+                es: "SpringBoard no mostró el host seleccionado de Island o Dock. No quedó ninguna luz parcial y no se marcó nada como aplicado."
             )
         case -3:
             return LaraL10n.text(en: "The selected aura style is invalid.", es: "El estilo de aura seleccionado no es válido.")
