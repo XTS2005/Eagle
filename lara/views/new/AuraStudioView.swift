@@ -6,6 +6,85 @@ private struct AuraStudioNotice: Identifiable {
     let message: String
 }
 
+struct AuraStudioDisplayGeometry {
+    let logicalSize: CGSize
+    let nativePixelSize: CGSize
+    let standardLogicalSize: CGSize
+    let renderScale: CGFloat
+    let nativeScale: CGFloat
+    let xFactor: CGFloat
+    let yFactor: CGFloat
+    let isDisplayZoomed: Bool
+
+    func scaleStandardFrame(_ frame: CGRect) -> CGRect {
+        CGRect(
+            x: frame.origin.x * xFactor,
+            y: frame.origin.y * yFactor,
+            width: frame.width * xFactor,
+            height: frame.height * yFactor
+        )
+    }
+
+    var compactIslandFrame: CGRect {
+        scaleStandardFrame(CGRect(
+            x: (standardLogicalSize.width - 130) / 2,
+            y: 13,
+            width: 130,
+            height: 35
+        ))
+    }
+
+    var dockAuraFrame: CGRect {
+        scaleStandardFrame(CGRect(
+            x: 15,
+            y: 1,
+            width: standardLogicalSize.width - 30,
+            height: 94
+        ))
+    }
+
+    static var current: AuraStudioDisplayGeometry {
+        let screen = UIScreen.main
+        let logical = CGSize(
+            width: min(screen.bounds.width, screen.bounds.height),
+            height: max(screen.bounds.width, screen.bounds.height)
+        )
+        let native = CGSize(
+            width: min(screen.nativeBounds.width, screen.nativeBounds.height),
+            height: max(screen.nativeBounds.width, screen.nativeBounds.height)
+        )
+        let renderScale = max(screen.scale, 1)
+        let nativeScale = max(screen.nativeScale, 1)
+        let standard = CGSize(
+            width: native.width / renderScale,
+            height: native.height / renderScale
+        )
+        let rawX = standard.width > 0 ? logical.width / standard.width : 1
+        let rawY = standard.height > 0 ? logical.height / standard.height : 1
+        var xFactor = (0.75...1.015).contains(rawX) ? rawX : 1
+        var yFactor = (0.75...1.015).contains(rawY) ? rawY : 1
+        if xFactor >= 0.985,
+           yFactor >= 0.985,
+           nativeScale > renderScale * 1.015 {
+            let uniformFactor = renderScale / nativeScale
+            if (0.75..<0.985).contains(uniformFactor) {
+                xFactor = uniformFactor
+                yFactor = uniformFactor
+            }
+        }
+        return AuraStudioDisplayGeometry(
+            logicalSize: logical,
+            nativePixelSize: native,
+            standardLogicalSize: standard,
+            renderScale: renderScale,
+            nativeScale: nativeScale,
+            xFactor: xFactor,
+            yFactor: yFactor,
+            isDisplayZoomed: xFactor < 0.985 || yFactor < 0.985
+        )
+    }
+}
+
 private enum AuraStudioDiagnostics {
     static func log(_ stage: String, _ detail: String = "") {
         let formatter = ISO8601DateFormatter()
@@ -118,6 +197,10 @@ struct AuraStudioView: View {
 
     private var auraColor: Color {
         Color(red: red, green: green, blue: blue)
+    }
+
+    private var displayGeometry: AuraStudioDisplayGeometry {
+        .current
     }
 
     private var previewLightColor: Color {
@@ -323,6 +406,24 @@ struct AuraStudioView: View {
                 Text(activeFlagsRaw == 0
                      ? LaraL10n.text(en: "No verified Apply saved", es: "Sin Apply verificado guardado")
                      : LaraL10n.text(en: "Last Apply verified \(activeModuleCount) surfaces", es: "El último Apply verificó \(activeModuleCount) superficies"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 7) {
+                Image(systemName: displayGeometry.isDisplayZoomed
+                      ? "arrow.down.right.and.arrow.up.left"
+                      : "viewfinder.circle.fill")
+                    .foregroundStyle(previewLightColor)
+                Text(displayGeometry.isDisplayZoomed
+                     ? LaraL10n.text(
+                        en: "Display Zoom detected · geometry corrected",
+                        es: "Zoom de pantalla detectado · geometría corregida"
+                     )
+                     : LaraL10n.text(
+                        en: "Standard display · native geometry",
+                        es: "Pantalla estándar · geometría nativa"
+                     ))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -593,9 +694,22 @@ struct AuraStudioView: View {
     private func apply(mode: Int, flags: UInt32) {
         let version = ProcessInfo.processInfo.operatingSystemVersion
         let versionString = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+        let display = displayGeometry
+        let islandFrame = display.compactIslandFrame
+        let dockFrame = display.dockAuraFrame
         AuraStudioDiagnostics.log(
             "request",
             "mode=\(mode) flags=0x\(String(flags, radix: 16)) device=\(devicemachine()) ios=\(versionString) " +
+            "display=\(display.isDisplayZoomed ? "zoomed" : "standard") " +
+            "logical=\(Int(display.logicalSize.width))x\(Int(display.logicalSize.height)) " +
+            "standard=\(String(format: "%.1f", display.standardLogicalSize.width))x" +
+            "\(String(format: "%.1f", display.standardLogicalSize.height)) " +
+            "native=\(Int(display.nativePixelSize.width))x\(Int(display.nativePixelSize.height)) " +
+            "renderScale=\(String(format: "%.4f", display.renderScale)) " +
+            "nativeScale=\(String(format: "%.4f", display.nativeScale)) " +
+            "factor=\(String(format: "%.4f", display.xFactor)),\(String(format: "%.4f", display.yFactor)) " +
+            "island=\(String(format: "%.2f,%.2f,%.2f,%.2f", islandFrame.minX, islandFrame.minY, islandFrame.width, islandFrame.height)) " +
+            "dock=\(String(format: "%.2f,%.2f,%.2f,%.2f", dockFrame.minX, dockFrame.minY, dockFrame.width, dockFrame.height)) " +
             "dsready=\(mgr.dsready) rcrunning=\(mgr.rcrunning) rcready=\(mgr.rcready) session=\(mgr.sbProc != nil)"
         )
 
