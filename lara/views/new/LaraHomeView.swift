@@ -23,6 +23,8 @@ struct LaraHomeView: View {
                                 sceneManager.applyPendingShortcutIfNeeded()
                             }
                         }
+                    } else {
+                        homeAccessCard
                     }
 
                     VStack(alignment: .leading, spacing: 20) {
@@ -223,7 +225,7 @@ struct LaraHomeView: View {
                         Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                     }
                 }
-                .accessibilityLabel("Language")
+                .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
 
                 HStack(spacing: 6) {
                     Circle()
@@ -257,6 +259,36 @@ struct LaraHomeView: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var homeAccessCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: mgr.sbxready ? "checkmark.shield.fill" : "iphone.and.arrow.forward")
+                    .foregroundStyle(mgr.sbxready ? .green : .blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mgr.sbxready
+                         ? LaraL10n.text(en: "iPhone Prepared", es: "iPhone preparado")
+                         : LaraL10n.text(en: "Prepare This iPhone", es: "Preparar este iPhone"))
+                        .font(.headline)
+                    Text(mgr.sbxready
+                         ? LaraL10n.text(
+                            en: "System customization access is ready.",
+                            es: "El acceso para personalizar el sistema está listo."
+                         )
+                         : LaraL10n.text(
+                            en: "Start secure access here without opening another screen.",
+                            es: "Inicia aquí el acceso seguro sin abrir otra pantalla."
+                         ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 2)
+
+            LaraAccessView(compact: true)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var trustNote: some View {
