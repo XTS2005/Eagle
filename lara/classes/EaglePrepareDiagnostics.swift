@@ -22,7 +22,6 @@ final class EaglePrepareDiagnostics: ObservableObject {
     static let shared = EaglePrepareDiagnostics()
 
     @Published private(set) var latestIncident: Incident?
-    @Published private(set) var requiresPrepareAcknowledgement = false
 
     var latestReportURL: URL? { latestIncident?.reportURL }
 
@@ -219,8 +218,8 @@ final class EaglePrepareDiagnostics: ObservableObject {
         }
     }
 
-    /// Explicitly releases the retry gate after the user has had an opportunity
-    /// to save/share the report. Reports and journals remain on disk.
+    /// Hides the incident card after the user has had an opportunity to save or
+    /// share it. Reports and journals remain on disk, and retries are never gated.
     func acknowledgeIncident() {
         lock.lock()
         let incident = latestIncident
@@ -228,19 +227,17 @@ final class EaglePrepareDiagnostics: ObservableObject {
         if let incident {
             appendEvent(
                 attemptID: incident.attemptID,
-                stage: "review.acknowledged",
+                stage: "review.dismissed",
                 progress: nil,
-                detail: "retry-unlocked"
+                detail: "report-preserved"
             )
         }
         nativeClearInterruptedAttempt()
         removeUnacknowledgedIncidentIndex()
         if Thread.isMainThread {
-            requiresPrepareAcknowledgement = false
             latestIncident = nil
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.requiresPrepareAcknowledgement = false
                 self?.latestIncident = nil
             }
         }
@@ -567,11 +564,9 @@ final class EaglePrepareDiagnostics: ObservableObject {
         persistUnacknowledgedIncident(incident)
         if Thread.isMainThread {
             latestIncident = incident
-            requiresPrepareAcknowledgement = true
         } else {
             DispatchQueue.main.async { [weak self] in
                 self?.latestIncident = incident
-                self?.requiresPrepareAcknowledgement = true
             }
         }
     }
@@ -742,8 +737,8 @@ struct EaglePrepareCrashReportCard: View {
                         ))
                             .font(.headline)
                         Text(LaraL10n.text(
-                            en: "Eagle preserved a private diagnostic from the last attempt. Share it before trying Prepare again.",
-                            es: "Eagle conservó un diagnóstico privado del último intento. Compártelo antes de volver a preparar."
+                            en: "Eagle preserved a private diagnostic from the last attempt. You can share it without delaying another Prepare attempt.",
+                            es: "Eagle conservó un diagnóstico privado del último intento. Puedes compartirlo sin retrasar otro intento de preparación."
                         ))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -769,8 +764,8 @@ struct EaglePrepareCrashReportCard: View {
                     diagnostics.acknowledgeIncident()
                 } label: {
                     Text(LaraL10n.text(
-                        en: "I saved the report — allow one retry",
-                        es: "Guardé el reporte — permitir un intento"
+                        en: "Dismiss Report",
+                        es: "Ocultar reporte"
                     ))
                         .font(.footnote.weight(.semibold))
                         .frame(maxWidth: .infinity)
@@ -778,8 +773,8 @@ struct EaglePrepareCrashReportCard: View {
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
                 .accessibilityHint(LaraL10n.text(
-                    en: "Keeps the diagnostic and unlocks the Prepare button.",
-                    es: "Conserva el diagnóstico y desbloquea el botón Preparar."
+                    en: "Hides this card while keeping the diagnostic file and journal.",
+                    es: "Oculta esta tarjeta y conserva el archivo de diagnóstico y el registro."
                 ))
             }
             .padding(16)
