@@ -257,7 +257,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.15-r7"
+    private let auraEngineBuild = "2026.08.15-r8"
 
     private var selectedTarget: AuraStudioTarget {
         get { AuraStudioTarget(rawValue: selectedTargetRaw) ?? .island }
@@ -1217,6 +1217,16 @@ struct AuraStudioView: View {
         let operationID = String(UUID().uuidString.prefix(8))
         let mode = operation.nativeMode
         let requestedFlags = flags & Flag.supported
+        let requestedTarget: AuraStudioTarget?
+        switch requestedFlags {
+        case Flag.island:
+            requestedTarget = .island
+        case Flag.dock:
+            requestedTarget = .dock
+        default:
+            requestedTarget = nil
+        }
+        let requestedTargetTitle = requestedTarget?.title ?? "Invalid selection"
         let display = displayGeometry
         let islandFrame = display.compactIslandFrame
         let dockFrame = display.dockAuraFrame
@@ -1224,7 +1234,7 @@ struct AuraStudioView: View {
             "request",
             "op=\(operationID) engine=\(auraEngineBuild) " +
             "action=\(operation.isRemoving ? "remove" : "apply") mode=\(mode) " +
-            "target=\(selectedTarget.title) flags=0x\(String(requestedFlags, radix: 16)) " +
+            "target=\(requestedTargetTitle) flags=0x\(String(requestedFlags, radix: 16)) " +
             "device=\(devicemachine()) " +
             "ios=\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) " +
             "display=\(display.isDisplayZoomed ? "zoomed" : "standard") " +
@@ -1275,7 +1285,8 @@ struct AuraStudioView: View {
             ))
             return
         }
-        guard requestedFlags.nonzeroBitCount == 1 else {
+        guard requestedFlags.nonzeroBitCount == 1,
+              let operationTarget = requestedTarget else {
             finish(message: LaraL10n.text(
                 en: "Choose exactly one Aura surface. Island and Dock are applied independently.",
                 es: "Elige exactamente una superficie Aura. Island y Dock se aplican de forma independiente."
@@ -1300,7 +1311,7 @@ struct AuraStudioView: View {
         }
 
         let selectedRGB: (red: Double, green: Double, blue: Double) =
-            selectedTarget == .island
+            operationTarget == .island
                 ? (islandRed, islandGreen, islandBlue)
                 : (dockRed, dockGreen, dockBlue)
         let redValue = Int32(max(0, min(255, Int((selectedRGB.red * 255).rounded()))))
@@ -1342,12 +1353,16 @@ struct AuraStudioView: View {
             resetOperationUI()
             AuraStudioApplyGate.end()
             notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Aura Studio could not prepare a safe session for \(selectedTarget.title). Nothing was sent, and the other aura was not touched. A technical report is ready if the problem repeats.",
-                es: "Aura Studio no pudo preparar una sesión segura para \(selectedTarget.title). No se envió nada y no se tocó la otra aura. Hay un informe técnico disponible si el problema se repite."
+                en: "Aura Studio could not prepare a safe session for \(operationTarget.title). Nothing was sent, and the other aura was not touched. A technical report is ready if the problem repeats.",
+                es: "Aura Studio no pudo preparar una sesión segura para \(operationTarget.title). No se envió nada y no se tocó la otra aura. Hay un informe técnico disponible si el problema se repite."
             ))
         }
 
-        func failAfterNativeCall(_ reason: String, result: Int32? = nil) {
+        func failAfterNativeCall(
+            _ reason: String,
+            result: Int32? = nil,
+            userDetail: String? = nil
+        ) {
             let resultText = result.map { " result=\($0)" } ?? ""
             AuraStudioDiagnostics.log(
                 "breaker.open",
@@ -1375,10 +1390,12 @@ struct AuraStudioView: View {
             AuraStudioApplyGate.lock()
             diagnosticsURL = makeDiagnosticsReport(summary: reason)
             resetOperationUI()
-            notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Aura Studio stopped because \(selectedTarget.title) could not be verified. The other aura was not changed and no automatic respring was attempted. Share the diagnostic report, then fully close and reopen Eagle before another test.",
-                es: "Aura Studio se detuvo porque no pudo verificar \(selectedTarget.title). No se cambió la otra aura ni se intentó un respring automático. Comparte el informe y luego cierra y abre Eagle completamente antes de otra prueba."
-            ))
+            let baseMessage = LaraL10n.text(
+                en: "Aura Studio stopped because \(operationTarget.title) could not be verified. The other aura was not changed and no automatic respring was attempted. Share the diagnostic report, then fully close and reopen Eagle before another test.",
+                es: "Aura Studio se detuvo porque no pudo verificar \(operationTarget.title). No se cambió la otra aura ni se intentó un respring automático. Comparte el informe y luego cierra y abre Eagle completamente antes de otra prueba."
+            )
+            let detailSuffix = userDetail.map { "\n\n\($0)" } ?? ""
+            notice = AuraStudioNotice(message: baseMessage + detailSuffix)
         }
 
         func finishVerifiedRollback(
@@ -1456,7 +1473,10 @@ struct AuraStudioView: View {
                         : newlyApplied,
                     requestedFlags: requestedFlags,
                     restoring: operation.isRemoving,
-                    motionDegraded: motionDegraded
+                    motionDegraded: motionDegraded,
+                    appliedMode: operation.isRemoving
+                        ? nil
+                        : AuraStudioMode(rawValue: mode)
                 )
             }
             let resultMessage: String
@@ -1691,7 +1711,11 @@ struct AuraStudioView: View {
                             retainedVerified &= ~step.flag
                             failAfterNativeCall(
                                 "\(step.englishName) RemoteCall error: \(transportReason)",
-                                result: result
+                                result: result,
+                                userDetail: LaraL10n.text(
+                                    en: "The protected call channel became unhealthy while \(step.englishName) was being checked. Eagle did not mark this surface as active.",
+                                    es: "El canal protegido de llamadas dejó de estar disponible mientras se verificaba \(step.spanishName). Eagle no marcó esta superficie como activa."
+                                )
                             )
                             return
                         }
@@ -1700,7 +1724,8 @@ struct AuraStudioView: View {
                                 retainedVerified &= ~step.flag
                                 failAfterNativeCall(
                                     "\(step.englishName) removal could not be verified",
-                                    result: result
+                                    result: result,
+                                    userDetail: message(for: result)
                                 )
                                 return
                             }
@@ -1790,7 +1815,8 @@ struct AuraStudioView: View {
                             retainedVerified &= ~step.flag
                             failAfterNativeCall(
                                 "\(step.englishName) returned unverified native error \(result)",
-                                result: result
+                                result: result,
+                                userDetail: message(for: result)
                             )
                             return
                         }
@@ -1799,7 +1825,11 @@ struct AuraStudioView: View {
                             retainedVerified &= ~step.flag
                             failAfterNativeCall(
                                 "\(step.englishName) did not verify its requested host",
-                                result: result
+                                result: result,
+                                userDetail: LaraL10n.text(
+                                    en: "SpringBoard returned without confirming the requested \(step.englishName) surface, so Eagle cleared only that surface's verified badge.",
+                                    es: "SpringBoard terminó sin confirmar la superficie \(step.spanishName) solicitada, por lo que Eagle borró solo el indicador verificado de esa superficie."
+                                )
                             )
                             return
                         }
@@ -1926,7 +1956,8 @@ struct AuraStudioView: View {
         appliedFlags: UInt32,
         requestedFlags: UInt32,
         restoring: Bool,
-        motionDegraded: Bool
+        motionDegraded: Bool,
+        appliedMode: AuraStudioMode?
     ) -> String {
         if restoring {
             let removed = names(for: appliedFlags)
@@ -1960,9 +1991,12 @@ struct AuraStudioView: View {
             ) + unavailable
         }
         if missing.isEmpty {
-            let style = appliedFlags != 0
-                ? " · \(selectedMode.title)"
-                : ""
+            let style: String
+            if appliedFlags != 0, let appliedMode {
+                style = " · \(appliedMode.title)"
+            } else {
+                style = ""
+            }
             return LaraL10n.text(
                 en: "Applied and verified: \(applied.joined(separator: ", "))\(style).",
                 es: "Aplicado y verificado: \(applied.joined(separator: ", "))\(style)."
