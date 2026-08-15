@@ -27,6 +27,8 @@ struct LaraHomeView: View {
                         homeAccessCard
                     }
 
+                    EaglePrepareCrashReportCard()
+
                     VStack(alignment: .leading, spacing: 20) {
                         NavigationLink(destination: CompleteStylesView()) {
                             LaraFeatureCard(
@@ -262,32 +264,7 @@ struct LaraHomeView: View {
     }
 
     private var homeAccessCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: mgr.sbxready ? "checkmark.shield.fill" : "iphone.and.arrow.forward")
-                    .foregroundStyle(mgr.sbxready ? .green : .blue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mgr.sbxready
-                         ? LaraL10n.text(en: "iPhone Prepared", es: "iPhone preparado")
-                         : LaraL10n.text(en: "Prepare This iPhone", es: "Preparar este iPhone"))
-                        .font(.headline)
-                    Text(mgr.sbxready
-                         ? LaraL10n.text(
-                            en: "System customization access is ready.",
-                            es: "El acceso para personalizar el sistema está listo."
-                         )
-                         : LaraL10n.text(
-                            en: "Start secure access here without opening another screen.",
-                            es: "Inicia aquí el acceso seguro sin abrir otra pantalla."
-                         ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 2)
-
-            LaraAccessView(compact: true)
-        }
+        LaraAccessView(compact: false)
         .accessibilityElement(children: .contain)
     }
 
@@ -300,8 +277,8 @@ struct LaraHomeView: View {
                 Text(LaraL10n.text(en: "You stay in control", es: "Tú mantienes el control"))
                     .font(.subheadline.weight(.semibold))
                 Text(LaraL10n.text(
-                    en: "Eagle requests access only when you choose to apply a change.",
-                    es: "Eagle solicita acceso solo cuando eliges aplicar un cambio."
+                    en: "Preparation starts only when you press Prepare iPhone. Eagle blocks duplicate attempts and keeps a diagnostic if the process is interrupted.",
+                    es: "La preparación comienza solo cuando pulsas Preparar iPhone. Eagle bloquea los intentos duplicados y conserva un diagnóstico si el proceso se interrumpe."
                 ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)

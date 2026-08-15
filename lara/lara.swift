@@ -31,6 +31,10 @@ struct LaraCustomApp: App {
         if keepalive {
             toggleka()
         }
+
+        // Install the persistent Prepare flight recorder before any activation
+        // button can dispatch the native engine.
+        EaglePrepareDiagnostics.shared.startObserving(manager: laramgr.shared)
         
         globallogger.capture()
     }
