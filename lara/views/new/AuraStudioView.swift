@@ -166,6 +166,33 @@ private struct AuraStudioModule: Identifiable {
     let symbol: String
 }
 
+private struct AuraStudioOperationStep {
+    let flag: UInt32
+    let englishName: String
+    let spanishName: String
+
+    var localizedName: String {
+        LaraL10n.text(en: englishName, es: spanishName)
+    }
+}
+
+private enum AuraStudioOperation {
+    case apply(AuraStudioMode)
+    case remove
+
+    var nativeMode: Int {
+        switch self {
+        case .apply(let mode): return mode.rawValue
+        case .remove: return 0
+        }
+    }
+
+    var isRemoving: Bool {
+        if case .remove = self { return true }
+        return false
+    }
+}
+
 struct AuraStudioView: View {
     private enum Flag {
         static let island: UInt32 = 1 << 0
@@ -189,6 +216,9 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.mode") private var selectedModeRaw = AuraStudioMode.glow.rawValue
     @AppStorage("eagle.auraStudio.activeFlags") private var activeFlagsRaw = 0
     @AppStorage("eagle.auraStudio.activeMode") private var activeModeRaw = 0
+    @AppStorage("eagle.auraStudio.activeIslandMode") private var activeIslandModeRaw = 0
+    @AppStorage("eagle.auraStudio.activeDockMode") private var activeDockModeRaw = 0
+    @AppStorage("eagle.auraStudio.activeSpringBoardPID") private var activeSpringBoardPID = 0
 
     @AppStorage("eagle.auraStudio.island") private var islandEnabled = true
     @AppStorage("eagle.auraStudio.screen") private var screenEnabled = false
@@ -204,8 +234,11 @@ struct AuraStudioView: View {
     @State private var applySafetyBlocked = false
     @State private var activeOperationID: String?
     @State private var diagnosticsURL: URL?
+    @State private var operationStepIndex = 0
+    @State private var operationStepCount = 0
+    @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.15-r3"
+    private let auraEngineBuild = "2026.08.15-r4"
 
     private var selectedMode: AuraStudioMode {
         get { AuraStudioMode(rawValue: selectedModeRaw) ?? .glow }
@@ -216,16 +249,6 @@ struct AuraStudioView: View {
                 islandEnabled = true
             }
         }
-    }
-
-    private var activeMode: AuraStudioMode? {
-        AuraStudioMode(rawValue: activeModeRaw)
-    }
-
-    private var activeStatusModeTitle: String {
-        (UInt32(max(activeFlagsRaw, 0)) & Flag.island) != 0
-            ? (activeMode?.title ?? "Aura")
-            : "Aura"
     }
 
     private var auraColor: Color {
@@ -311,6 +334,7 @@ struct AuraStudioView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Aura Studio")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isApplying)
         .alert(item: $notice) { notice in
             Alert(
                 title: Text("Aura Studio"),
@@ -322,8 +346,8 @@ struct AuraStudioView: View {
             if isApplying {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView()
+                VStack(spacing: 12) {
+                    ProgressView()
                         Text(applyStage.isEmpty
                              ? LaraL10n.text(
                                 en: "Preparing a safe system update…",
@@ -331,7 +355,16 @@ struct AuraStudioView: View {
                              )
                              : applyStage)
                         .font(.headline)
+                        .multilineTextAlignment(.center)
+                    if operationStepCount > 0 {
+                        Text(LaraL10n.text(
+                            en: "Step \(min(operationStepIndex, operationStepCount)) of \(operationStepCount)",
+                            es: "Paso \(min(operationStepIndex, operationStepCount)) de \(operationStepCount)"
+                        ))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
                     }
+                }
                     .padding(22)
                     .background(.regularMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -344,10 +377,11 @@ struct AuraStudioView: View {
             screenEnabled = false
             batteryEnabled = false
             lockEnabled = false
-            // This phase is intentionally Island-first. A persisted Dock
-            // toggle from an earlier beta must not silently add a second
-            // SpringBoard operation to the first Island verification.
-            dockEnabled = false
+            if selectedMode == .tint {
+                islandEnabled = true
+                dockEnabled = false
+            }
+            reconcilePersistedActiveState()
             if mgr.rcSafetyLocked { applySafetyBlocked = true }
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
@@ -471,8 +505,8 @@ struct AuraStudioView: View {
                 Text(activeFlagsRaw == 0
                      ? LaraL10n.text(en: "No verified Apply saved", es: "Sin Apply verificado guardado")
                      : LaraL10n.text(
-                        en: "Active: \(activeStatusModeTitle) · \(activeModuleCount) verified surface(s)",
-                        es: "Activo: \(activeStatusModeTitle) · \(activeModuleCount) superficie(s) verificada(s)"
+                        en: "Active: \(activeModuleCount) verified surface(s) in this SpringBoard session",
+                        es: "Activo: \(activeModuleCount) superficie(s) verificada(s) en esta sesión de SpringBoard"
                      ))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -672,10 +706,22 @@ struct AuraStudioView: View {
                             .lineLimit(2)
                     }
                     Spacer(minLength: 8)
+                    if UInt32(max(activeFlagsRaw, 0)) & module.id != 0 {
+                        Text(activeBadgeTitle(for: module.id))
+                            .font(.caption2.bold())
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Color.green.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
                     Toggle("", isOn: binding(for: module.id))
                         .labelsHidden()
                         .tint(previewLightColor)
-                        .disabled(selectedMode == .tint && module.id == Flag.dock)
+                        .disabled(
+                            isApplying ||
+                            (selectedMode == .tint && module.id == Flag.dock)
+                        )
                 }
                 .padding(.vertical, 10)
                 .opacity(selectedMode == .tint && module.id == Flag.dock ? 0.48 : 1)
@@ -715,7 +761,9 @@ struct AuraStudioView: View {
     }
 
     private var applyButton: some View {
-        Button { apply(mode: selectedMode.rawValue, flags: selectedFlags) } label: {
+        Button {
+            runAuraOperation(.apply(selectedMode), flags: selectedFlags)
+        } label: {
             Label(
                 LaraL10n.text(en: "Apply Verified Auras", es: "Aplicar auras verificadas"),
                 systemImage: "sparkles"
@@ -736,11 +784,13 @@ struct AuraStudioView: View {
     }
 
     private var restoreButton: some View {
-        Button { requestSafeRemoval() } label: {
+        Button {
+            runAuraOperation(.remove, flags: selectedFlags)
+        } label: {
             Label(
                 LaraL10n.text(
-                    en: "Remove Island & Dock Auras",
-                    es: "Eliminar auras de Island y Dock"
+                    en: "Remove Selected Auras",
+                    es: "Eliminar auras seleccionadas"
                 ),
                 systemImage: "arrow.counterclockwise"
             )
@@ -750,7 +800,10 @@ struct AuraStudioView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.large)
-        .disabled(isApplying || applySafetyBlocked || mgr.rcSafetyLocked)
+        .disabled(
+            isApplying || selectedFlags == 0 ||
+            applySafetyBlocked || mgr.rcSafetyLocked
+        )
     }
 
     private var diagnosticsCard: some View {
@@ -817,6 +870,19 @@ struct AuraStudioView: View {
         (UInt32(max(activeFlagsRaw, 0)) & Flag.supported).nonzeroBitCount
     }
 
+    private func activeBadgeTitle(for flag: UInt32) -> String {
+        let rawMode = flag == Flag.island
+            ? activeIslandModeRaw
+            : activeDockModeRaw
+        guard let mode = AuraStudioMode(rawValue: rawMode) else {
+            return LaraL10n.text(en: "ACTIVE", es: "ACTIVO")
+        }
+        return LaraL10n.text(
+            en: "ACTIVE · \(mode.title.uppercased())",
+            es: "ACTIVO · \(mode.title.uppercased())"
+        )
+    }
+
     private func binding(for flag: UInt32) -> Binding<Bool> {
         switch flag {
         case Flag.island: return $islandEnabled
@@ -827,16 +893,74 @@ struct AuraStudioView: View {
         }
     }
 
-    private func apply(mode: Int, flags: UInt32) {
+    private func reconcilePersistedActiveState(currentPID providedPID: Int32? = nil) {
+        let currentPID = providedPID ?? "SpringBoard".withCString {
+            find_process_pid($0)
+        }
+        let savedFlags = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        guard savedFlags != 0 else {
+            activeFlagsRaw = 0
+            activeModeRaw = 0
+            activeIslandModeRaw = 0
+            activeDockModeRaw = 0
+            activeSpringBoardPID = 0
+            return
+        }
+
+        // Auras live inside SpringBoard. A badge saved by an older build, or
+        // by a SpringBoard PID that no longer exists, cannot be called active.
+        guard activeSpringBoardPID > 0,
+              currentPID == Int32(activeSpringBoardPID) else {
+            AuraStudioDiagnostics.log(
+                "state.expired",
+                "savedPID=\(activeSpringBoardPID) currentPID=\(currentPID) " +
+                "flags=0x\(String(savedFlags, radix: 16))"
+            )
+            activeFlagsRaw = 0
+            activeModeRaw = 0
+            activeIslandModeRaw = 0
+            activeDockModeRaw = 0
+            activeSpringBoardPID = 0
+            return
+        }
+
+        // One-time migration from the original shared style field.
+        if savedFlags & Flag.island != 0, activeIslandModeRaw == 0 {
+            activeIslandModeRaw = activeModeRaw
+        }
+        if savedFlags & Flag.dock != 0, activeDockModeRaw == 0 {
+            activeDockModeRaw = activeModeRaw
+        }
+    }
+
+    private func runAuraOperation(
+        _ operation: AuraStudioOperation,
+        flags: UInt32
+    ) {
+        // The visual objects live inside one SpringBoard process. Reconcile
+        // again at the moment of the request (not only onAppear) so a respring
+        // while this screen remains open cannot carry stale badges or modes
+        // into a fresh process.
+        let operationSpringBoardPID = "SpringBoard".withCString {
+            find_process_pid($0)
+        }
+        reconcilePersistedActiveState(currentPID: operationSpringBoardPID)
         let version = ProcessInfo.processInfo.operatingSystemVersion
-        let requestedFlags = flags & Flag.supported
         let operationID = String(UUID().uuidString.prefix(8))
+        let mode = operation.nativeMode
+        let requestedFlags: UInt32
+        if !operation.isRemoving, mode == AuraStudioMode.tint.rawValue {
+            requestedFlags = flags & Flag.island
+        } else {
+            requestedFlags = flags & Flag.supported
+        }
         let display = displayGeometry
         let islandFrame = display.compactIslandFrame
         let dockFrame = display.dockAuraFrame
         AuraStudioDiagnostics.log(
             "request",
-            "op=\(operationID) engine=\(auraEngineBuild) mode=\(mode) " +
+            "op=\(operationID) engine=\(auraEngineBuild) " +
+            "action=\(operation.isRemoving ? "remove" : "apply") mode=\(mode) " +
             "flags=0x\(String(requestedFlags, radix: 16)) device=\(devicemachine()) " +
             "ios=\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) " +
             "display=\(display.isDisplayZoomed ? "zoomed" : "standard") " +
@@ -874,7 +998,9 @@ struct AuraStudioView: View {
             ))
             return
         }
-        guard mode != AuraStudioMode.tint.rawValue || version.majorVersion == 18 else {
+        guard operation.isRemoving ||
+                mode != AuraStudioMode.tint.rawValue ||
+                version.majorVersion == 18 else {
             finish(message: message(for: -17))
             return
         }
@@ -886,16 +1012,20 @@ struct AuraStudioView: View {
             return
         }
 
-        struct ApplyStep {
-            let flag: UInt32
-            let name: String
-        }
-        var steps: [ApplyStep] = []
+        var steps: [AuraStudioOperationStep] = []
         if requestedFlags & Flag.island != 0 {
-            steps.append(ApplyStep(flag: Flag.island, name: "Island"))
+            steps.append(AuraStudioOperationStep(
+                flag: Flag.island,
+                englishName: "Dynamic Island",
+                spanishName: "Dynamic Island"
+            ))
         }
         if requestedFlags & Flag.dock != 0 {
-            steps.append(ApplyStep(flag: Flag.dock, name: "Dock"))
+            steps.append(AuraStudioOperationStep(
+                flag: Flag.dock,
+                englishName: "Dock",
+                spanishName: "Dock"
+            ))
         }
 
         let redValue = Int32(max(0, min(255, Int((red * 255).rounded()))))
@@ -904,68 +1034,136 @@ struct AuraStudioView: View {
         let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
         var retainedVerified = previouslyVerified
         var newlyApplied: UInt32 = 0
+        var removedFlags: UInt32 = 0
         var motionDegraded = false
         var firstUnavailableResult: Int32?
         var verifiedFallbackResult: Int32?
 
         isApplying = true
+        operationIsRemoval = operation.isRemoving
+        operationStepIndex = 0
+        operationStepCount = steps.count
         activeOperationID = operationID
         applyStage = LaraL10n.text(
             en: "Preparing a fresh SpringBoard session…",
             es: "Preparando una sesión nueva de SpringBoard…"
         )
 
-        func fail(_ reason: String, result: Int32? = nil) {
+        func resetOperationUI() {
+            isApplying = false
+            applyStage = ""
+            operationStepIndex = 0
+            operationStepCount = 0
+            operationIsRemoval = false
+            activeOperationID = nil
+        }
+
+        func failBeforeNativeCall(_ reason: String) {
+            AuraStudioDiagnostics.log(
+                "sequence.preflight-failed",
+                "op=\(operationID) reason=\(reason)"
+            )
+            diagnosticsURL = makeDiagnosticsReport(summary: reason)
+            resetOperationUI()
+            AuraStudioApplyGate.end()
+            let hasVerifiedPartialResult = newlyApplied != 0 || removedFlags != 0
+            notice = AuraStudioNotice(message: hasVerifiedPartialResult
+                ? LaraL10n.text(
+                    en: "Aura Studio could not prepare the next SpringBoard module. The earlier verified change remains active; nothing was sent for the unfinished module. A technical report is ready.",
+                    es: "Aura Studio no pudo preparar el siguiente módulo de SpringBoard. El cambio anterior verificado permanece activo; no se envió nada al módulo pendiente. Hay un informe técnico disponible."
+                )
+                : LaraL10n.text(
+                    en: "Aura Studio could not prepare a safe SpringBoard session. Nothing was sent or changed. A technical report is ready if the problem repeats.",
+                    es: "Aura Studio no pudo preparar una sesión segura de SpringBoard. No se envió ni cambió nada. Hay un informe técnico disponible si el problema se repite."
+                ))
+        }
+
+        func failAfterNativeCall(_ reason: String, result: Int32? = nil) {
             let resultText = result.map { " result=\($0)" } ?? ""
             AuraStudioDiagnostics.log(
                 "breaker.open",
-                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16))" +
+                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16)) " +
+                "removed=0x\(String(removedFlags, radix: 16))" +
                 resultText + " reason=\(reason)"
             )
             activeFlagsRaw = Int(retainedVerified | newlyApplied)
-            if newlyApplied & Flag.island != 0 {
-                activeModeRaw = mode
-            } else if activeFlagsRaw & Int(Flag.island) == 0 {
+            if activeFlagsRaw & Int(Flag.island) == 0 {
                 activeModeRaw = 0
+                activeIslandModeRaw = 0
+            }
+            if activeFlagsRaw & Int(Flag.dock) == 0 {
+                activeDockModeRaw = 0
+            }
+            if activeFlagsRaw == 0 {
+                activeSpringBoardPID = 0
+            } else {
+                activeSpringBoardPID = Int(
+                    "SpringBoard".withCString { find_process_pid($0) }
+                )
             }
             mgr.quarantineRemoteCall(reason: reason)
             applySafetyBlocked = true
-            isApplying = false
-            applyStage = ""
             AuraStudioApplyGate.lock()
             diagnosticsURL = makeDiagnosticsReport(summary: reason)
-            activeOperationID = nil
+            resetOperationUI()
             notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Aura Studio stopped after an unverified system call: \(reason). No second module or automatic respring was attempted. Share the diagnostic report, then fully close and reopen Eagle before another test.",
-                es: "Aura Studio se detuvo después de una llamada del sistema no verificada: \(reason). No se intentó un segundo módulo ni un respring automático. Comparte el informe de diagnóstico y luego cierra y abre Eagle completamente antes de otra prueba."
+                en: "Aura Studio stopped because the live result could not be verified. No second module or automatic respring was attempted. Share the diagnostic report, then fully close and reopen Eagle before another test.",
+                es: "Aura Studio se detuvo porque no pudo verificar el resultado en vivo. No se intentó un segundo módulo ni un respring automático. Comparte el informe de diagnóstico y luego cierra y abre Eagle completamente antes de otra prueba."
             ))
         }
 
-        func completeSuccess() {
+        func completeSuccess(deadlineWarning: Bool = false) {
             let finalFlags = retainedVerified | newlyApplied
             activeFlagsRaw = Int(finalFlags)
-            if newlyApplied & Flag.island != 0 { activeModeRaw = mode }
+            activeModeRaw = activeIslandModeRaw
+            if finalFlags == 0 {
+                activeSpringBoardPID = 0
+                activeModeRaw = 0
+                activeIslandModeRaw = 0
+                activeDockModeRaw = 0
+            } else {
+                activeSpringBoardPID = Int(operationSpringBoardPID)
+            }
             AuraStudioDiagnostics.log(
                 "sequence.success",
-                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16)) degraded=\(motionDegraded)"
+                "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16)) " +
+                "removed=0x\(String(removedFlags, radix: 16)) " +
+                "degraded=\(motionDegraded) deadlineWarning=\(deadlineWarning)"
             )
-            isApplying = false
-            applyStage = ""
-            AuraStudioApplyGate.end()
-            diagnosticsURL = makeDiagnosticsReport(summary: "Apply completed")
-            activeOperationID = nil
-            let resultMessage: String
+            diagnosticsURL = makeDiagnosticsReport(
+                summary: operation.isRemoving
+                    ? "Scoped removal completed"
+                    : "Apply completed"
+            )
+            resetOperationUI()
+            if !deadlineWarning {
+                AuraStudioApplyGate.end()
+            }
+            let baseResultMessage: String
             if let verifiedFallbackResult {
-                resultMessage = message(for: verifiedFallbackResult)
-            } else if newlyApplied == 0, let firstUnavailableResult {
-                resultMessage = message(for: firstUnavailableResult)
+                baseResultMessage = message(for: verifiedFallbackResult)
+            } else if !operation.isRemoving,
+                      newlyApplied == 0,
+                      let firstUnavailableResult {
+                baseResultMessage = message(for: firstUnavailableResult)
             } else {
-                resultMessage = successMessage(
-                    appliedFlags: newlyApplied,
+                baseResultMessage = successMessage(
+                    appliedFlags: operation.isRemoving
+                        ? removedFlags
+                        : newlyApplied,
                     requestedFlags: requestedFlags,
-                    restoring: false,
+                    restoring: operation.isRemoving,
                     motionDegraded: motionDegraded
                 )
+            }
+            let resultMessage: String
+            if deadlineWarning {
+                resultMessage = baseResultMessage + " " + LaraL10n.text(
+                    en: "Verification exceeded the safety deadline, so no second module was started. Fully close and reopen Eagle before another Aura Studio operation.",
+                    es: "La verificación superó el límite de seguridad, por lo que no se inició un segundo módulo. Cierra Eagle completamente y vuelve a abrirlo antes de otra operación de Aura Studio."
+                )
+            } else {
+                resultMessage = baseResultMessage
             }
             notice = AuraStudioNotice(message: resultMessage)
         }
@@ -977,67 +1175,136 @@ struct AuraStudioView: View {
                 return
             }
             let step = steps[index]
+            operationStepIndex = index + 1
             applyStage = LaraL10n.text(
-                en: "Preparing \(step.name) safely…",
-                es: "Preparando \(step.name) de forma segura…"
+                en: "Preparing \(step.englishName) safely…",
+                es: "Preparando \(step.spanishName) de forma segura…"
             )
             AuraStudioDiagnostics.log(
                 "step.session.begin",
-                "op=\(operationID) index=\(index) module=\(step.name) flag=0x\(String(step.flag, radix: 16))"
+                "op=\(operationID) index=\(index) module=\(step.englishName) " +
+                "flag=0x\(String(step.flag, radix: 16))"
             )
             mgr.prepareFreshRemoteCall(
                 process: "SpringBoard",
-                timeout: 12
+                timeout: 20
             ) { process, sessionError in
                 guard activeOperationID == operationID, isApplying else { return }
                 guard let process else {
-                    fail(sessionError ?? "Fresh SpringBoard session was unavailable")
+                    let reason = sessionError ?? "Fresh SpringBoard session was unavailable"
+                    let isReadOnlyPreflight =
+                        reason.localizedCaseInsensitiveContains("access is not ready") ||
+                        reason.localizedCaseInsensitiveContains("still running") ||
+                        reason.localizedCaseInsensitiveContains("safety locked")
+                    if isReadOnlyPreflight {
+                        failBeforeNativeCall(reason)
+                    } else {
+                        // RemoteCall initialization can already install target
+                        // exception ports and create a helper thread. Any
+                        // failure after that point is a transport event, not a
+                        // harmless host miss, so this run must fail closed.
+                        retainedVerified &= ~step.flag
+                        failAfterNativeCall(reason)
+                    }
                     return
                 }
 
                 let targetPID = process.pid
                 let currentPID = "SpringBoard".withCString { find_process_pid($0) }
                 guard targetPID > 0,
-                      currentPID == targetPID,
                       process.creatingExtraThread else {
-                    fail(
+                    failBeforeNativeCall(
                         "Fresh session identity check failed " +
                         "(target \(targetPID), current \(currentPID), " +
                         "isolated \(process.creatingExtraThread))"
                     )
                     return
                 }
-                guard mgr.beginExclusiveRemoteCall(
-                    label: "Aura \(step.name) \(operationID)"
-                ) else {
-                    fail("Could not acquire the serialized \(step.name) session")
+                guard currentPID == targetPID,
+                      targetPID == operationSpringBoardPID else {
+                    retainedVerified = 0
+                    newlyApplied = 0
+                    activeFlagsRaw = 0
+                    activeModeRaw = 0
+                    activeIslandModeRaw = 0
+                    activeDockModeRaw = 0
+                    activeSpringBoardPID = 0
+                    failAfterNativeCall(
+                        "SpringBoard changed while preparing \(step.englishName) " +
+                        "(operation \(operationSpringBoardPID), target \(targetPID), " +
+                        "current \(currentPID))"
+                    )
                     return
                 }
-                // A new attempt replaces the verification claim for this
-                // module. It is added back only after read-back succeeds; a
-                // non-mutating Tint preflight may explicitly preserve it.
-                retainedVerified &= ~step.flag
+                guard mgr.beginExclusiveRemoteCall(
+                    label: "Aura \(step.englishName) \(operationID)"
+                ) else {
+                    failBeforeNativeCall(
+                        "Could not acquire the serialized \(step.englishName) session"
+                    )
+                    return
+                }
 
                 applyStage = LaraL10n.text(
-                    en: "Applying \(step.name) only…",
-                    es: "Aplicando solo \(step.name)…"
+                    en: operation.isRemoving
+                        ? "Removing \(step.englishName) only…"
+                        : "Applying \(step.englishName) only…",
+                    es: operation.isRemoving
+                        ? "Eliminando solo \(step.spanishName)…"
+                        : "Aplicando solo \(step.spanishName)…"
                 )
                 AuraStudioDiagnostics.log(
                     "step.native.begin",
-                    "op=\(operationID) module=\(step.name) pid=\(targetPID) flag=0x\(String(step.flag, radix: 16))"
+                    "op=\(operationID) module=\(step.englishName) " +
+                    "action=\(operation.isRemoving ? "remove" : "apply") " +
+                    "pid=\(targetPID) flag=0x\(String(step.flag, radix: 16))"
                 )
                 let started = Date()
                 var nativeFinished = false
-                let timeoutWork = DispatchWorkItem {
+                var hardDeadlineExceeded = false
+                let softProgressWork = DispatchWorkItem {
                     guard activeOperationID == operationID,
                           isApplying,
                           !nativeFinished else { return }
-                    nativeFinished = true
-                    fail("\(step.name) exceeded the 12-second native deadline")
+                    applyStage = LaraL10n.text(
+                        en: "\(step.englishName) is responding · verifying the live result…",
+                        es: "\(step.spanishName) está respondiendo · verificando el resultado en vivo…"
+                    )
+                    AuraStudioDiagnostics.log(
+                        "step.native.progress",
+                        "op=\(operationID) module=\(step.englishName) elapsed=10"
+                    )
                 }
                 DispatchQueue.main.asyncAfter(
-                    deadline: .now() + 12,
-                    execute: timeoutWork
+                    deadline: .now() + 10,
+                    execute: softProgressWork
+                )
+
+                // Device evidence on iOS 18.6.2 shows a healthy, verified
+                // Island call can take ~17 seconds. The hard deadline is a
+                // circuit breaker, not a false failure: the in-flight result
+                // is still consumed, but a second module can never start.
+                let hardDeadlineWork = DispatchWorkItem {
+                    guard activeOperationID == operationID,
+                          isApplying,
+                          !nativeFinished else { return }
+                    hardDeadlineExceeded = true
+                    let reason = "\(step.englishName) exceeded the 60-second safety deadline"
+                    AuraStudioDiagnostics.log(
+                        "step.native.deadline",
+                        "op=\(operationID) module=\(step.englishName) elapsed=60"
+                    )
+                    applyStage = LaraL10n.text(
+                        en: "Still waiting safely for \(step.englishName) · no other module will start…",
+                        es: "Aún esperando de forma segura a \(step.spanishName) · no se iniciará otro módulo…"
+                    )
+                    mgr.quarantineRemoteCall(reason: reason)
+                    applySafetyBlocked = true
+                    AuraStudioApplyGate.lock()
+                }
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + 60,
+                    execute: hardDeadlineWork
                 )
 
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -1047,7 +1314,7 @@ struct AuraStudioView: View {
                             redValue,
                             greenValue,
                             blueValue,
-                            Int32(mode),
+                            Int32(operation.nativeMode),
                             step.flag
                         )
                     }
@@ -1058,50 +1325,104 @@ struct AuraStudioView: View {
                     }
                     AuraStudioDiagnostics.log(
                         "step.native.end",
-                        "op=\(operationID) module=\(step.name) result=\(result) " +
+                        "op=\(operationID) module=\(step.englishName) result=\(result) " +
                         "elapsed=\(String(format: "%.3f", elapsed)) target=\(targetPID) " +
                         "current=\(springBoardPID) error=\(processError ?? "none")"
                     )
                     DispatchQueue.main.async {
+                        let liveSpringBoardPID = "SpringBoard".withCString {
+                            find_process_pid($0)
+                        }
                         guard activeOperationID == operationID,
                               isApplying,
                               !nativeFinished else {
                             AuraStudioDiagnostics.log(
                                 "step.native.late",
-                                "op=\(operationID) module=\(step.name) result=\(result)"
+                                "op=\(operationID) module=\(step.englishName) result=\(result)"
                             )
-                            if springBoardPID != targetPID {
+                            if springBoardPID != targetPID ||
+                                liveSpringBoardPID != targetPID {
                                 activeFlagsRaw = 0
                                 activeModeRaw = 0
+                                activeIslandModeRaw = 0
+                                activeDockModeRaw = 0
+                                activeSpringBoardPID = 0
                             }
                             mgr.endExclusiveRemoteCall(
-                                label: "Aura \(step.name) \(operationID) late"
+                                label: "Aura \(step.englishName) \(operationID)"
                             )
                             return
                         }
                         nativeFinished = true
-                        timeoutWork.cancel()
+                        softProgressWork.cancel()
+                        hardDeadlineWork.cancel()
                         mgr.endExclusiveRemoteCall(
-                            label: "Aura \(step.name) \(operationID)"
+                            label: "Aura \(step.englishName) \(operationID)"
                         )
 
-                        if springBoardPID != targetPID {
+                        if springBoardPID != targetPID ||
+                            liveSpringBoardPID != targetPID ||
+                            targetPID != operationSpringBoardPID {
                             activeFlagsRaw = 0
                             activeModeRaw = 0
+                            activeIslandModeRaw = 0
+                            activeDockModeRaw = 0
+                            activeSpringBoardPID = 0
                             retainedVerified = 0
                             newlyApplied = 0
-                            fail(
-                                "SpringBoard restarted during \(step.name) " +
-                                "(PID \(targetPID) → \(springBoardPID))",
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "SpringBoard restarted during \(step.englishName) " +
+                                "(PID \(targetPID) → \(liveSpringBoardPID))",
                                 result: result
                             )
                             return
                         }
-                        if let processError,
-                           processError.localizedCaseInsensitiveContains("main-thread") ||
-                           processError.localizedCaseInsensitiveContains("timed out") ||
-                           processError.localizedCaseInsensitiveContains("restore") {
-                            fail("\(step.name) RemoteCall error: \(processError)", result: result)
+                        if !process.isHealthy ||
+                            process.lastCallTimedOut ||
+                            (processError?.isEmpty == false) {
+                            let transportReason = processError ??
+                                (process.lastCallTimedOut
+                                    ? "RemoteCall transport timed out"
+                                    : "RemoteCall session became unhealthy")
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "\(step.englishName) RemoteCall error: \(transportReason)",
+                                result: result
+                            )
+                            return
+                        }
+                        if operation.isRemoving {
+                            guard result == 0 else {
+                                retainedVerified &= ~step.flag
+                                failAfterNativeCall(
+                                    "\(step.englishName) removal could not be verified",
+                                    result: result
+                                )
+                                return
+                            }
+                            retainedVerified &= ~step.flag
+                            removedFlags |= step.flag
+                            if step.flag == Flag.island {
+                                activeIslandModeRaw = 0
+                                activeModeRaw = 0
+                            } else if step.flag == Flag.dock {
+                                activeDockModeRaw = 0
+                            }
+                            activeFlagsRaw = Int(retainedVerified | newlyApplied)
+                            activeSpringBoardPID = activeFlagsRaw == 0
+                                ? 0
+                                : Int(springBoardPID)
+                            AuraStudioDiagnostics.log(
+                                "step.remove.success",
+                                "op=\(operationID) module=\(step.englishName) " +
+                                "removed=0x\(String(removedFlags, radix: 16))"
+                            )
+                            if hardDeadlineExceeded {
+                                completeSuccess(deadlineWarning: true)
+                            } else {
+                                runStep(index + 1)
+                            }
                             return
                         }
                         if result == -15 || result == -16 {
@@ -1110,14 +1431,19 @@ struct AuraStudioView: View {
                             // Keep that truthful state without opening the
                             // circuit breaker or attempting to reapply Tint.
                             newlyApplied |= Flag.island
+                            retainedVerified &= ~Flag.island
                             activeFlagsRaw = Int(retainedVerified | newlyApplied)
+                            activeSpringBoardPID = Int(springBoardPID)
                             activeModeRaw = AuraStudioMode.glow.rawValue
+                            activeIslandModeRaw = AuraStudioMode.glow.rawValue
                             verifiedFallbackResult = result
                             AuraStudioDiagnostics.log(
                                 "step.fallback",
-                                "op=\(operationID) module=\(step.name) result=\(result) verified=glow"
+                                "op=\(operationID) module=\(step.englishName) result=\(result) verified=glow"
                             )
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            if hardDeadlineExceeded {
+                                completeSuccess(deadlineWarning: true)
+                            } else {
                                 runStep(index + 1)
                             }
                             return
@@ -1130,42 +1456,59 @@ struct AuraStudioView: View {
                             if firstUnavailableResult == nil {
                                 firstUnavailableResult = result
                             }
-                            if result == -17 {
-                                retainedVerified |= previouslyVerified & step.flag
-                            }
+                            retainedVerified |= previouslyVerified & step.flag
                             activeFlagsRaw = Int(retainedVerified | newlyApplied)
                             if activeFlagsRaw & Int(Flag.island) == 0 {
                                 activeModeRaw = 0
                             }
                             AuraStudioDiagnostics.log(
                                 "step.unavailable",
-                                "op=\(operationID) module=\(step.name) result=\(result) mutation=none"
+                                "op=\(operationID) module=\(step.englishName) result=\(result) mutation=none"
                             )
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            if hardDeadlineExceeded {
+                                completeSuccess(deadlineWarning: true)
+                            } else {
                                 runStep(index + 1)
                             }
                             return
                         }
                         guard result >= 0 else {
-                            fail("\(step.name) returned unverified native error \(result)", result: result)
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "\(step.englishName) returned unverified native error \(result)",
+                                result: result
+                            )
                             return
                         }
                         let rawResult = UInt32(bitPattern: result)
                         guard rawResult & step.flag != 0 else {
-                            fail("\(step.name) did not verify its requested host", result: result)
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "\(step.englishName) did not verify its requested host",
+                                result: result
+                            )
                             return
                         }
 
                         newlyApplied |= step.flag
+                        retainedVerified &= ~step.flag
                         motionDegraded = motionDegraded ||
                             rawResult & Flag.motionDegraded != 0
                         activeFlagsRaw = Int(retainedVerified | newlyApplied)
-                        if step.flag == Flag.island { activeModeRaw = mode }
+                        activeSpringBoardPID = Int(springBoardPID)
+                        if step.flag == Flag.island {
+                            activeModeRaw = mode
+                            activeIslandModeRaw = mode
+                        } else if step.flag == Flag.dock {
+                            activeDockModeRaw = mode
+                        }
                         AuraStudioDiagnostics.log(
                             "step.success",
-                            "op=\(operationID) module=\(step.name) applied=0x\(String(newlyApplied, radix: 16))"
+                            "op=\(operationID) module=\(step.englishName) applied=0x\(String(newlyApplied, radix: 16))"
                         )
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        if hardDeadlineExceeded {
+                            completeSuccess(deadlineWarning: true)
+                        } else {
                             runStep(index + 1)
                         }
                     }
@@ -1174,20 +1517,6 @@ struct AuraStudioView: View {
         }
 
         runStep(0)
-    }
-
-    private func requestSafeRemoval() {
-        AuraStudioDiagnostics.log(
-            "remove.blocked",
-            "engine=\(auraEngineBuild) reason=scoped-native-remove-unavailable"
-        )
-        diagnosticsURL = makeDiagnosticsReport(
-            summary: "Scoped Remove was withheld; no native call was sent"
-        )
-        notice = AuraStudioNotice(message: LaraL10n.text(
-            en: "This safety build did not send the old flags=0 global cleanup call. That route touches Island and Dock together and was causing repeated SpringBoard restarts. Nothing was changed and Eagle will never respring automatically. Until scoped native removal is available, a manual device restart removes these runtime-only auras.",
-            es: "Esta versión de seguridad no envió la antigua llamada global de limpieza con flags=0. Esa ruta toca Island y Dock juntos y estaba provocando reinicios repetidos de SpringBoard. No se cambió nada y Eagle nunca hará respring automáticamente. Hasta que exista una eliminación nativa por módulo, un reinicio manual del dispositivo elimina estas auras temporales."
-        ))
     }
 
     private func makeDiagnosticsReport(summary: String) -> URL? {
@@ -1215,6 +1544,8 @@ struct AuraStudioView: View {
             "timestamp=\(timestamp)",
             "engine=\(auraEngineBuild)",
             "operation=\(activeOperationID ?? "none")",
+            "operationKind=\(operationIsRemoval ? "remove" : "apply")",
+            "operationStep=\(operationStepIndex)/\(operationStepCount)",
             "summary=\(summary)",
             "device=\(devicemachine())",
             "ios=\(ProcessInfo.processInfo.operatingSystemVersionString)",
@@ -1223,6 +1554,12 @@ struct AuraStudioView: View {
             "rcready=\(mgr.rcready)",
             "rcSafetyLocked=\(mgr.rcSafetyLocked)",
             "rcError=\(mgr.rcLastError ?? "none")",
+            "selectedFlags=0x\(String(selectedFlags, radix: 16))",
+            "activeFlags=0x\(String(UInt32(max(activeFlagsRaw, 0)) & Flag.supported, radix: 16))",
+            "activeSpringBoardPID=\(activeSpringBoardPID)",
+            "currentSpringBoardPID=\("SpringBoard".withCString { find_process_pid($0) })",
+            "displayZoomed=\(displayGeometry.isDisplayZoomed)",
+            "displayFactor=\(String(format: "%.4f,%.4f", displayGeometry.xFactor, displayGeometry.yFactor))",
             "--- filtered log ---",
         ]
         let report = (header + Array(lines)).joined(separator: "\n") + "\n"
@@ -1253,6 +1590,9 @@ struct AuraStudioView: View {
             self.activeOperationID = nil
             self.isApplying = false
             self.applyStage = ""
+            self.operationStepIndex = 0
+            self.operationStepCount = 0
+            self.operationIsRemoval = false
             self.notice = AuraStudioNotice(message: message)
         }
     }
@@ -1264,9 +1604,20 @@ struct AuraStudioView: View {
         motionDegraded: Bool
     ) -> String {
         if restoring {
+            let removed = names(for: appliedFlags)
+            let missing = names(for: requestedFlags & ~appliedFlags)
+            let removedText = removed.isEmpty
+                ? LaraL10n.text(en: "No aura", es: "Ningún aura")
+                : removed.joined(separator: ", ")
+            if !missing.isEmpty {
+                return LaraL10n.text(
+                    en: "Removed and verified: \(removedText). Not verified: \(missing.joined(separator: ", ")).",
+                    es: "Eliminado y verificado: \(removedText). Sin verificar: \(missing.joined(separator: ", "))."
+                )
+            }
             return LaraL10n.text(
-                en: "Island and Dock lights were removed; the black system center was restored.",
-                es: "Se eliminaron las luces de Island y Dock; se restauró el centro negro del sistema."
+                en: "Removed and verified: \(removedText). The original system appearance is restored.",
+                es: "Eliminado y verificado: \(removedText). Se restauró la apariencia original del sistema."
             )
         }
         let applied = names(for: appliedFlags)

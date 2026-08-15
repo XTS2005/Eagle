@@ -50,6 +50,23 @@ private func clearImmutableForOverwriteIfNeeded(path: String) -> String? {
     }
 }
 
+#if !DISABLE_REMOTECALL
+/// Main-thread-owned state for one asynchronous RemoteCall preparation. A
+/// reference token avoids sharing a stack `Bool` between timeout and late
+/// completion closures and makes stale completions easy to identify.
+private final class RemoteCallPreparationState {
+    let generation: UInt64
+    let process: String
+    let startedAt = Date()
+    var completed = false
+
+    init(generation: UInt64, process: String) {
+        self.generation = generation
+        self.process = process
+    }
+}
+#endif
+
 final class laramgr: ObservableObject {
     @Published var log: String = ""
     @Published var hasOffsets: Bool = false
@@ -97,6 +114,7 @@ final class laramgr: ObservableObject {
     private var rcGeneration: UInt64 = 0
     private var rcFreshSessionInFlight = false
     private var rcNativeCallInFlight = false
+    private var rcNativeCallLabel: String?
     var ytProc = RemoteCall(process: "youtube", useMigFilterBypass: false)
     
     static let shared = laramgr()
@@ -698,12 +716,14 @@ final class laramgr: ObservableObject {
             completion?(false)
             return
         }
-        if rcready, sbProc != nil {
-            completion?(true)
+        guard !rcrunning, !rcFreshSessionInFlight,
+              !rcNativeCallInFlight else {
+            rcLastError = "Another RemoteCall operation is still running"
+            completion?(false)
             return
         }
-        guard !rcrunning else {
-            completion?(false)
+        if rcready, sbProc != nil {
+            completion?(true)
             return
         }
         // Repair split state left by an interrupted RemoteCall lifecycle before
@@ -820,7 +840,8 @@ final class laramgr: ObservableObject {
             )
             return
         }
-        guard !rcFreshSessionInFlight, !rcrunning else {
+        guard !rcFreshSessionInFlight, !rcrunning,
+              !rcNativeCallInFlight else {
             completion(nil, "Another RemoteCall lifecycle operation is still running")
             return
         }
@@ -832,13 +853,16 @@ final class laramgr: ObservableObject {
         rcLastError = nil
         rcGeneration &+= 1
         let generation = rcGeneration
+        let preparation = RemoteCallPreparationState(
+            generation: generation,
+            process: process
+        )
         let previousSession = sbProc
         sbProc = nil
-        var completed = false
 
         func complete(_ session: RemoteCall?, _ error: String?) {
             precondition(Thread.isMainThread)
-            guard !completed else {
+            guard !preparation.completed else {
                 if let session {
                     DispatchQueue.global(qos: .utility).async {
                         session.destroy()
@@ -846,9 +870,10 @@ final class laramgr: ObservableObject {
                 }
                 return
             }
-            completed = true
+            preparation.completed = true
             rcFreshSessionInFlight = false
             rcrunning = false
+            let elapsed = Date().timeIntervalSince(preparation.startedAt)
             if let session {
                 sbProc = session
                 rcready = true
@@ -859,6 +884,14 @@ final class laramgr: ObservableObject {
                 rcfailed = true
                 rcLastError = error
             }
+            logmsg(
+                String(
+                    format: "remote call preparation finished on %@ in %.3fs (%@)",
+                    preparation.process,
+                    elapsed,
+                    session == nil ? "failed" : "ready"
+                )
+            )
             completion(session, error)
         }
 
@@ -866,7 +899,7 @@ final class laramgr: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + deadline) { [weak self] in
             guard let self,
                   self.rcGeneration == generation,
-                  !completed else { return }
+                  !preparation.completed else { return }
             self.rcGeneration &+= 1
             complete(
                 nil,
@@ -880,7 +913,7 @@ final class laramgr: ObservableObject {
             DispatchQueue.main.async {
                 guard let self,
                       self.rcGeneration == generation,
-                      !completed else { return }
+                      !preparation.completed else { return }
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                     let candidate = RemoteCall(
                         process: process,
@@ -889,7 +922,7 @@ final class laramgr: ObservableObject {
                     DispatchQueue.main.async {
                         guard let self,
                               self.rcGeneration == generation,
-                              !completed else {
+                              !preparation.completed else {
                             if let candidate {
                                 DispatchQueue.global(qos: .utility).async {
                                     candidate.destroy()
@@ -902,9 +935,12 @@ final class laramgr: ObservableObject {
                             complete(candidate, nil)
                         } else {
                             let detail = RemoteCall.lastInitError()
-                            let error = detail?.isEmpty == false
-                                ? detail!
-                                : "Fresh RemoteCall initialization failed on \(process)"
+                            let error: String
+                            if let detail, !detail.isEmpty {
+                                error = detail
+                            } else {
+                                error = "Fresh RemoteCall initialization failed on \(process)"
+                            }
                             self.logmsg(error)
                             complete(nil, error)
                         }
@@ -943,6 +979,7 @@ final class laramgr: ObservableObject {
             return false
         }
         rcNativeCallInFlight = true
+        rcNativeCallLabel = label
         rcrunning = true
         logmsg("remote call operation started: \(label)")
         return true
@@ -950,7 +987,18 @@ final class laramgr: ObservableObject {
 
     func endExclusiveRemoteCall(label: String) {
         precondition(Thread.isMainThread)
+        guard rcNativeCallInFlight else {
+            logmsg("ignored duplicate remote call completion: \(label)")
+            return
+        }
+        if let activeLabel = rcNativeCallLabel, activeLabel != label {
+            logmsg(
+                "remote call completion label mismatch: " +
+                "active=\(activeLabel), finishing=\(label)"
+            )
+        }
         rcNativeCallInFlight = false
+        rcNativeCallLabel = nil
         rcrunning = false
         logmsg("remote call operation finished: \(label)")
     }
