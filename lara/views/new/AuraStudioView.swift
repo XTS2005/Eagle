@@ -28,10 +28,10 @@ struct AuraStudioDisplayGeometry {
 
     var compactIslandFrame: CGRect {
         scaleStandardFrame(CGRect(
-            x: (standardLogicalSize.width - 132) / 2,
-            y: 12,
-            width: 132,
-            height: 37
+            x: (standardLogicalSize.width - 134) / 2,
+            y: 13,
+            width: 134,
+            height: 39
         ))
     }
 
@@ -131,8 +131,8 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
         switch self {
         case .glow:
             return LaraL10n.text(
-                en: "A crisp outline with a focused outer light.",
-                es: "Un contorno definido con una luz exterior concentrada."
+                en: "Keeps the system-black center and adds a thick, bright outer light.",
+                es: "Mantiene el centro negro del sistema y añade una luz exterior gruesa e intensa."
             )
         case .pulse:
             return LaraL10n.text(
@@ -141,8 +141,8 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
             )
         case .tint:
             return LaraL10n.text(
-                en: "Adds a subtle color wash inside compact surfaces.",
-                es: "Añade un tono sutil dentro de las superficies compactas."
+                en: "Replaces the software-black center with color; only the physical camera cutouts stay black.",
+                es: "Reemplaza el centro negro generado por software con color; solo los recortes físicos de la cámara permanecen negros."
             )
         case .rainbow:
             return LaraL10n.text(
@@ -181,6 +181,7 @@ struct AuraStudioView: View {
     @AppStorage("eagle.islandAura.blue") private var blue = 1.0
     @AppStorage("eagle.auraStudio.mode") private var selectedModeRaw = AuraStudioMode.glow.rawValue
     @AppStorage("eagle.auraStudio.activeFlags") private var activeFlagsRaw = 0
+    @AppStorage("eagle.auraStudio.activeMode") private var activeModeRaw = 0
 
     @AppStorage("eagle.auraStudio.island") private var islandEnabled = true
     @AppStorage("eagle.auraStudio.screen") private var screenEnabled = false
@@ -195,7 +196,23 @@ struct AuraStudioView: View {
 
     private var selectedMode: AuraStudioMode {
         get { AuraStudioMode(rawValue: selectedModeRaw) ?? .glow }
-        nonmutating set { selectedModeRaw = newValue.rawValue }
+        nonmutating set {
+            selectedModeRaw = newValue.rawValue
+            if newValue == .tint {
+                dockEnabled = false
+                islandEnabled = true
+            }
+        }
+    }
+
+    private var activeMode: AuraStudioMode? {
+        AuraStudioMode(rawValue: activeModeRaw)
+    }
+
+    private var activeStatusModeTitle: String {
+        (UInt32(max(activeFlagsRaw, 0)) & Flag.island) != 0
+            ? (activeMode?.title ?? "Aura")
+            : "Aura"
     }
 
     private var auraColor: Color {
@@ -210,6 +227,14 @@ struct AuraStudioView: View {
         selectedMode == .rainbow
             ? Color(hue: previewRainbowHue, saturation: 0.96, brightness: 1.0)
             : auraColor
+    }
+
+    private var previewTintFillColor: Color {
+        let brightest = max(red, max(green, blue))
+        let scale = brightest > (112.0 / 255.0)
+            ? (112.0 / 255.0) / brightest
+            : 1.0
+        return Color(red: red * scale, green: green * scale, blue: blue * scale)
     }
 
     private var previewRingStyle: AnyShapeStyle {
@@ -308,6 +333,7 @@ struct AuraStudioView: View {
             // SpringBoard operation to the first Island verification.
             dockEnabled = false
             activeFlagsRaw &= Int(Flag.island)
+            if activeFlagsRaw == 0 { activeModeRaw = 0 }
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
             }
@@ -389,24 +415,35 @@ struct AuraStudioView: View {
                 if islandEnabled {
                     ZStack {
                         Capsule()
-                            .stroke(previewRingStyle, lineWidth: 11)
-                            .blur(radius: 7)
-                            .opacity(0.78)
+                            .stroke(previewRingStyle, lineWidth: 14)
+                            .blur(radius: 9)
+                            .opacity(0.88)
                         Capsule()
                             .fill(selectedMode == .tint
-                                  ? previewLightColor.opacity(0.32)
+                                  ? previewTintFillColor
                                   : .black)
                         Capsule()
-                            .stroke(previewRingStyle, lineWidth: 5)
+                            .stroke(previewRingStyle, lineWidth: 6)
+                        if selectedMode == .tint {
+                            HStack(spacing: 5) {
+                                Capsule()
+                                    .fill(.black)
+                                    .frame(width: 42, height: 13)
+                                Circle()
+                                    .fill(.black)
+                                    .frame(width: 13, height: 13)
+                            }
+                            .offset(x: 3)
+                        }
                     }
-                        .frame(width: 102, height: 31)
-                        .shadow(color: previewLightColor.opacity(0.95), radius: 18)
+                        .frame(width: 108, height: 34)
+                        .shadow(color: previewLightColor, radius: 22)
                         .hueRotation(.degrees(selectedMode == .rainbow
                                               ? previewRainbowHue * 360
                                               : 0))
                         .opacity(selectedMode == .pulse ? (previewPulse ? 1 : 0.55) : 1)
                         .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 9)
+                        .padding(.top, 11)
                 }
             }
             .frame(height: 238)
@@ -418,7 +455,10 @@ struct AuraStudioView: View {
                     .frame(width: 8, height: 8)
                 Text(activeFlagsRaw == 0
                      ? LaraL10n.text(en: "No verified Apply saved", es: "Sin Apply verificado guardado")
-                     : LaraL10n.text(en: "Last Apply verified \(activeModuleCount) surfaces", es: "El último Apply verificó \(activeModuleCount) superficies"))
+                     : LaraL10n.text(
+                        en: "Active: \(activeStatusModeTitle) · \(activeModuleCount) verified surface(s)",
+                        es: "Activo: \(activeStatusModeTitle) · \(activeModuleCount) superficie(s) verificada(s)"
+                     ))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -464,6 +504,23 @@ struct AuraStudioView: View {
             Text(selectedMode.summary)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            Label(
+                selectedMode == .tint
+                    ? LaraL10n.text(
+                        en: "Software black: off · native iOS 18 Island only · Dock paused",
+                        es: "Negro por software: desactivado · solo Island nativa de iOS 18 · Dock en pausa"
+                    )
+                    : LaraL10n.text(
+                        en: "Software black: on · restored by Glow, Pulse and Rainbow",
+                        es: "Negro por software: activado · restaurado por Brillo, Pulso y Arcoíris"
+                    ),
+                systemImage: selectedMode == .tint
+                    ? "camera.aperture"
+                    : "capsule.fill"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(selectedMode == .tint ? previewLightColor : .secondary)
 
             Divider()
 
@@ -531,8 +588,8 @@ struct AuraStudioView: View {
             if selectedMode == .rainbow {
                 Label(
                     LaraL10n.text(
-                        en: "Rainbow drives the bright core and outer bloom in two moving color phases.",
-                        es: "Arcoíris mueve el núcleo brillante y la difusión exterior en dos fases de color."
+                        en: "Rainbow moves continuously through the bright edge and its outer light.",
+                        es: "Arcoíris recorre continuamente el borde brillante y su luz exterior."
                     ),
                     systemImage: "wand.and.stars"
                 )
@@ -603,8 +660,10 @@ struct AuraStudioView: View {
                     Toggle("", isOn: binding(for: module.id))
                         .labelsHidden()
                         .tint(previewLightColor)
+                        .disabled(selectedMode == .tint && module.id == Flag.dock)
                 }
                 .padding(.vertical, 10)
+                .opacity(selectedMode == .tint && module.id == Flag.dock ? 0.48 : 1)
             }
         }
         .padding(18)
@@ -739,6 +798,10 @@ struct AuraStudioView: View {
             ))
             return
         }
+        guard mode != AuraStudioMode.tint.rawValue || version.majorVersion == 18 else {
+            finish(message: message(for: -17))
+            return
+        }
         guard mgr.dsready else {
             finish(message: LaraL10n.text(
                 en: "Prepare Eagle access before applying system auras.",
@@ -797,6 +860,11 @@ struct AuraStudioView: View {
                     self.isApplying = false
                     if result >= 0 {
                         self.activeFlagsRaw = Int(result)
+                        self.activeModeRaw = mode == 0 || result == 0
+                            ? 0
+                            : ((UInt32(result) & Flag.island) != 0
+                               ? mode
+                               : self.activeModeRaw)
                         self.notice = AuraStudioNotice(
                             message: self.successMessage(
                                 appliedFlags: UInt32(result),
@@ -805,10 +873,17 @@ struct AuraStudioView: View {
                             )
                         )
                     } else {
-                        if result == -15 {
-                            // The native contract guarantees the static core
-                            // remains installed when only Rainbow motion fails.
+                        if result == -15 || result == -16 {
+                            // Rainbow and Tint both guarantee a verified black
+                            // Glow remains after their optional native feature
+                            // is rejected.
                             self.activeFlagsRaw = Int(Flag.island)
+                            self.activeModeRaw = AuraStudioMode.glow.rawValue
+                        } else if result == -7 || result == -14 || result == -18 || result == -19 {
+                            // A partial system mutation cannot remain labeled
+                            // as a verified active state in the UI.
+                            self.activeFlagsRaw = 0
+                            self.activeModeRaw = 0
                         }
                         self.notice = AuraStudioNotice(message: self.message(for: result))
                     }
@@ -857,16 +932,19 @@ struct AuraStudioView: View {
     ) -> String {
         if restoring {
             return LaraL10n.text(
-                en: "Island and Dock auras were removed.",
-                es: "Se eliminaron las auras de Island y Dock."
+                en: "Island and Dock lights were removed; the black system center was restored.",
+                es: "Se eliminaron las luces de Island y Dock; se restauró el centro negro del sistema."
             )
         }
         let applied = names(for: appliedFlags)
         let missing = names(for: requestedFlags & ~appliedFlags)
         if missing.isEmpty {
+            let style = appliedFlags & Flag.island != 0
+                ? " · \(selectedMode.title)"
+                : ""
             return LaraL10n.text(
-                en: "Applied and verified: \(applied.joined(separator: ", ")).",
-                es: "Aplicado y verificado: \(applied.joined(separator: ", "))."
+                en: "Applied and verified: \(applied.joined(separator: ", "))\(style).",
+                es: "Aplicado y verificado: \(applied.joined(separator: ", "))\(style)."
             )
         }
         return LaraL10n.text(
@@ -936,13 +1014,33 @@ struct AuraStudioView: View {
             )
         case -14:
             return LaraL10n.text(
-                en: "Island Aura caught a SpringBoard exception and rolled back safely.",
-                es: "Island Aura detectó una excepción de SpringBoard y revirtió el cambio de forma segura."
+                en: "Island Aura caught a SpringBoard exception. The resulting system state could not be verified, so Eagle cleared the verified badge.",
+                es: "Island Aura detectó una excepción de SpringBoard. No se pudo verificar el estado resultante del sistema, por lo que Eagle eliminó el indicador de verificación."
             )
         case -15:
             return LaraL10n.text(
                 en: "The thick Island glow is active, but SpringBoard did not retain the moving Rainbow animation. The static core was preserved; choose Glow if you want the verified style.",
                 es: "El brillo grueso de Island está activo, pero SpringBoard no conservó la animación Rainbow. El núcleo estático se mantuvo; elige Brillo para usar el estilo verificado."
+            )
+        case -16:
+            return LaraL10n.text(
+                en: "SpringBoard did not retain the native Tint background or its gain-map change. Eagle restored and verified the black Glow center; no color layer was left over.",
+                es: "SpringBoard no conservó el fondo nativo de Color o el cambio de su mapa de ganancia. Eagle restauró y verificó el centro negro de Brillo; no quedó ninguna capa de color."
+            )
+        case -17:
+            return LaraL10n.text(
+                en: "True Tint needs the native adaptive Island background available on this iOS 18 SpringBoard state. Eagle preserved the current aura instead of placing color over music or timer controls.",
+                es: "Color real necesita el fondo adaptativo nativo de Island disponible en este estado de SpringBoard de iOS 18. Eagle conservó el aura actual en vez de poner color sobre los controles de música o temporizador."
+            )
+        case -18:
+            return LaraL10n.text(
+                en: "Eagle could not verify the complete return to the black system center. The verified badge was cleared. Reopen Eagle on the Home Screen and choose Glow or Remove again.",
+                es: "Eagle no pudo verificar el regreso completo al centro negro del sistema. Se eliminó el indicador de verificación. Abre Eagle de nuevo desde Inicio y elige Brillo o Eliminar otra vez."
+            )
+        case -19:
+            return LaraL10n.text(
+                en: "The Island cleanup completed, but SpringBoard did not expose the Home Screen Dock for a verified removal. The verified badge was cleared. Return to the Home Screen, reopen Eagle, and choose Remove again.",
+                es: "La limpieza de Island terminó, pero SpringBoard no mostró el Dock de Inicio para verificar su eliminación. Se eliminó el indicador de verificación. Vuelve a Inicio, abre Eagle y elige Eliminar otra vez."
             )
         default:
             return LaraL10n.text(
