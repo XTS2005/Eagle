@@ -470,6 +470,7 @@ final class EaglePrepareDiagnostics: ObservableObject {
         let events = journalLines(for: marker.attemptID)
         let currentLog = sanitizedCurrentLog()
         let nativeState = marker.nativeJournalInterrupted ? "interrupted marker present" : "no interrupted marker reported"
+        let support = eagleSupportAssessment()
         let text = """
         Eagle Prepare Diagnostic
         ========================
@@ -484,6 +485,7 @@ final class EaglePrepareDiagnostics: ObservableObject {
         App: Eagle \(marker.appVersion) (\(marker.appBuild))
         Device model: \(marker.deviceModel)
         iOS: \(marker.systemVersion)
+        Support matrix: \(support.status.rawValue) (\(support.reason.rawValue))
         Native Prepare journal: \(nativeState)
 
         Persistent Prepare events

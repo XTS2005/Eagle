@@ -259,8 +259,77 @@ struct AuraStudioView: View {
 
     private let auraEngineBuild = "2026.08.15-r8"
 
+    private var islandCompatibility: EagleDynamicIslandCompatibility {
+        .current
+    }
+
+    private var islandProfileAvailable: Bool {
+        islandCompatibility.availability == .supported
+    }
+
+    private var deviceSupportedFlags: UInt32 {
+        islandProfileAvailable ? Flag.supported : Flag.dock
+    }
+
+    private var verifiedSupportDescription: String {
+        switch islandCompatibility.availability {
+        case .supported:
+            if islandCompatibility.isSimulator {
+                return LaraL10n.text(
+                    en: "Dynamic Island preview is available for this simulated model. Live Aura changes require a supported physical iPhone; Dock remains independent.",
+                    es: "La vista previa de Dynamic Island está disponible para este modelo simulado. Los cambios en vivo requieren un iPhone físico compatible; el Dock permanece independiente."
+                )
+            }
+            return LaraL10n.text(
+                en: "This iPhone has Dynamic Island. Eagle still verifies its live SpringBoard host before every change; Dock remains independent.",
+                es: "Este iPhone tiene Dynamic Island. Eagle también verifica su host activo de SpringBoard antes de cada cambio; el Dock permanece independiente."
+            )
+        case .unsupported:
+            return LaraL10n.text(
+                en: "This model has no Dynamic Island, so Island controls are safely disabled. Dock Aura remains available and independent.",
+                es: "Este modelo no tiene Dynamic Island, por eso sus controles están desactivados de forma segura. El aura del Dock sigue disponible e independiente."
+            )
+        case .unknown:
+            return LaraL10n.text(
+                en: "Eagle does not yet recognize this model's Island hardware, so Island changes are disabled safely. Dock Aura remains available.",
+                es: "Eagle aún no reconoce el hardware de Island de este modelo, por eso sus cambios están desactivados de forma segura. El aura del Dock sigue disponible."
+            )
+        }
+    }
+
+    private var islandHardwareUnavailableMessage: String {
+        if islandCompatibility.isSimulator {
+            return LaraL10n.text(
+                en: "Simulator can preview this model, but it cannot apply Island Aura to SpringBoard. Build for a supported physical iPhone. Dock remains unchanged.",
+                es: "El simulador puede previsualizar este modelo, pero no puede aplicar el aura de Island a SpringBoard. Compila para un iPhone físico compatible. El Dock no cambió."
+            )
+        }
+        switch islandCompatibility.availability {
+        case .supported:
+            return LaraL10n.text(
+                en: "Dynamic Island hardware is recognized, but this device is not available for a live SpringBoard change. Nothing was changed.",
+                es: "El hardware de Dynamic Island fue reconocido, pero este dispositivo no está disponible para cambiar SpringBoard en vivo. No se cambió nada."
+            )
+        case .unsupported:
+            return LaraL10n.text(
+                en: "This iPhone model does not have Dynamic Island. Island Aura was not sent to SpringBoard, and Dock remains available.",
+                es: "Este modelo de iPhone no tiene Dynamic Island. El aura de Island no se envió a SpringBoard y el Dock sigue disponible."
+            )
+        case .unknown:
+            return LaraL10n.text(
+                en: "This iPhone model has not been verified for Dynamic Island. Eagle stopped before contacting SpringBoard; Dock remains available.",
+                es: "Este modelo de iPhone no ha sido verificado para Dynamic Island. Eagle se detuvo antes de contactar SpringBoard; el Dock sigue disponible."
+            )
+        }
+    }
+
     private var selectedTarget: AuraStudioTarget {
-        get { AuraStudioTarget(rawValue: selectedTargetRaw) ?? .island }
+        get {
+            let stored = AuraStudioTarget(rawValue: selectedTargetRaw) ?? .dock
+            // A persisted Island selection from another device must never
+            // hide or block Dock on hardware without a verified Island.
+            return stored == .island && !islandProfileAvailable ? .dock : stored
+        }
         nonmutating set { selectedTargetRaw = newValue.rawValue }
     }
 
@@ -413,6 +482,10 @@ struct AuraStudioView: View {
                 islandModeRaw = legacyMode.rawValue
                 dockModeRaw = (legacyMode == .tint ? AuraStudioMode.glow : legacyMode).rawValue
                 independentProfilesMigrated = true
+            }
+            if !islandProfileAvailable,
+               selectedTargetRaw == AuraStudioTarget.island.rawValue {
+                selectedTargetRaw = AuraStudioTarget.dock.rawValue
             }
             reconcilePersistedActiveState()
             if mgr.rcSafetyLocked { applySafetyBlocked = true }
@@ -793,6 +866,7 @@ struct AuraStudioView: View {
 
     private func profileButton(for target: AuraStudioTarget) -> some View {
         let isSelected = selectedTarget == target
+        let isHardwareAvailable = target != .island || islandProfileAvailable
         let targetFlag = flag(for: target)
         let isActive = isTargetActive(target)
         let hasPendingChanges = isActive && !draftMatchesActive(target)
@@ -824,7 +898,14 @@ struct AuraStudioView: View {
 
                     Spacer(minLength: 6)
 
-                    if isSelected {
+                    if !isHardwareAvailable {
+                        Text(LaraL10n.text(en: "UNAVAILABLE", es: "NO DISPONIBLE"))
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
+                    } else if isSelected {
                         Text(LaraL10n.text(en: "EDITING", es: "EDITANDO"))
                             .font(.caption2.bold())
                             .foregroundStyle(profileColor)
@@ -860,15 +941,20 @@ struct AuraStudioView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isApplying)
+        .disabled(isApplying || !isHardwareAvailable)
+        .opacity(isHardwareAvailable ? 1 : 0.64)
         .accessibilityLabel(target.title)
         .accessibilityValue(LaraL10n.text(
             en: "Selected profile: \(mode(for: target).title). \(profileStatusText(for: target)).",
             es: "Perfil seleccionado: \(mode(for: target).title). \(profileStatusText(for: target))."
         ))
         .accessibilityHint(LaraL10n.text(
-            en: "Edits only this surface.",
-            es: "Edita únicamente esta superficie."
+            en: isHardwareAvailable
+                ? "Edits only this surface."
+                : "This model has no verified Dynamic Island. Dock remains available.",
+            es: isHardwareAvailable
+                ? "Edita únicamente esta superficie."
+                : "Este modelo no tiene una Dynamic Island verificada. El Dock sigue disponible."
         ))
     }
 
@@ -883,10 +969,7 @@ struct AuraStudioView: View {
                     es: "Compatibilidad verificada"
                 ))
                     .font(.subheadline.weight(.semibold))
-                Text(LaraL10n.text(
-                    en: "Dynamic Island and Dock are available now. Screen, Battery and Lock remain safely disabled until their live surfaces are verified.",
-                    es: "Dynamic Island y Dock están disponibles. Pantalla, batería y bloqueo permanecen desactivados de forma segura hasta verificar sus superficies en vivo."
-                ))
+                Text(verifiedSupportDescription)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 Text("Aura Engine \(auraEngineBuild)")
@@ -1123,6 +1206,17 @@ struct AuraStudioView: View {
     }
 
     private func profileStatusText(for target: AuraStudioTarget) -> String {
+        if target == .island && !islandProfileAvailable {
+            return islandCompatibility.availability == .unknown
+                ? LaraL10n.text(
+                    en: "Unknown model · Island disabled safely",
+                    es: "Modelo desconocido · Island desactivada de forma segura"
+                )
+                : LaraL10n.text(
+                    en: "This iPhone has no Dynamic Island",
+                    es: "Este iPhone no tiene Dynamic Island"
+                )
+        }
         guard let appliedMode = activeMode(for: target), isTargetActive(target) else {
             return LaraL10n.text(en: "Not active", es: "No activo")
         }
@@ -1145,7 +1239,7 @@ struct AuraStudioView: View {
     }
 
     private var activeModuleCount: Int {
-        (UInt32(max(activeFlagsRaw, 0)) & Flag.supported).nonzeroBitCount
+        (UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags).nonzeroBitCount
     }
 
     private var verifiedSurfaceSummary: String {
@@ -1165,7 +1259,18 @@ struct AuraStudioView: View {
         let currentPID = providedPID ?? "SpringBoard".withCString {
             find_process_pid($0)
         }
-        let savedFlags = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        let rawSavedFlags = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        let savedFlags = rawSavedFlags & deviceSupportedFlags
+        if rawSavedFlags != savedFlags {
+            AuraStudioDiagnostics.log(
+                "state.hardware-pruned",
+                "before=0x\(String(rawSavedFlags, radix: 16)) " +
+                "after=0x\(String(savedFlags, radix: 16)) " +
+                "\(islandCompatibility.diagnosticsToken)"
+            )
+            activeFlagsRaw = Int(savedFlags)
+            activeIslandModeRaw = 0
+        }
         guard savedFlags != 0 else {
             activeFlagsRaw = 0
             activeModeRaw = 0
@@ -1236,6 +1341,7 @@ struct AuraStudioView: View {
             "action=\(operation.isRemoving ? "remove" : "apply") mode=\(mode) " +
             "target=\(requestedTargetTitle) flags=0x\(String(requestedFlags, radix: 16)) " +
             "device=\(devicemachine()) " +
+            "islandHardware={\(islandCompatibility.diagnosticsToken)} " +
             "ios=\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) " +
             "display=\(display.isDisplayZoomed ? "zoomed" : "standard") " +
             "factor=\(String(format: "%.4f", display.xFactor))," +
@@ -1256,6 +1362,11 @@ struct AuraStudioView: View {
                 en: "Aura Studio is still finishing the previous system update.",
                 es: "Aura Studio todavía está terminando la actualización anterior."
             ))
+            return
+        }
+        if requestedTarget == .island,
+           !islandCompatibility.canAttemptLiveIslandAura {
+            finish(message: islandHardwareUnavailableMessage)
             return
         }
         guard !isdebugged() else {
@@ -1317,7 +1428,7 @@ struct AuraStudioView: View {
         let redValue = Int32(max(0, min(255, Int((selectedRGB.red * 255).rounded()))))
         let greenValue = Int32(max(0, min(255, Int((selectedRGB.green * 255).rounded()))))
         let blueValue = Int32(max(0, min(255, Int((selectedRGB.blue * 255).rounded()))))
-        let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags
         var retainedVerified = previouslyVerified
         var newlyApplied: UInt32 = 0
         var removedFlags: UInt32 = 0
@@ -1898,6 +2009,7 @@ struct AuraStudioView: View {
             "operationStep=\(operationStepIndex)/\(operationStepCount)",
             "summary=\(summary)",
             "device=\(devicemachine())",
+            "islandHardware=\(islandCompatibility.diagnosticsToken)",
             "ios=\(ProcessInfo.processInfo.operatingSystemVersionString)",
             "dsready=\(mgr.dsready)",
             "rcrunning=\(mgr.rcrunning)",
@@ -1908,7 +2020,7 @@ struct AuraStudioView: View {
             "islandDraft=mode:\(islandModeRaw) rgb:\(rgb255String(islandRed, islandGreen, islandBlue))",
             "dockDraft=mode:\(dockModeRaw) rgb:\(rgb255String(dockRed, dockGreen, dockBlue))",
             "selectedFlags=0x\(String(selectedFlags, radix: 16))",
-            "activeFlags=0x\(String(UInt32(max(activeFlagsRaw, 0)) & Flag.supported, radix: 16))",
+            "activeFlags=0x\(String(UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags, radix: 16))",
             "activeIsland=mode:\(activeIslandModeRaw) rgb:\(activeIslandRed),\(activeIslandGreen),\(activeIslandBlue)",
             "activeDock=mode:\(activeDockModeRaw) rgb:\(activeDockRed),\(activeDockGreen),\(activeDockBlue)",
             "activeSpringBoardPID=\(activeSpringBoardPID)",

@@ -66,6 +66,14 @@ private final class EagleAccessCoordinator: ObservableObject {
             return
         }
 
+        let support = eagleSupportAssessment()
+        guard support.allowsPrepare else {
+            state = .failed(support.message(
+                spanish: LaraL10n.language == .spanish
+            ))
+            return
+        }
+
         guard activeID == nil else { return }
         guard !mgr.dsrunning, !mgr.sbxrunning else {
             state = .failed(LaraL10n.text(
@@ -446,10 +454,9 @@ struct LaraAccessView: View {
                 ))
             }
 
-            if isunsupported() {
-                Text(LaraL10n.text(
-                    en: "This device or iOS version is not compatible with Eagle's current engine.",
-                    es: "Este dispositivo o esta versión de iOS no es compatible con el motor actual de Eagle."
+            if !supportAssessment.allowsPrepare {
+                Text(supportAssessment.message(
+                    spanish: LaraL10n.language == .spanish
                 ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -464,6 +471,17 @@ struct LaraAccessView: View {
                 }
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.orange)
+            } else if supportAssessment.status == .possible ||
+                        supportAssessment.status == .testedNeedsMoreTesting {
+                Label {
+                    Text(supportAssessment.message(
+                        spanish: LaraL10n.language == .spanish
+                    ))
+                } icon: {
+                    Image(systemName: "testtube.2")
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.orange)
             }
         }
         .padding(compact ? 16 : 20)
@@ -472,6 +490,10 @@ struct LaraAccessView: View {
 
     private var isBusy: Bool {
         access.isBusy || mgr.dsrunning || mgr.sbxrunning
+    }
+
+    private var supportAssessment: EagleSupportAssessment {
+        eagleSupportAssessment()
     }
 
     private var buttonTitle: String {

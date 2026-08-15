@@ -76,10 +76,13 @@ struct ContentView: View {
                 }
             }) {
                 Button("Run Exploit", action: {
+                    guard !isunsupported(), !isdebugged() else { return }
                     offsets_init()
                     mgr.run()
                 })
-                .disabled(mgr.dsready || mgr.dsrunning || isdebugged())
+                .disabled(
+                    mgr.dsready || mgr.dsrunning || isdebugged() || isunsupported()
+                )
             }
             
             if !mgr.hasOffsets {
