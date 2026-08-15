@@ -2,7 +2,7 @@
   <img src="lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png" alt="Eagle icon" width="150">
   <h1>Eagle</h1>
   <p>Focused iOS personalization powered by DarkSword.</p>
-  <p><strong>Public Beta 3 — expect unfinished features and SpringBoard resprings.</strong></p>
+  <p><strong>Public Beta 4 — Aura Engine r7; expect unfinished features and device-dependent SpringBoard behavior.</strong></p>
 </div>
 
 > [!WARNING]
@@ -22,7 +22,7 @@ Eagle is a modified version of [Lara](https://github.com/rooootdev/lara). The Ea
 - **Passcode** — browse, import, preview, apply and restore compatible key themes.
 - **Icon Studio (beta)** — icon-theme import and alternate icon shapes.
 - **Dock (beta)** — layouts supporting up to six apps where SpringBoard accepts them.
-- **Aura Studio (experimental)** — Island, Screen, Battery Halo, Dock and Lock lighting in one bilingual workspace, with per-surface verification.
+- **Aura Studio (experimental)** — independently colored Dynamic Island and Dock lighting, with Glow, Pulse, Rainbow, guarded Tint and per-surface verification.
 - **Eagle System** — Guardian checks, Scenes and shareable personalization recipes.
 - English and Spanish interface text.
 
@@ -30,7 +30,7 @@ Eagle is a modified version of [Lara](https://github.com/rooootdev/lara). The Ea
 
 - If Island Aura reports **Safe Compact Halo**, it will not expand with music, screen recording or timers. Only **Adaptive Aura** follows those layouts.
 - Aura Studio depends on private live SpringBoard surfaces. A surface can be unavailable even when another aura applies successfully.
-- Battery Halo surrounds the status-bar battery area; it is not a verified replacement for the native battery fill color.
+- Screen, Battery Halo and Lock experiments are not exposed in this beta while their live SpringBoard hosts remain unverified.
 - Dock Aura geometry is currently tuned from iPhone 16 Pro testing and may still need adjustment on other screen sizes.
 - Aura overlays can disappear after a SpringBoard respring or device reboot and must then be applied again.
 - Icon theme importing and nonstandard masks remain device- and SpringBoard-dependent.
