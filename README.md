@@ -2,7 +2,7 @@
   <img src="lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png" alt="Eagle icon" width="150">
   <h1>Eagle</h1>
   <p>Focused iOS personalization powered by DarkSword.</p>
-  <p><strong>Public Beta 2 — expect unfinished features and SpringBoard resprings.</strong></p>
+  <p><strong>Public Beta 3 — expect unfinished features and SpringBoard resprings.</strong></p>
 </div>
 
 > [!WARNING]
