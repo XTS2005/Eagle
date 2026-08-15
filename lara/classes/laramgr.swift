@@ -758,16 +758,23 @@ final class laramgr: ObservableObject {
     }
     
     func rcdestroy(completion: (() -> Void)? = nil) {
-        guard rcready else { return }
+        guard rcready || sbProc != nil else {
+            completion?()
+            return
+        }
         
         logmsg("destroying remote call session...")
+        let session = sbProc
+        sbProc = nil
         rcready = false
+        rcrunning = true
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.sbProc?.destroy()
+            session?.destroy()
             
             DispatchQueue.main.async {
                 self?.logmsg("remote call session destroyed")
+                self?.rcrunning = false
                 completion?()
             }
         }

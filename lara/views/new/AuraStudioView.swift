@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Darwin
 
 private struct AuraStudioNotice: Identifiable {
     let id = UUID()
@@ -302,7 +303,11 @@ struct AuraStudioView: View {
             screenEnabled = false
             batteryEnabled = false
             lockEnabled = false
-            activeFlagsRaw &= Int(Flag.supported)
+            // This phase is intentionally Island-first. A persisted Dock
+            // toggle from an earlier beta must not silently add a second
+            // SpringBoard operation to the first Island verification.
+            dockEnabled = false
+            activeFlagsRaw &= Int(Flag.island)
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 previewPulse = true
             }
@@ -318,8 +323,8 @@ struct AuraStudioView: View {
                 Text(LaraL10n.text(en: "Island Aura, rebuilt.", es: "Island Aura, reconstruida."))
                     .font(.title2.bold())
                 Text(LaraL10n.text(
-                    en: "A brighter dual-layer light that follows the live Dynamic Island.",
-                    es: "Una luz de dos capas, más intensa, que sigue a Dynamic Island en vivo."
+                    en: "A brighter luminous core with a wide bloom that follows the live Dynamic Island.",
+                    es: "Un núcleo luminoso más intenso con difusión amplia que sigue a Dynamic Island en vivo."
                 ))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -751,6 +756,21 @@ struct AuraStudioView: View {
                 ))
                 return
             }
+            let targetPID = process.pid
+            let probeResult = targetPID > 0 ? Darwin.kill(targetPID, 0) : -1
+            let probeError = errno
+            guard targetPID > 0,
+                  probeResult == 0 || probeError == EPERM else {
+                AuraStudioDiagnostics.log(
+                    "session.invalid",
+                    "reason=stale-springboard-pid pid=\(targetPID) errno=\(probeError)"
+                )
+                self.finish(message: LaraL10n.text(
+                    en: "The saved SpringBoard session belongs to the previous respring. Close and reopen Eagle once so it can create a fresh session.",
+                    es: "La sesión guardada de SpringBoard pertenece al reinicio anterior. Cierra y abre Eagle una vez para crear una sesión nueva."
+                ))
+                return
+            }
             let redValue = Int32(max(0, min(255, Int((self.red * 255).rounded()))))
             let greenValue = Int32(max(0, min(255, Int((self.green * 255).rounded()))))
             let blueValue = Int32(max(0, min(255, Int((self.blue * 255).rounded()))))
@@ -785,6 +805,11 @@ struct AuraStudioView: View {
                             )
                         )
                     } else {
+                        if result == -15 {
+                            // The native contract guarantees the static core
+                            // remains installed when only Rainbow motion fails.
+                            self.activeFlagsRaw = Int(Flag.island)
+                        }
                         self.notice = AuraStudioNotice(message: self.message(for: result))
                     }
                 }
@@ -854,8 +879,8 @@ struct AuraStudioView: View {
         switch result {
         case -2:
             return LaraL10n.text(
-                en: "SpringBoard did not expose the selected Island or Dock host. No partial light was left behind and nothing was reported as applied.",
-                es: "SpringBoard no mostró el host seleccionado de Island o Dock. No quedó ninguna luz parcial y no se marcó nada como aplicado."
+                en: "SpringBoard did not expose a visible Dynamic Island host. Return to the Home Screen once, reopen Eagle, and try Island by itself.",
+                es: "SpringBoard no mostró un host visible de Dynamic Island. Vuelve una vez a Inicio, abre Eagle y prueba Island por sí sola."
             )
         case -3:
             return LaraL10n.text(en: "The selected aura style is invalid.", es: "El estilo de aura seleccionado no es válido.")
@@ -878,6 +903,46 @@ struct AuraStudioView: View {
             return LaraL10n.text(
                 en: "Aura Studio caught a system exception and stopped without reporting success.",
                 es: "Aura Studio detectó una excepción del sistema y se detuvo sin mostrar un éxito falso."
+            )
+        case -8:
+            return LaraL10n.text(
+                en: "Eagle could not resolve the safe Dynamic Island window.",
+                es: "Eagle no pudo resolver la ventana segura de Dynamic Island."
+            )
+        case -9:
+            return LaraL10n.text(
+                en: "SpringBoard did not provide the UIKit classes required for Island Aura.",
+                es: "SpringBoard no proporcionó las clases de UIKit necesarias para Island Aura."
+            )
+        case -10:
+            return LaraL10n.text(
+                en: "SpringBoard could not create or position the Island Aura view.",
+                es: "SpringBoard no pudo crear o posicionar la vista de Island Aura."
+            )
+        case -11:
+            return LaraL10n.text(
+                en: "SpringBoard created the Island host but rejected its light layer.",
+                es: "SpringBoard creó el host de Island, pero rechazó su capa luminosa."
+            )
+        case -12:
+            return LaraL10n.text(
+                en: "The Island view was created but could not be read back safely. Eagle removed it instead of leaving a partial effect.",
+                es: "La vista de Island se creó, pero no pudo verificarse de forma segura. Eagle la eliminó para no dejar un efecto parcial."
+            )
+        case -13:
+            return LaraL10n.text(
+                en: "The SpringBoard session is missing its isolated call thread.",
+                es: "La sesión de SpringBoard no tiene su hilo aislado de llamadas."
+            )
+        case -14:
+            return LaraL10n.text(
+                en: "Island Aura caught a SpringBoard exception and rolled back safely.",
+                es: "Island Aura detectó una excepción de SpringBoard y revirtió el cambio de forma segura."
+            )
+        case -15:
+            return LaraL10n.text(
+                en: "The thick Island glow is active, but SpringBoard did not retain the moving Rainbow animation. The static core was preserved; choose Glow if you want the verified style.",
+                es: "El brillo grueso de Island está activo, pero SpringBoard no conservó la animación Rainbow. El núcleo estático se mantuvo; elige Brillo para usar el estilo verificado."
             )
         default:
             return LaraL10n.text(
