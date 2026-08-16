@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.16-r10-dock-proven"
+    private let auraEngineBuild = "2026.08.16-r11-dock-rebuilt"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -576,14 +576,17 @@ struct AuraStudioView: View {
     }
 
     private var previewTintFillColor: Color {
-        let brightest = max(islandRed, max(islandGreen, islandBlue))
+        let red = sanitizedChannel(islandRed)
+        let green = sanitizedChannel(islandGreen)
+        let blue = sanitizedChannel(islandBlue)
+        let brightest = max(red, max(green, blue))
         let scale = brightest > (112.0 / 255.0)
             ? (112.0 / 255.0) / brightest
             : 1.0
         return Color(
-            red: islandRed * scale,
-            green: islandGreen * scale,
-            blue: islandBlue * scale
+            red: red * scale,
+            green: green * scale,
+            blue: blue * scale
         )
     }
 
@@ -1443,8 +1446,8 @@ struct AuraStudioView: View {
         _ preset: (name: String, red: Double, green: Double, blue: Double)
     ) -> Bool {
         let selectedRGB = selectedTarget == .island
-            ? (islandRed, islandGreen, islandBlue)
-            : (dockRed, dockGreen, dockBlue)
+            ? (sanitizedChannel(islandRed), sanitizedChannel(islandGreen), sanitizedChannel(islandBlue))
+            : (sanitizedChannel(dockRed), sanitizedChannel(dockGreen), sanitizedChannel(dockBlue))
         let tolerance = 0.002
         return abs(selectedRGB.0 - preset.red) < tolerance &&
             abs(selectedRGB.1 - preset.green) < tolerance &&
@@ -1459,9 +1462,17 @@ struct AuraStudioView: View {
     private func color(for target: AuraStudioTarget) -> Color {
         switch target {
         case .island:
-            return Color(red: islandRed, green: islandGreen, blue: islandBlue)
+            return Color(
+                red: sanitizedChannel(islandRed),
+                green: sanitizedChannel(islandGreen),
+                blue: sanitizedChannel(islandBlue)
+            )
         case .dock:
-            return Color(red: dockRed, green: dockGreen, blue: dockBlue)
+            return Color(
+                red: sanitizedChannel(dockRed),
+                green: sanitizedChannel(dockGreen),
+                blue: sanitizedChannel(dockBlue)
+            )
         }
     }
 
@@ -1472,9 +1483,9 @@ struct AuraStudioView: View {
     }
 
     private func setSelectedRGB(red: Double, green: Double, blue: Double) {
-        let nextRed = max(0, min(1, red))
-        let nextGreen = max(0, min(1, green))
-        let nextBlue = max(0, min(1, blue))
+        let nextRed = sanitizedChannel(red)
+        let nextGreen = sanitizedChannel(green)
+        let nextBlue = sanitizedChannel(blue)
         if selectedTarget == .island {
             islandRed = nextRed
             islandGreen = nextGreen
@@ -1567,8 +1578,20 @@ struct AuraStudioView: View {
 
     private func rgb255String(_ red: Double, _ green: Double, _ blue: Double) -> String {
         [red, green, blue]
-            .map { String(max(0, min(255, Int(($0 * 255).rounded())))) }
+            .map { String(channel255($0)) }
             .joined(separator: ",")
+    }
+
+    /// UserDefaults can contain stale or externally-written floating-point
+    /// values. Never pass NaN/∞ (or an out-of-range channel) into Color or the
+    /// native C bridge: converting NaN to Int would trap the Eagle process.
+    private func sanitizedChannel(_ value: Double, fallback: Double = 0) -> Double {
+        guard value.isFinite else { return fallback }
+        return max(0, min(1, value))
+    }
+
+    private func channel255(_ value: Double) -> Int {
+        Int((sanitizedChannel(value) * 255).rounded())
     }
 
     private var activeModuleCount: Int {
@@ -1750,6 +1773,17 @@ struct AuraStudioView: View {
             ))
             return
         }
+        guard requestedFlags == flag(for: selectedTarget),
+              operationTarget == selectedTarget else {
+            let reason = "Aura target contract mismatch selected=\(selectedTarget.title) " +
+                "flags=0x\(String(requestedFlags, radix: 16)) resolved=\(operationTarget.title)"
+            AuraStudioDiagnostics.log("preflight.contract-failed", "op=\(operationID) \(reason)")
+            finish(message: LaraL10n.text(
+                en: "Aura Studio detected a stale surface selection and sent nothing to SpringBoard. Reopen Aura Studio and choose Dock again.",
+                es: "Aura Studio detectó una selección de superficie obsoleta y no envió nada a SpringBoard. Vuelve a abrir Aura Studio y elige Dock otra vez."
+            ))
+            return
+        }
         guard operation.isRemoving ||
                 policyAllows(requestedProfileMode, for: operationTarget) else {
             finish(message: LaraL10n.text(
@@ -1777,11 +1811,18 @@ struct AuraStudioView: View {
 
         let selectedRGB: (red: Double, green: Double, blue: Double) =
             operationTarget == .island
-                ? (islandRed, islandGreen, islandBlue)
-                : (dockRed, dockGreen, dockBlue)
-        let redValue = Int32(max(0, min(255, Int((selectedRGB.red * 255).rounded()))))
-        let greenValue = Int32(max(0, min(255, Int((selectedRGB.green * 255).rounded()))))
-        let blueValue = Int32(max(0, min(255, Int((selectedRGB.blue * 255).rounded()))))
+                ? (sanitizedChannel(islandRed), sanitizedChannel(islandGreen), sanitizedChannel(islandBlue))
+                : (sanitizedChannel(dockRed), sanitizedChannel(dockGreen), sanitizedChannel(dockBlue))
+        let redValue = Int32(channel255(selectedRGB.red))
+        let greenValue = Int32(channel255(selectedRGB.green))
+        let blueValue = Int32(channel255(selectedRGB.blue))
+        AuraStudioDiagnostics.log(
+            "preflight.contract",
+            "op=\(operationID) target=\(operationTarget.title) " +
+                "flags=0x\(String(requestedFlags, radix: 16)) " +
+                "mode=\(requestedProfileMode.rawValue) " +
+                "rgb=\(redValue),\(greenValue),\(blueValue)"
+        )
         let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags
         var retainedVerified = previouslyVerified
         var newlyApplied: UInt32 = 0
