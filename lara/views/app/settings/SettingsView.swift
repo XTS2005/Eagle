@@ -29,6 +29,8 @@ enum logsdisplaymode: String, CaseIterable {
 
 struct SettingsView: View {
     @EnvironmentObject var mgr: laramgr
+    @AppStorage(EagleReleaseChannel.storageKey)
+    private var channelRaw = EagleReleaseChannel.stable.rawValue
     
     @AppStorage("selectedMethod") private var selectedMethod: method = .hybrid
     @AppStorage("keepAlive") private var keepAlive: Bool = false
@@ -49,6 +51,14 @@ struct SettingsView: View {
     @AppStorage("fmRecursiveSearch") private var fmRecursiveSearch: Bool = false
     
     @AppStorage("rcDockUnlimited") private var rcDockUnlimited: Bool = false
+
+    private var channel: EagleReleaseChannel {
+        EagleFeaturePolicy.channel(from: channelRaw)
+    }
+
+    private var advancedToolsAllowed: Bool {
+        EagleFeaturePolicy.allows(.advancedSystemTools, channel: channel)
+    }
     
     var body: some View {
         NavigationStack {
@@ -57,8 +67,34 @@ struct SettingsView: View {
                     AppInfoCell()
                     NavigationLink("Credits", destination: CreditsView())
                 }
+
+                Section {
+                    NavigationLink(destination: EagleCompatibilityCenterView()) {
+                        Label(
+                            LaraL10n.text(en: "Compatibility", es: "Compatibilidad"),
+                            systemImage: "checkmark.shield.fill"
+                        )
+                    }
+                    LabeledContent(
+                        LaraL10n.text(en: "Feature channel", es: "Canal de funciones"),
+                        value: channel.title
+                    )
+                } header: {
+                    HeaderLabel(
+                        text: LaraL10n.text(en: "Availability", es: "Disponibilidad"),
+                        icon: "slider.horizontal.3"
+                    )
+                } footer: {
+                    if !advancedToolsAllowed {
+                        Text(LaraL10n.text(
+                            en: "Kernelcache and RemoteCall controls require the Experimental channel.",
+                            es: "Los controles de Kernelcache y RemoteCall requieren el canal Experimental."
+                        ))
+                    }
+                }
                 
-                Section(header: HeaderLabel(text: "Exploit", icon: "ant")) {
+                if advancedToolsAllowed {
+                    Section(header: HeaderLabel(text: "Exploit", icon: "ant")) {
                     Picker("", selection: $selectedMethod) {
                         ForEach(method.allCases, id: \.self) { method in
                             Text(method.rawValue).tag(method)
@@ -67,10 +103,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     
                     NavigationLink("Modify Offsets", destination: OffsetManagementView())
+                    }
                 }
                 
                 // kernelcache
-                Section {
+                if advancedToolsAllowed {
+                    Section {
                     if !mgr.hasOffsets {
                         // this does not need to be here any longer, but i'll keep it here anyways.
                         Button {
@@ -137,9 +175,10 @@ struct SettingsView: View {
                         Text("Deleting and refetching kernelcache may fix some issues. Try doing this before opening a GitHub issue or asking for support in our [Discord](https://discord.gg/gw8PcRF3Jr) server.")
                     }
                 }
+                }
                 
                 // tips
-                if showkcachetips {
+                if advancedToolsAllowed && showkcachetips {
                     Section {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("How to obtain a kernelcache (macOS)")
@@ -192,7 +231,8 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                 }
                 
-                Section(header: HeaderLabel(text: "File Manager", icon: "folder"), footer: Text("Display Mode lets you change the way app folders get displayed in the file manager.")) {
+                if advancedToolsAllowed {
+                    Section(header: HeaderLabel(text: "File Manager", icon: "folder"), footer: Text("Display Mode lets you change the way app folders get displayed in the file manager.")) {
                     Picker("Display Mode", selection: $selectedFMAppsDisplayMode) {
                         ForEach(fmAppsDisplayMode.allCases, id: \.self) { mode in
                             Text(mode.rawValue).tag(mode)
@@ -201,10 +241,12 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     Toggle("Recursive Search in File Manager", isOn: $fmRecursiveSearch)
                     Toggle("Show File Manager in Tabs", isOn: $showFMInTabs)
+                    }
                 }
                 
                 #if !DISABLE_REMOTECALL
-                Section(header: HeaderLabel(text: "RemoteCall", icon: "syringe")) {
+                if advancedToolsAllowed {
+                    Section(header: HeaderLabel(text: "RemoteCall", icon: "syringe")) {
                     Toggle("Stash KRW primitives", isOn: $stashKRW)
                         .onChange(of: stashKRW) { enabled in
                             if enabled && isIOS16() {
@@ -252,10 +294,11 @@ struct SettingsView: View {
                         .disabled(!mgr.dsready || mgr.rcrunning || stashingKRWNow)
                     }
                     Toggle("Allow >10 dock icons", isOn: $rcDockUnlimited)
+                    }
                 }
                 #endif
             }
-            .navigationTitle("Settings")
+            .navigationTitle(LaraL10n.text(en: "Advanced Settings", es: "Ajustes avanzados"))
             .fileImporter(isPresented: $showkcacheimport, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):

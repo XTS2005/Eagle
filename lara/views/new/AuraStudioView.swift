@@ -174,6 +174,22 @@ private enum AuraStudioTarget: Int, CaseIterable, Identifiable {
 
 }
 
+private enum AuraStudioPreviewIslandState: Int, CaseIterable, Identifiable {
+    case compact
+    case liveActivity
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .compact:
+            return LaraL10n.text(en: "Compact", es: "Compacta")
+        case .liveActivity:
+            return LaraL10n.text(en: "Live Activity", es: "Actividad en vivo")
+        }
+    }
+}
+
 private struct AuraStudioOperationStep {
     let flag: UInt32
     let englishName: String
@@ -199,6 +215,122 @@ private enum AuraStudioOperation {
         if case .remove = self { return true }
         return false
     }
+}
+
+/// Pure validation for the one-surface native boundary. Keep these rules in
+/// Swift as well as Objective-C so a mismatched native result can never update
+/// the wrong profile badge or be presented as a successful fallback.
+private enum AuraStudioNativeContract {
+    static func target(
+        for flags: UInt32,
+        islandFlag: UInt32,
+        dockFlag: UInt32
+    ) -> AuraStudioTarget? {
+        switch flags {
+        case islandFlag: return .island
+        case dockFlag: return .dock
+        default: return nil
+        }
+    }
+
+    static func isScopedUnavailable(
+        result: Int32,
+        target: AuraStudioTarget,
+        mode: AuraStudioMode,
+        isRemoval: Bool
+    ) -> Bool {
+        guard !isRemoval else { return false }
+        switch (result, target, mode) {
+        case (-2, .island, _),
+             (-17, .island, .tint),
+             (-20, .dock, _):
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func verifiedFallbackMode(
+        result: Int32,
+        target: AuraStudioTarget,
+        requestedMode: AuraStudioMode
+    ) -> AuraStudioMode? {
+        switch (result, target, requestedMode) {
+        case (-15, .island, .rainbow),
+             (-16, .island, .tint):
+            return .glow
+        default:
+            return nil
+        }
+    }
+
+    static func isScopedVerifiedRollback(
+        result: Int32,
+        target: AuraStudioTarget,
+        isRemoval: Bool
+    ) -> Bool {
+        !isRemoval && result == -12 && target == .island
+    }
+
+    static func hasExactAppliedSurface(
+        result: Int32,
+        requestedFlag: UInt32,
+        supportedFlags: UInt32
+    ) -> Bool {
+        guard result >= 0 else { return false }
+        return UInt32(bitPattern: result) & supportedFlags == requestedFlag
+    }
+
+#if DEBUG
+    /// Lightweight pure contract checks for projects that currently have no
+    /// XCTest target. They log rather than trap on a physical beta device.
+    static var invariantsHold: Bool {
+        let island: UInt32 = 1
+        let dock: UInt32 = 1 << 5
+        let supported = island | dock
+        return target(for: island, islandFlag: island, dockFlag: dock) == .island &&
+            target(for: dock, islandFlag: island, dockFlag: dock) == .dock &&
+            target(for: supported, islandFlag: island, dockFlag: dock) == nil &&
+            isScopedUnavailable(
+                result: -20,
+                target: .dock,
+                mode: .glow,
+                isRemoval: false
+            ) &&
+            !isScopedUnavailable(
+                result: -20,
+                target: .island,
+                mode: .glow,
+                isRemoval: false
+            ) &&
+            !isScopedUnavailable(
+                result: -20,
+                target: .dock,
+                mode: .glow,
+                isRemoval: true
+            ) &&
+            verifiedFallbackMode(
+                result: -16,
+                target: .island,
+                requestedMode: .tint
+            ) == .glow &&
+            verifiedFallbackMode(
+                result: -16,
+                target: .dock,
+                requestedMode: .glow
+            ) == nil &&
+            hasExactAppliedSurface(
+                result: Int32(island),
+                requestedFlag: island,
+                supportedFlags: supported
+            ) &&
+            !hasExactAppliedSurface(
+                result: Int32(supported),
+                requestedFlag: island,
+                supportedFlags: supported
+            )
+    }
+#endif
 }
 
 struct AuraStudioView: View {
@@ -244,10 +376,13 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockRed") private var activeDockRed = 158
     @AppStorage("eagle.auraStudio.activeDockGreen") private var activeDockGreen = 64
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
+    @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
+        EagleReleaseChannel.stable.rawValue
 
     @State private var isApplying = false
     @State private var previewPulse = false
     @State private var previewRainbowHue = 0.0
+    @State private var previewIslandState = AuraStudioPreviewIslandState.compact
     @State private var notice: AuraStudioNotice?
     @State private var applyStage = ""
     @State private var applySafetyBlocked = false
@@ -257,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.15-r8"
+    private let auraEngineBuild = "2026.08.16-r10-dock-proven"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -269,32 +404,6 @@ struct AuraStudioView: View {
 
     private var deviceSupportedFlags: UInt32 {
         islandProfileAvailable ? Flag.supported : Flag.dock
-    }
-
-    private var verifiedSupportDescription: String {
-        switch islandCompatibility.availability {
-        case .supported:
-            if islandCompatibility.isSimulator {
-                return LaraL10n.text(
-                    en: "Dynamic Island preview is available for this simulated model. Live Aura changes require a supported physical iPhone; Dock remains independent.",
-                    es: "La vista previa de Dynamic Island está disponible para este modelo simulado. Los cambios en vivo requieren un iPhone físico compatible; el Dock permanece independiente."
-                )
-            }
-            return LaraL10n.text(
-                en: "This iPhone has Dynamic Island. Eagle still verifies its live SpringBoard host before every change; Dock remains independent.",
-                es: "Este iPhone tiene Dynamic Island. Eagle también verifica su host activo de SpringBoard antes de cada cambio; el Dock permanece independiente."
-            )
-        case .unsupported:
-            return LaraL10n.text(
-                en: "This model has no Dynamic Island, so Island controls are safely disabled. Dock Aura remains available and independent.",
-                es: "Este modelo no tiene Dynamic Island, por eso sus controles están desactivados de forma segura. El aura del Dock sigue disponible e independiente."
-            )
-        case .unknown:
-            return LaraL10n.text(
-                en: "Eagle does not yet recognize this model's Island hardware, so Island changes are disabled safely. Dock Aura remains available.",
-                es: "Eagle aún no reconoce el hardware de Island de este modelo, por eso sus cambios están desactivados de forma segura. El aura del Dock sigue disponible."
-            )
-        }
     }
 
     private var islandHardwareUnavailableMessage: String {
@@ -333,27 +442,62 @@ struct AuraStudioView: View {
         nonmutating set { selectedTargetRaw = newValue.rawValue }
     }
 
+    private var releaseChannel: EagleReleaseChannel {
+        EagleFeaturePolicy.channel(from: releaseChannelRaw)
+    }
+
+    private func policyAllows(
+        _ mode: AuraStudioMode,
+        for target: AuraStudioTarget
+    ) -> Bool {
+        switch mode {
+        case .glow:
+            return true
+        case .pulse:
+            return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
+        case .rainbow:
+            return EagleFeaturePolicy.allows(.auraRainbow, channel: releaseChannel)
+        case .tint:
+            return target == .island &&
+                ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 18 &&
+                EagleFeaturePolicy.allows(.islandTint, channel: releaseChannel)
+        }
+    }
+
+    private func normalizedMode(
+        rawValue: Int,
+        for target: AuraStudioTarget
+    ) -> AuraStudioMode {
+        let stored = AuraStudioMode(rawValue: rawValue) ?? .glow
+        return policyAllows(stored, for: target) ? stored : .glow
+    }
+
+    private func normalizeDraftModesForPolicy() {
+        let island = normalizedMode(rawValue: islandModeRaw, for: .island)
+        let dock = normalizedMode(rawValue: dockModeRaw, for: .dock)
+        if islandModeRaw != island.rawValue { islandModeRaw = island.rawValue }
+        if dockModeRaw != dock.rawValue { dockModeRaw = dock.rawValue }
+    }
+
     private var selectedMode: AuraStudioMode {
         get {
             let rawValue = selectedTarget == .island
                 ? islandModeRaw
                 : dockModeRaw
-            let mode = AuraStudioMode(rawValue: rawValue) ?? .glow
-            return selectedTarget == .dock && mode == .tint ? .glow : mode
+            return normalizedMode(rawValue: rawValue, for: selectedTarget)
         }
         nonmutating set {
+            guard policyAllows(newValue, for: selectedTarget) else { return }
             if selectedTarget == .island {
                 islandModeRaw = newValue.rawValue
             } else {
-                dockModeRaw = (newValue == .tint ? AuraStudioMode.glow : newValue).rawValue
+                dockModeRaw = newValue.rawValue
             }
         }
     }
 
     private var availableModes: [AuraStudioMode] {
-        selectedTarget == .island
-            ? AuraStudioMode.allCases
-            : AuraStudioMode.allCases.filter { $0 != .tint }
+        AuraStudioMode.allCases.filter { policyAllows($0, for: selectedTarget) }
     }
 
     private var auraColor: Color {
@@ -362,6 +506,69 @@ struct AuraStudioView: View {
 
     private var displayGeometry: AuraStudioDisplayGeometry {
         .current
+    }
+
+    private var compactIslandPreviewSize: CGSize {
+        let logicalWidth = max(displayGeometry.logicalSize.width, 1)
+        let canvasWidth: CGFloat = 318
+        let scaledWidth = displayGeometry.compactIslandFrame.width /
+            logicalWidth * canvasWidth
+        let aspect = displayGeometry.compactIslandFrame.height /
+            max(displayGeometry.compactIslandFrame.width, 1)
+        let width = max(96, min(122, scaledWidth))
+        return CGSize(width: width, height: max(31, width * aspect))
+    }
+
+    private var selectedCapabilityTitle: String {
+        if applySafetyBlocked || mgr.rcSafetyLocked {
+            return LaraL10n.text(
+                en: "Safety lock active",
+                es: "Bloqueo de seguridad activo"
+            )
+        }
+        if !mgr.dsready {
+            return LaraL10n.text(
+                en: "System access required",
+                es: "Se requiere acceso al sistema"
+            )
+        }
+        return LaraL10n.text(
+            en: "\(selectedTarget.title) ready for live verification",
+            es: "\(selectedTarget.title) listo para verificación en vivo"
+        )
+    }
+
+    private var selectedCapabilityDescription: String {
+        if applySafetyBlocked || mgr.rcSafetyLocked {
+            return LaraL10n.text(
+                en: "Share the report, then fully close and reopen Eagle. Apply and Restore remain blocked so no second private call can start.",
+                es: "Comparte el informe y luego cierra y abre Eagle completamente. Aplicar y Restaurar permanecen bloqueados para que no se inicie una segunda llamada privada."
+            )
+        }
+        if !mgr.dsready {
+            return LaraL10n.text(
+                en: "Prepare Eagle access below before using Apply or Restore. No Aura call will be sent until access is ready.",
+                es: "Prepara el acceso de Eagle abajo antes de usar Aplicar o Restaurar. No se enviará ninguna llamada Aura hasta que el acceso esté listo."
+            )
+        }
+        switch selectedTarget {
+        case .island:
+            if selectedMode == .tint {
+                return LaraL10n.text(
+                    en: "Experimental True Tint requires the native adaptive iOS 18 Island background. Eagle verifies it during Apply and preserves the current Island if that host is unavailable.",
+                    es: "True Tint experimental requiere el fondo adaptativo nativo de Island en iOS 18. Eagle lo verifica al aplicar y conserva la Island actual si ese host no está disponible."
+                )
+            }
+            return LaraL10n.text(
+                en: "Hardware is recognized. Eagle checks the current compact or expanded SpringBoard host during Apply; Dock is never included in this call.",
+                es: "El hardware fue reconocido. Eagle verifica el host compacto o expandido actual de SpringBoard al aplicar; el Dock nunca se incluye en esta llamada."
+            )
+        case .dock:
+            return LaraL10n.text(
+                en: "Use the Home Screen before Apply so SpringBoard can expose the live Dock. Dynamic Island is never included in this call.",
+                es: "Pasa por la pantalla de Inicio antes de Aplicar para que SpringBoard exponga el Dock activo. Dynamic Island nunca se incluye en esta llamada."
+            )
+        }
     }
 
     private var previewLightColor: Color {
@@ -483,12 +690,21 @@ struct AuraStudioView: View {
                 dockModeRaw = (legacyMode == .tint ? AuraStudioMode.glow : legacyMode).rawValue
                 independentProfilesMigrated = true
             }
+            normalizeDraftModesForPolicy()
             if !islandProfileAvailable,
                selectedTargetRaw == AuraStudioTarget.island.rawValue {
                 selectedTargetRaw = AuraStudioTarget.dock.rawValue
             }
             reconcilePersistedActiveState()
             if mgr.rcSafetyLocked { applySafetyBlocked = true }
+#if DEBUG
+            if !AuraStudioNativeContract.invariantsHold {
+                AuraStudioDiagnostics.log(
+                    "contract.self-test",
+                    "result=failed engine=\(auraEngineBuild)"
+                )
+            }
+#endif
             if !reduceMotion {
                 withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                     previewPulse = true
@@ -497,6 +713,10 @@ struct AuraStudioView: View {
                     previewRainbowHue = 1.0
                 }
             }
+        }
+        .onChange(of: releaseChannelRaw) { _ in
+            guard !isApplying else { return }
+            normalizeDraftModesForPolicy()
         }
     }
 
@@ -555,6 +775,7 @@ struct AuraStudioView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
                         .background {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .fill(.ultraThinMaterial)
@@ -580,33 +801,68 @@ struct AuraStudioView: View {
                 }
                 .padding(14)
 
-                Group {
-                    let islandPreviewColor = previewLightColor(for: .island)
-                    let islandPreviewMode = mode(for: .island)
-                    ZStack {
-                        Capsule()
-                            .stroke(previewRingStyle(for: .island), lineWidth: 14)
-                            .blur(radius: 9)
-                            .opacity(0.88)
-                        Capsule()
-                            .fill(islandPreviewMode == .tint
-                                  ? previewTintFillColor
-                                  : .black)
-                        Capsule()
-                            .stroke(previewRingStyle(for: .island), lineWidth: 6)
-                        if islandPreviewMode == .tint {
-                            HStack(spacing: 5) {
-                                Capsule()
-                                    .fill(.black)
-                                    .frame(width: 42, height: 13)
-                                Circle()
-                                    .fill(.black)
-                                    .frame(width: 13, height: 13)
+                if islandProfileAvailable {
+                    Group {
+                        let islandPreviewColor = previewLightColor(for: .island)
+                        let islandPreviewMode = mode(for: .island)
+                        let compactSize = compactIslandPreviewSize
+                        let isExpanded = previewIslandState == .liveActivity
+                        let islandWidth = isExpanded
+                            ? min(205, compactSize.width * 1.72)
+                            : compactSize.width
+                        let islandHeight = isExpanded
+                            ? max(44, compactSize.height * 1.22)
+                            : compactSize.height
+                        ZStack {
+                            Capsule()
+                                .stroke(previewRingStyle(for: .island), lineWidth: 14)
+                                .blur(radius: 9)
+                                .opacity(0.88)
+                            Capsule()
+                                .fill(islandPreviewMode == .tint
+                                      ? previewTintFillColor
+                                      : .black)
+                            Capsule()
+                                .stroke(previewRingStyle(for: .island), lineWidth: 6)
+                            if isExpanded {
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(islandPreviewColor.gradient)
+                                        .frame(width: 19, height: 19)
+                                        .overlay {
+                                            Image(systemName: "waveform")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                    Spacer(minLength: 5)
+                                    HStack(spacing: 2) {
+                                        ForEach(0..<7, id: \.self) { index in
+                                            Capsule()
+                                                .fill(.white.opacity(0.86))
+                                                .frame(
+                                                    width: 2,
+                                                    height: CGFloat(5 + (index % 3) * 3)
+                                                )
+                                        }
+                                    }
+                                    Text("0:42")
+                                        .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.white.opacity(0.88))
+                                }
+                                .padding(.horizontal, 13)
+                            } else if islandPreviewMode == .tint {
+                                HStack(spacing: 5) {
+                                    Capsule()
+                                        .fill(.black)
+                                        .frame(width: 42, height: 13)
+                                    Circle()
+                                        .fill(.black)
+                                        .frame(width: 13, height: 13)
+                                }
+                                .offset(x: 3)
                             }
-                            .offset(x: 3)
                         }
-                    }
-                        .frame(width: 108, height: 34)
+                        .frame(width: islandWidth, height: islandHeight)
                         .shadow(color: islandPreviewColor, radius: 22)
                         .hueRotation(.degrees(islandPreviewMode == .rainbow
                                               ? previewRainbowHue * 360
@@ -614,23 +870,51 @@ struct AuraStudioView: View {
                         .opacity(islandPreviewMode == .pulse
                                  ? (previewPulse ? 1 : 0.55)
                                  : 1)
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82),
+                            value: previewIslandState
+                        )
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 11)
+                    }
                 }
             }
             .frame(height: 238)
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(LaraL10n.text(
-                en: "Preview. Dynamic Island: \(mode(for: .island).title). Dock: \(mode(for: .dock).title).",
-                es: "Vista previa. Dynamic Island: \(mode(for: .island).title). Dock: \(mode(for: .dock).title)."
+                en: "Preview. Dynamic Island: \(mode(for: .island).title), \(previewIslandState.title). Dock: \(mode(for: .dock).title).",
+                es: "Vista previa. Dynamic Island: \(mode(for: .island).title), \(previewIslandState.title). Dock: \(mode(for: .dock).title)."
             ))
+
+            if islandProfileAvailable {
+                Picker(
+                    LaraL10n.text(
+                        en: "Island preview state",
+                        es: "Estado de vista previa de Island"
+                    ),
+                    selection: $previewIslandState
+                ) {
+                    ForEach(AuraStudioPreviewIslandState.allCases) { state in
+                        Text(state.title).tag(state)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(LaraL10n.text(
+                    en: "Preview only · music, calls, timers and recording control the real expanded shape.",
+                    es: "Solo vista previa · música, llamadas, temporizadores y grabación controlan la forma expandida real."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            }
 
             HStack(spacing: 7) {
                 Circle()
-                    .fill(activeFlagsRaw == 0 ? Color.secondary.opacity(0.5) : Color.green)
+                    .fill(activeModuleCount == 0 ? Color.secondary.opacity(0.5) : Color.green)
                     .frame(width: 8, height: 8)
-                Text(activeFlagsRaw == 0
+                Text(activeModuleCount == 0
                      ? LaraL10n.text(
                         en: "No verified aura active in this SpringBoard session",
                         es: "No hay un aura verificada activa en esta sesión de SpringBoard"
@@ -640,6 +924,15 @@ struct AuraStudioView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if islandProfileAvailable {
+                Text(LaraL10n.text(
+                    en: "Hardware profile \(islandCompatibility.modelIdentifier) · \(previewIslandState.title) Island preview",
+                    es: "Perfil de hardware \(islandCompatibility.modelIdentifier) · vista Island \(previewIslandState.title)"
+                ))
+                .font(.caption2.monospaced())
+                .foregroundStyle(.tertiary)
+            }
+
             HStack(spacing: 7) {
                 Image(systemName: displayGeometry.isDisplayZoomed
                       ? "arrow.down.right.and.arrow.up.left"
@@ -647,8 +940,8 @@ struct AuraStudioView: View {
                     .foregroundStyle(previewLightColor)
                 Text(displayGeometry.isDisplayZoomed
                      ? LaraL10n.text(
-                        en: "Display Zoom detected · geometry corrected",
-                        es: "Zoom de pantalla detectado · geometría corregida"
+                        en: "Display Zoom detected · preview scaled for this canvas",
+                        es: "Zoom de pantalla detectado · vista previa escalada para este lienzo"
                      )
                      : LaraL10n.text(
                         en: "Standard display · native geometry",
@@ -686,19 +979,44 @@ struct AuraStudioView: View {
             Text(LaraL10n.text(en: "Light Style", es: "Estilo de luz"))
                 .font(.headline)
 
-            Picker(
-                LaraL10n.text(en: "Light Style", es: "Estilo de luz"),
-                selection: Binding(get: { selectedMode }, set: { selectedMode = $0 })
-            ) {
-                ForEach(availableModes) { mode in
-                    Text(mode.title).tag(mode)
+            if availableModes.count > 1 {
+                Picker(
+                    LaraL10n.text(en: "Light Style", es: "Estilo de luz"),
+                    selection: Binding(get: { selectedMode }, set: { selectedMode = $0 })
+                ) {
+                    ForEach(availableModes) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+            } else {
+                Label(AuraStudioMode.glow.title, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(previewLightColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 13)
+                    .frame(height: 40)
+                    .background(
+                        previewLightColor.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
             }
-            .pickerStyle(.segmented)
 
             Text(selectedMode.summary)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            Label(
+                LaraL10n.text(
+                    en: "\(releaseChannel.title) channel · \(availableModes.count) verified \(availableModes.count == 1 ? "style" : "styles") for this surface",
+                    es: "Canal \(releaseChannel.title) · \(availableModes.count) \(availableModes.count == 1 ? "estilo verificado" : "estilos verificados") para esta superficie"
+                ),
+                systemImage: releaseChannel == .stable
+                    ? "checkmark.shield.fill"
+                    : (releaseChannel == .beta ? "testtube.2" : "flask.fill")
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
 
             Label {
                 if selectedTarget == .dock {
@@ -766,6 +1084,8 @@ struct AuraStudioView: View {
                         .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
+                    .disabled(selectedMode == .rainbow)
+                    .opacity(selectedMode == .rainbow ? 0.42 : 1)
                     .accessibilityLabel(preset.name)
                     .accessibilityValue(
                         presetIsSelected(preset) && selectedMode != .rainbow
@@ -774,43 +1094,45 @@ struct AuraStudioView: View {
                     )
                 }
 
-                Button {
-                    selectedMode = .rainbow
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                AngularGradient(
-                                    colors: [
-                                        .red, .orange, .yellow, .green, .cyan,
-                                        .blue, .purple, .pink, .red,
-                                    ],
-                                    center: .center
+                if policyAllows(.rainbow, for: selectedTarget) {
+                    Button {
+                        selectedMode = .rainbow
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    AngularGradient(
+                                        colors: [
+                                            .red, .orange, .yellow, .green, .cyan,
+                                            .blue, .purple, .pink, .red,
+                                        ],
+                                        center: .center
+                                    )
                                 )
-                            )
-                            .frame(width: 34, height: 34)
-                            .overlay {
-                                Circle().strokeBorder(.white.opacity(0.72), lineWidth: 1.2)
-                                if selectedMode == .rainbow {
-                                    Image(systemName: "checkmark")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.white)
-                                        .shadow(color: .black.opacity(0.75), radius: 2)
+                                .frame(width: 34, height: 34)
+                                .overlay {
+                                    Circle().strokeBorder(.white.opacity(0.72), lineWidth: 1.2)
+                                    if selectedMode == .rainbow {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.white)
+                                            .shadow(color: .black.opacity(0.75), radius: 2)
+                                    }
                                 }
-                            }
-                            .shadow(color: previewLightColor.opacity(0.9), radius: 8)
+                                .shadow(color: previewLightColor.opacity(0.9), radius: 8)
+                        }
+                        .frame(width: 44, height: 44)
                     }
-                    .frame(width: 44, height: 44)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        LaraL10n.text(en: "Animated rainbow", es: "Arcoíris animado")
+                    )
+                    .accessibilityValue(
+                        selectedMode == .rainbow
+                            ? LaraL10n.text(en: "Selected", es: "Seleccionado")
+                            : ""
+                    )
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    LaraL10n.text(en: "Animated rainbow", es: "Arcoíris animado")
-                )
-                .accessibilityValue(
-                    selectedMode == .rainbow
-                        ? LaraL10n.text(en: "Selected", es: "Seleccionado")
-                        : ""
-                )
                 Spacer()
             }
 
@@ -960,19 +1282,25 @@ struct AuraStudioView: View {
 
     private var adaptiveNote: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "checkmark.shield.fill")
-                .foregroundStyle(previewLightColor)
+            Image(systemName: applySafetyBlocked || mgr.rcSafetyLocked
+                  ? "exclamationmark.shield.fill"
+                  : (mgr.dsready ? "checkmark.shield.fill" : "lock.shield.fill"))
+                .foregroundStyle(
+                    applySafetyBlocked || mgr.rcSafetyLocked
+                        ? Color.orange
+                        : previewLightColor
+                )
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(LaraL10n.text(
-                    en: "Verified support",
-                    es: "Compatibilidad verificada"
-                ))
+                Text(selectedCapabilityTitle)
                     .font(.subheadline.weight(.semibold))
-                Text(verifiedSupportDescription)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                Text("Aura Engine \(auraEngineBuild)")
+                Text(selectedCapabilityDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text(
+                    "Aura Engine \(auraEngineBuild) · \(releaseChannel.title) · " +
+                    (displayGeometry.isDisplayZoomed ? "Display Zoom" : "Standard")
+                )
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
             }
@@ -989,13 +1317,18 @@ struct AuraStudioView: View {
         } label: {
             Label(
                 mgr.dsready
-                    ? LaraL10n.text(
-                        en: "Apply \(selectedMode.title) to \(selectedTarget.title)",
-                        es: "Aplicar \(selectedMode.title) a \(selectedTarget.title)"
-                    )
+                    ? (draftMatchesActive(selectedTarget)
+                        ? LaraL10n.text(
+                            en: "Reapply \(selectedTarget.title) Profile",
+                            es: "Volver a aplicar perfil de \(selectedTarget.title)"
+                        )
+                        : LaraL10n.text(
+                            en: "Apply \(selectedMode.title) to \(selectedTarget.title)",
+                            es: "Aplicar \(selectedMode.title) a \(selectedTarget.title)"
+                        ))
                     : LaraL10n.text(
-                        en: "Prepare iPhone to Apply",
-                        es: "Prepara el iPhone para aplicar"
+                        en: "System Access Required",
+                        es: "Se requiere acceso al sistema"
                     ),
                 systemImage: mgr.dsready ? "sparkles" : "lock.shield.fill"
             )
@@ -1024,8 +1357,8 @@ struct AuraStudioView: View {
         } label: {
             Label(
                 LaraL10n.text(
-                    en: "Remove \(selectedTarget.title) Aura",
-                    es: "Eliminar aura de \(selectedTarget.title)"
+                    en: "Restore Original \(selectedTarget.title)",
+                    es: "Restaurar \(selectedTarget.title) original"
                 ),
                 systemImage: "arrow.counterclockwise"
             )
@@ -1039,6 +1372,7 @@ struct AuraStudioView: View {
             isApplying || !mgr.dsready || !isTargetActive(selectedTarget) ||
             applySafetyBlocked || mgr.rcSafetyLocked
         )
+        .opacity(isTargetActive(selectedTarget) ? 1 : 0.52)
         .accessibilityHint(LaraL10n.text(
             en: "Restores only \(selectedTarget.title) and keeps the other aura active.",
             es: "Restaura únicamente \(selectedTarget.title) y mantiene activa la otra aura."
@@ -1119,8 +1453,7 @@ struct AuraStudioView: View {
 
     private func mode(for target: AuraStudioTarget) -> AuraStudioMode {
         let rawValue = target == .island ? islandModeRaw : dockModeRaw
-        let stored = AuraStudioMode(rawValue: rawValue) ?? .glow
-        return target == .dock && stored == .tint ? .glow : stored
+        return normalizedMode(rawValue: rawValue, for: target)
     }
 
     private func color(for target: AuraStudioTarget) -> Color {
@@ -1297,6 +1630,16 @@ struct AuraStudioView: View {
             return
         }
 
+        // Mode/color metadata never outlives its surface flag. This matters
+        // when one profile is restored while the other remains active.
+        if savedFlags & Flag.island == 0 {
+            activeModeRaw = 0
+            activeIslandModeRaw = 0
+        }
+        if savedFlags & Flag.dock == 0 {
+            activeDockModeRaw = 0
+        }
+
         // One-time migration from the original shared style field.
         if savedFlags & Flag.island != 0, activeIslandModeRaw == 0 {
             activeIslandModeRaw = activeModeRaw
@@ -1321,16 +1664,19 @@ struct AuraStudioView: View {
         let version = ProcessInfo.processInfo.operatingSystemVersion
         let operationID = String(UUID().uuidString.prefix(8))
         let mode = operation.nativeMode
-        let requestedFlags = flags & Flag.supported
-        let requestedTarget: AuraStudioTarget?
-        switch requestedFlags {
-        case Flag.island:
-            requestedTarget = .island
-        case Flag.dock:
-            requestedTarget = .dock
-        default:
-            requestedTarget = nil
+        let requestedProfileMode: AuraStudioMode
+        switch operation {
+        case .apply(let profileMode):
+            requestedProfileMode = profileMode
+        case .remove:
+            requestedProfileMode = .glow
         }
+        let requestedFlags = flags & Flag.supported
+        let requestedTarget = AuraStudioNativeContract.target(
+            for: requestedFlags,
+            islandFlag: Flag.island,
+            dockFlag: Flag.dock
+        )
         let requestedTargetTitle = requestedTarget?.title ?? "Invalid selection"
         let display = displayGeometry
         let islandFrame = display.compactIslandFrame
@@ -1401,6 +1747,14 @@ struct AuraStudioView: View {
             finish(message: LaraL10n.text(
                 en: "Choose exactly one Aura surface. Island and Dock are applied independently.",
                 es: "Elige exactamente una superficie Aura. Island y Dock se aplican de forma independiente."
+            ))
+            return
+        }
+        guard operation.isRemoving ||
+                policyAllows(requestedProfileMode, for: operationTarget) else {
+            finish(message: LaraL10n.text(
+                en: "\(requestedProfileMode.title) is not available for \(operationTarget.title) in the \(releaseChannel.title) channel. Nothing was sent to SpringBoard.",
+                es: "\(requestedProfileMode.title) no está disponible para \(operationTarget.title) en el canal \(releaseChannel.title). No se envió nada a SpringBoard."
             ))
             return
         }
@@ -1555,17 +1909,28 @@ struct AuraStudioView: View {
             } else {
                 activeSpringBoardPID = Int(operationSpringBoardPID)
             }
+            let sequenceStage = !operation.isRemoving &&
+                newlyApplied == 0 && firstUnavailableResult != nil
+                ? "sequence.unavailable"
+                : "sequence.success"
             AuraStudioDiagnostics.log(
-                "sequence.success",
+                sequenceStage,
                 "op=\(operationID) applied=0x\(String(newlyApplied, radix: 16)) " +
                 "removed=0x\(String(removedFlags, radix: 16)) " +
                 "degraded=\(motionDegraded) deadlineWarning=\(deadlineWarning)"
             )
-            diagnosticsURL = makeDiagnosticsReport(
-                summary: operation.isRemoving
-                    ? "Scoped removal completed"
-                    : "Apply completed"
-            )
+            let diagnosticsSummary: String
+            if operation.isRemoving {
+                diagnosticsSummary = "Scoped removal completed and verified"
+            } else if newlyApplied == 0, let firstUnavailableResult {
+                diagnosticsSummary =
+                    "No mutation; selected host unavailable (result \(firstUnavailableResult))"
+            } else if verifiedFallbackResult != nil {
+                diagnosticsSummary = "Requested style unavailable; verified Glow fallback retained"
+            } else {
+                diagnosticsSummary = "Scoped apply completed and verified"
+            }
+            diagnosticsURL = makeDiagnosticsReport(summary: diagnosticsSummary)
             resetOperationUI()
             if !deadlineWarning {
                 AuraStudioApplyGate.end()
@@ -1864,7 +2229,12 @@ struct AuraStudioView: View {
                             }
                             return
                         }
-                        if result == -15 || result == -16 {
+                        if let fallbackMode =
+                            AuraStudioNativeContract.verifiedFallbackMode(
+                                result: result,
+                                target: operationTarget,
+                                requestedMode: requestedProfileMode
+                            ) {
                             // These results explicitly guarantee that the
                             // static black Glow core was restored and verified.
                             // Keep that truthful state without opening the
@@ -1873,8 +2243,8 @@ struct AuraStudioView: View {
                             retainedVerified &= ~Flag.island
                             activeFlagsRaw = Int(retainedVerified | newlyApplied)
                             activeSpringBoardPID = Int(springBoardPID)
-                            activeModeRaw = AuraStudioMode.glow.rawValue
-                            activeIslandModeRaw = AuraStudioMode.glow.rawValue
+                            activeModeRaw = fallbackMode.rawValue
+                            activeIslandModeRaw = fallbackMode.rawValue
                             activeIslandRed = Int(redValue)
                             activeIslandGreen = Int(greenValue)
                             activeIslandBlue = Int(blueValue)
@@ -1890,11 +2260,28 @@ struct AuraStudioView: View {
                             }
                             return
                         }
-                        if result == -2 || result == -17 || result == -20 {
+                        if result == -15 || result == -16 {
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "Native fallback did not match the requested \(step.englishName) profile",
+                                result: result,
+                                userDetail: LaraL10n.text(
+                                    en: "Eagle rejected a fallback intended for a different surface or style. No profile was reported as applied.",
+                                    es: "Eagle rechazó un fallback destinado a otra superficie o estilo. Ningún perfil se marcó como aplicado."
+                                )
+                            )
+                            return
+                        }
+                        if AuraStudioNativeContract.isScopedUnavailable(
+                            result: result,
+                            target: operationTarget,
+                            mode: requestedProfileMode,
+                            isRemoval: operation.isRemoving
+                        ) {
                             // The native contract defines these as read-only
                             // host/preflight misses. They are safe to report as
-                            // unavailable and must not prevent the other
-                            // independently selected module from being tried.
+                            // unavailable while preserving the other profile's
+                            // independently verified state.
                             if firstUnavailableResult == nil {
                                 firstUnavailableResult = result
                             }
@@ -1914,11 +2301,35 @@ struct AuraStudioView: View {
                             }
                             return
                         }
-                        if result == -12 && !hardDeadlineExceeded {
+                        if result == -2 || result == -17 || result == -20 {
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "Native capability result did not match \(step.englishName)",
+                                result: result,
+                                userDetail: LaraL10n.text(
+                                    en: "SpringBoard returned a capability code for another surface or style. Eagle did not update either profile.",
+                                    es: "SpringBoard devolvió un código de capacidad para otra superficie o estilo. Eagle no actualizó ningún perfil."
+                                )
+                            )
+                            return
+                        }
+                        if AuraStudioNativeContract.isScopedVerifiedRollback(
+                            result: result,
+                            target: operationTarget,
+                            isRemoval: operation.isRemoving
+                        ) && !hardDeadlineExceeded {
                             finishVerifiedRollback(
                                 result,
                                 step: step,
                                 reason: "\(step.englishName) rejected candidate and verified native rollback (result -12)"
+                            )
+                            return
+                        }
+                        if result == -12 {
+                            retainedVerified &= ~step.flag
+                            failAfterNativeCall(
+                                "Native rollback result did not match \(step.englishName) or exceeded its deadline",
+                                result: result
                             )
                             return
                         }
@@ -1932,10 +2343,14 @@ struct AuraStudioView: View {
                             return
                         }
                         let rawResult = UInt32(bitPattern: result)
-                        guard rawResult & step.flag != 0 else {
+                        guard AuraStudioNativeContract.hasExactAppliedSurface(
+                            result: result,
+                            requestedFlag: step.flag,
+                            supportedFlags: Flag.supported
+                        ) else {
                             retainedVerified &= ~step.flag
                             failAfterNativeCall(
-                                "\(step.englishName) did not verify its requested host",
+                                "\(step.englishName) returned a missing or cross-surface verification mask",
                                 result: result,
                                 userDetail: LaraL10n.text(
                                     en: "SpringBoard returned without confirming the requested \(step.englishName) surface, so Eagle cleared only that surface's verified badge.",

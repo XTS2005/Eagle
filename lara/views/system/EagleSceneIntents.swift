@@ -28,7 +28,7 @@ enum EaglePresetScene: String, AppEnum {
 struct ApplyEagleSceneIntent: AppIntent {
     static var title: LocalizedStringResource = "Apply Eagle Scene"
     static var description = IntentDescription(
-        "Opens Eagle and applies a protected wallpaper, passcode, card, and Dock Scene."
+        "Opens Eagle and runs a saved Scene sequentially, including Style, Dock, icons, and independent Aura profiles."
     )
     static var openAppWhenRun = true
 
@@ -44,7 +44,7 @@ struct ApplyEagleSceneIntent: AppIntent {
             scene.sceneID.uuidString,
             forKey: EagleSceneShortcutBridge.pendingSceneKey
         )
-        return .result(dialog: "Opening Eagle to apply \(scene.rawValue.capitalized) safely.")
+        return .result(dialog: "Opening Eagle to verify and apply \(scene.rawValue.capitalized) one component at a time.")
     }
 }
 

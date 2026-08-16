@@ -2,7 +2,7 @@
   <img src="lara/other/media.xcassets/AppIcon.appiconset/Eagle-Light.png" alt="Eagle icon" width="150">
   <h1>Eagle</h1>
   <p>Focused iOS personalization powered by DarkSword.</p>
-  <p><strong>Public Beta 5 — Aura Engine r8 and a fail-closed Prepare pipeline; physical-device testing is still required.</strong></p>
+  <p><strong>Public Beta 6 — Aura Engine r10 with the restored device-proven Dock renderer; physical-device testing is still required.</strong></p>
 </div>
 
 > [!WARNING]
@@ -33,7 +33,7 @@ Eagle is a modified version of [Lara](https://github.com/rooootdev/lara). The Ea
 - If Island Aura reports **Safe Compact Halo**, it will not expand with music, screen recording or timers. Only **Adaptive Aura** follows those layouts.
 - Aura Studio depends on private live SpringBoard surfaces. A surface can be unavailable even when another aura applies successfully.
 - Screen, Battery Halo and Lock experiments are not exposed in this beta while their live SpringBoard hosts remain unverified.
-- Dock Aura geometry is currently tuned from iPhone 16 Pro testing and may still need adjustment on other screen sizes.
+- Dock Aura geometry is tuned from iPhone 16 Pro testing, keeps the restored device-proven glow renderer, and may still need adjustment on other screen sizes.
 - Aura overlays can disappear after a SpringBoard respring or device reboot and must then be applied again.
 - Icon theme importing and nonstandard masks remain device- and SpringBoard-dependent.
 - Community wallpaper and passcode packages can contain unsupported structures.

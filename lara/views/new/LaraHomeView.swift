@@ -4,14 +4,30 @@ struct LaraHomeView: View {
     @ObservedObject private var mgr = laramgr.shared
     @ObservedObject private var sceneManager = EagleSceneManager.shared
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
+    @AppStorage(EagleInterfaceMode.storageKey) private var interfaceMode = EagleInterfaceMode.simple
+    @AppStorage(EagleReleaseChannel.storageKey)
+    private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @State private var showingAdvancedSystemTools = false
+
+    private var channel: EagleReleaseChannel {
+        EagleFeaturePolicy.channel(from: channelRaw)
+    }
+
+    private func allows(_ feature: EagleProductFeature) -> Bool {
+        EagleFeaturePolicy.allows(feature, channel: channel)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     header
+                    interfaceModeControl
+                    compatibilityLink
 
-                    if sceneManager.hasPendingShortcut {
+                    if interfaceMode == .advanced &&
+                        allows(.scenes) &&
+                        sceneManager.hasPendingShortcut {
                         VStack(alignment: .leading, spacing: 10) {
                             Label(
                                 LaraL10n.text(en: "Scene waiting", es: "Scene en espera"),
@@ -27,7 +43,9 @@ struct LaraHomeView: View {
                         homeAccessCard
                     }
 
-                    EaglePrepareCrashReportCard()
+                    if interfaceMode == .advanced {
+                        EaglePrepareCrashReportCard()
+                    }
 
                     VStack(alignment: .leading, spacing: 20) {
                         NavigationLink(destination: CompleteStylesView()) {
@@ -44,46 +62,52 @@ struct LaraHomeView: View {
                         }
                         .buttonStyle(.plain)
 
-                        NavigationLink(destination: EagleSystemView()) {
-                            HStack(spacing: 15) {
-                                ZStack {
-                                    LinearGradient(
-                                        colors: [.indigo, .purple],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                    Image(systemName: "checkmark.shield.fill")
-                                        .font(.title2.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                }
-                                .frame(width: 54, height: 54)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        if interfaceMode == .advanced {
+                            NavigationLink(destination: EagleSystemView()) {
+                                HStack(spacing: 15) {
+                                    ZStack {
+                                        LinearGradient(
+                                            colors: [.indigo, .purple],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                        Image(systemName: "checkmark.shield.fill")
+                                            .font(.title2.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                    }
+                                    .frame(width: 54, height: 54)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Eagle System")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text(LaraL10n.text(
-                                        en: "Guardian, Scenes, and safe sharing",
-                                        es: "Guardian, Scenes y uso compartido seguro"
-                                    ))
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Eagle System")
+                                            .font(.headline)
+                                            .foregroundStyle(.primary)
+                                        Text(LaraL10n.text(
+                                            en: allows(.scenes)
+                                                ? "Guardian, Scenes, and safe sharing"
+                                                : "Verified recovery for every change",
+                                            es: allows(.scenes)
+                                                ? "Guardian, Escenas y uso compartido seguro"
+                                                : "Recuperación verificada para cada cambio"
+                                        ))
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.tertiary)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.tertiary)
+                                .padding(15)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                        .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                                }
                             }
-                            .padding(15)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 21, style: .continuous)
-                                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
-                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text(LaraL10n.text(en: "Customize one part", es: "Personalizar una parte"))
@@ -100,48 +124,75 @@ struct LaraHomeView: View {
                                     )
                                 }
 
-                                Divider().padding(.leading, 62)
+                                if interfaceMode == .advanced {
+                                    Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: CardView()) {
-                                    LaraToolRow(
-                                        title: LaraL10n.text(en: "Cards", es: "Tarjetas"),
-                                        subtitle: LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet"),
-                                        systemImage: "creditcard.fill",
-                                        accent: Color(red: 0.08, green: 0.48, blue: 0.52)
-                                    )
-                                }
+                                    NavigationLink(destination: CardView()) {
+                                        LaraToolRow(
+                                            title: LaraL10n.text(en: "Cards", es: "Tarjetas"),
+                                            subtitle: LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet"),
+                                            systemImage: "creditcard.fill",
+                                            accent: Color(red: 0.08, green: 0.48, blue: 0.52)
+                                        )
+                                    }
 
-                                Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: PasscodeView(mgr: mgr)) {
-                                    LaraToolRow(
-                                        title: LaraL10n.text(en: "Passcode", es: "Código"),
-                                        subtitle: LaraL10n.text(en: "Unlock key styles", es: "Números de desbloqueo"),
-                                        systemImage: "circle.grid.3x3.fill",
-                                        accent: Color(red: 0.56, green: 0.28, blue: 0.72)
-                                    )
-                                }
+                                    NavigationLink(destination: PasscodeView(mgr: mgr)) {
+                                        LaraToolRow(
+                                            title: LaraL10n.text(en: "Passcode", es: "Código"),
+                                            subtitle: LaraL10n.text(en: "Unlock key styles", es: "Números de desbloqueo"),
+                                            systemImage: "circle.grid.3x3.fill",
+                                            accent: Color(red: 0.56, green: 0.28, blue: 0.72)
+                                        )
+                                    }
 
-                                Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: DarkBoardView()) {
-                                    LaraToolRow(
-                                        title: LaraL10n.text(en: "Icons", es: "Iconos"),
-                                        subtitle: LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android"),
-                                        systemImage: "square.grid.2x2.fill",
-                                        accent: Color(red: 0.18, green: 0.60, blue: 0.42)
-                                    )
-                                }
+                                    NavigationLink(destination: DarkBoardView()) {
+                                        LaraToolRow(
+                                            title: LaraL10n.text(en: "Icons", es: "Iconos"),
+                                            subtitle: LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android"),
+                                            systemImage: "square.grid.2x2.fill",
+                                            accent: Color(red: 0.18, green: 0.60, blue: 0.42)
+                                        )
+                                    }
 
-                                Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: DockCustomizerView()) {
-                                    LaraToolRow(
-                                        title: "Dock",
-                                        subtitle: LaraL10n.text(en: "Fit up to six apps", es: "Hasta seis apps"),
-                                        systemImage: "dock.rectangle",
-                                        accent: Color(red: 0.12, green: 0.46, blue: 0.86)
-                                    )
+                                    NavigationLink(destination: DockCustomizerView()) {
+                                        LaraToolRow(
+                                            title: "Dock",
+                                            subtitle: LaraL10n.text(en: "Fit up to six apps", es: "Hasta seis apps"),
+                                            systemImage: "dock.rectangle",
+                                            accent: Color(red: 0.12, green: 0.46, blue: 0.86)
+                                        )
+                                    }
+
+                                    if allows(.advancedSystemTools) {
+                                        Divider().padding(.leading, 62)
+
+                                        Button {
+                                            showingAdvancedSystemTools = true
+                                        } label: {
+                                            LaraToolRow(
+                                                title: LaraL10n.text(
+                                                    en: "Advanced system tools",
+                                                    es: "Herramientas avanzadas del sistema"
+                                                ),
+                                                subtitle: LaraL10n.text(
+                                                    en: "Kernelcache, RemoteCall, and expert controls",
+                                                    es: "Kernelcache, RemoteCall y controles expertos"
+                                                ),
+                                                systemImage: "wrench.and.screwdriver.fill",
+                                                accent: .orange
+                                            )
+                                        }
+                                        .accessibilityHint(LaraL10n.text(
+                                            en: "Opens Experimental system settings",
+                                            es: "Abre los ajustes experimentales del sistema"
+                                        ))
+                                    }
                                 }
 
                                 Divider().padding(.leading, 62)
@@ -195,6 +246,10 @@ struct LaraHomeView: View {
                     progress: sceneManager.progress
                 )
             }
+        }
+        .sheet(isPresented: $showingAdvancedSystemTools) {
+            SettingsView()
+                .environmentObject(mgr)
         }
     }
 
@@ -263,6 +318,94 @@ struct LaraHomeView: View {
         }
     }
 
+    private var interfaceModeControl: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
+                Image(systemName: interfaceMode == .simple
+                      ? "rectangle.grid.1x2.fill"
+                      : "slider.horizontal.3")
+                    .foregroundStyle(interfaceMode == .simple ? .blue : .orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LaraL10n.text(en: "Interface mode", es: "Modo de interfaz"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(interfaceMode.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Picker(
+                LaraL10n.text(en: "Interface mode", es: "Modo de interfaz"),
+                selection: $interfaceMode
+            ) {
+                ForEach(EagleInterfaceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel(LaraL10n.text(en: "Interface mode", es: "Modo de interfaz"))
+            .accessibilityValue(interfaceMode.title)
+            .accessibilityHint(LaraL10n.text(
+                en: "Simple shows the essential destinations. Advanced reveals the tools allowed by your feature channel.",
+                es: "Simple muestra los destinos esenciales. Avanzado revela las herramientas permitidas por tu canal de funciones."
+            ))
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+        }
+    }
+
+    private var compatibilityLink: some View {
+        NavigationLink(destination: EagleCompatibilityCenterView()) {
+            HStack(spacing: 13) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 42, height: 42)
+                    .background(Color.blue.opacity(0.11), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(LaraL10n.text(en: "Compatibility", es: "Compatibilidad"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(LaraL10n.text(
+                        en: "\(channel.title) channel · Device support and reports",
+                        es: "Canal \(channel.title) · Compatibilidad y reportes"
+                    ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(LaraL10n.text(en: "Compatibility", es: "Compatibilidad"))
+        .accessibilityValue(channel.title)
+        .accessibilityHint(LaraL10n.text(
+            en: "Shows device support, feature channels, and Prepare reports",
+            es: "Muestra compatibilidad, canales de funciones y reportes de Preparar"
+        ))
+    }
+
     private var homeAccessCard: some View {
         LaraAccessView(compact: false)
         .accessibilityElement(children: .contain)
@@ -277,8 +420,8 @@ struct LaraHomeView: View {
                 Text(LaraL10n.text(en: "You stay in control", es: "Tú mantienes el control"))
                     .font(.subheadline.weight(.semibold))
                 Text(LaraL10n.text(
-                    en: "Preparation starts only when you press Prepare iPhone. Eagle blocks duplicate attempts and keeps a diagnostic if the process is interrupted.",
-                    es: "La preparación comienza solo cuando pulsas Preparar iPhone. Eagle bloquea los intentos duplicados y conserva un diagnóstico si el proceso se interrumpe."
+                    en: "Preparation starts only when you press Prepare iPhone. If the device restarts, reopen Eagle and try again; a report can be created only when you request it.",
+                    es: "La preparación comienza solo cuando pulsas Preparar iPhone. Si el dispositivo se reinicia, vuelve a abrir Eagle e inténtalo otra vez; el reporte se crea solo cuando tú lo solicitas."
                 ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)

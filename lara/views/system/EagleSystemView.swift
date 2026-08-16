@@ -312,6 +312,60 @@ final class EagleGuardianStore: ObservableObject {
 
 // MARK: - Scenes
 
+extension EagleSceneAuraMode {
+    var localizedName: String {
+        switch self {
+        case .glow: return LaraL10n.text(en: "Glow", es: "Brillo")
+        case .pulse: return LaraL10n.text(en: "Pulse", es: "Pulso")
+        case .tint: return LaraL10n.text(en: "Tint", es: "Color")
+        case .rainbow: return LaraL10n.text(en: "Rainbow", es: "Arcoíris")
+        }
+    }
+}
+
+extension EagleSceneComponent {
+    var localizedName: String {
+        switch self {
+        case .wallpaper: return LaraL10n.text(en: "Wallpaper", es: "Fondo")
+        case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
+        case .card: return LaraL10n.text(en: "Wallet card", es: "Tarjeta de Wallet")
+        case .dockLayout: return LaraL10n.text(en: "Dock layout", es: "Diseño del Dock")
+        case .icons: return LaraL10n.text(en: "Icons", es: "Iconos")
+        case .islandAura: return "Dynamic Island Aura"
+        case .dockAura: return "Dock Aura"
+        }
+    }
+}
+
+extension EagleSceneResultState {
+    var localizedName: String {
+        switch self {
+        case .pending: return LaraL10n.text(en: "Pending", es: "Pendiente")
+        case .applied: return LaraL10n.text(en: "Applied", es: "Aplicado")
+        case .skipped: return LaraL10n.text(en: "Skipped", es: "Omitido")
+        case .failed: return LaraL10n.text(en: "Failed", es: "Falló")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "clock.fill"
+        case .applied: return "checkmark.circle.fill"
+        case .skipped: return "minus.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return .blue
+        case .applied: return .green
+        case .skipped: return .secondary
+        case .failed: return .orange
+        }
+    }
+}
+
 struct EagleScene: Codable, Identifiable, Hashable {
     let id: UUID
     var name: String
@@ -326,6 +380,8 @@ struct EagleScene: Codable, Identifiable, Hashable {
     var dockCapacity: Int?
     var iconThemeNames: [String]
     var iconShapeRaw: String?
+    var islandAura: EagleSceneAuraProfile? = nil
+    var dockAura: EagleSceneAuraProfile? = nil
     var isBuiltIn: Bool
     let createdAt: Date
 
@@ -369,6 +425,18 @@ struct EagleScene: Codable, Identifiable, Hashable {
         [wallpaper, passcode, card].filter { $0 }.count
     }
 
+    var requestedComponents: [EagleSceneComponent] {
+        var components: [EagleSceneComponent] = []
+        if wallpaper { components.append(.wallpaper) }
+        if passcode { components.append(.passcode) }
+        if card { components.append(.card) }
+        if dockCapacity != nil { components.append(.dockLayout) }
+        if !iconThemeNames.isEmpty || iconShapeRaw != nil { components.append(.icons) }
+        if islandAura != nil { components.append(.islandAura) }
+        if dockAura != nil { components.append(.dockAura) }
+        return components
+    }
+
     var summary: String {
         var parts: [String] = []
         if isFusion { parts.append("Fusion") }
@@ -400,6 +468,12 @@ struct EagleScene: Codable, Identifiable, Hashable {
         if !iconThemeNames.isEmpty || iconShapeRaw != nil {
             parts.append(LaraL10n.text(en: "Icons", es: "Iconos"))
         }
+        if let islandAura {
+            parts.append("Island \(islandAura.mode.localizedName)")
+        }
+        if let dockAura {
+            parts.append("Dock Aura \(dockAura.mode.localizedName)")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -418,6 +492,8 @@ struct EagleScene: Codable, Identifiable, Hashable {
             dockCapacity: dockCapacity,
             iconThemeNames: iconThemeNames,
             iconShapeRaw: iconShapeRaw,
+            islandAura: islandAura,
+            dockAura: dockAura,
             isBuiltIn: false,
             createdAt: Date()
         )
@@ -654,81 +730,163 @@ final class EagleLiveConfigurationController {
 
     private init() {}
 
+    func applyForScene(
+        dockCapacity: Int?,
+        iconThemeNames: [String]?,
+        iconShapeRaw: String?,
+        applyIcons: Bool
+    ) async -> [EagleSceneComponentResult] {
+        let iconManager = IconThemeManager.shared
+        let availableNames = Set(iconManager.themes.map(\.name))
+        let requestedNames = iconThemeNames ?? []
+        let validNames = requestedNames.filter { availableNames.contains($0) }
+        var results: [EagleSceneComponentResult] = []
+        let validDockCapacity = dockCapacity.flatMap { (4...6).contains($0) ? $0 : nil }
+        let requestedShape = iconShapeRaw.flatMap(EagleIconShape.init(rawValue:))
+
+        if let validDockCapacity {
+            UserDefaults.standard.set(validDockCapacity, forKey: "eagle.dock.capacity")
+        } else if dockCapacity != nil {
+            results.append(.init(
+                component: .dockLayout,
+                state: .failed,
+                detail: LaraL10n.text(
+                    en: "The saved Dock capacity is outside the supported 4–6 range.",
+                    es: "La capacidad guardada del Dock está fuera del rango compatible de 4 a 6."
+                )
+            ))
+        }
+        if iconThemeNames != nil {
+            iconManager.selectedThemeNames = validNames
+            iconManager.saveSelection()
+        }
+        if let shape = requestedShape {
+            iconManager.selectedIconShape = shape
+        } else if iconShapeRaw != nil {
+            results.append(.init(
+                component: .icons,
+                state: .failed,
+                detail: LaraL10n.text(
+                    en: "The saved icon shape is no longer recognized.",
+                    es: "La forma de iconos guardada ya no se reconoce."
+                )
+            ))
+        }
+
+        let shouldApplyDock = validDockCapacity != nil
+        let shouldApplyIcons = applyIcons && (iconShapeRaw == nil || requestedShape != nil)
+        guard shouldApplyDock || shouldApplyIcons else {
+            return results
+        }
+        guard laramgr.shared.dsready else {
+            if shouldApplyDock {
+                results.append(.init(
+                    component: .dockLayout,
+                    state: .pending,
+                    detail: LaraL10n.text(en: "Waiting for Prepare access.", es: "Esperando que prepares el acceso.")
+                ))
+            }
+            if shouldApplyIcons {
+                results.append(.init(
+                    component: .icons,
+                    state: .pending,
+                    detail: LaraL10n.text(en: "Waiting for Prepare access.", es: "Esperando que prepares el acceso.")
+                ))
+            }
+            return results
+        }
+        guard await prepareSpringBoardSession(), let process = laramgr.shared.sbProc else {
+            let detail = LaraL10n.text(
+                en: "SpringBoard was unavailable; no live value was reported as applied.",
+                es: "SpringBoard no estuvo disponible; ningún valor en vivo se marcó como aplicado."
+            )
+            if shouldApplyDock {
+                results.append(.init(component: .dockLayout, state: .failed, detail: detail))
+            }
+            if shouldApplyIcons {
+                results.append(.init(component: .icons, state: .failed, detail: detail))
+            }
+            return results
+        }
+
+        if let validDockCapacity {
+            let processBox = EagleRemoteCallBox(process)
+            let result: Int32 = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: set_dock_icon_count(processBox.value, Int32(validDockCapacity)))
+                }
+            }
+            results.append(.init(
+                component: .dockLayout,
+                state: result == 0 ? .applied : .failed,
+                detail: result == 0
+                    ? LaraL10n.text(en: "Dock verified with \(validDockCapacity) icons.", es: "Dock verificado con \(validDockCapacity) iconos.")
+                    : LaraL10n.text(en: "Dock returned result \(result) and was not verified.", es: "El Dock devolvió el resultado \(result) y no fue verificado.")
+            ))
+        }
+
+        if shouldApplyIcons {
+            if !requestedNames.isEmpty, validNames.isEmpty, iconShapeRaw == nil {
+                results.append(.init(
+                    component: .icons,
+                    state: .skipped,
+                    detail: LaraL10n.text(
+                        en: "None of the Scene's icon themes are installed.",
+                        es: "Ninguno de los temas de iconos de la Scene está instalado."
+                    )
+                ))
+                return results
+            }
+            let result: Result<EagleLiveIconResult, Error> = await withCheckedContinuation { continuation in
+                iconManager.applyLiveIcons { continuation.resume(returning: $0) }
+            }
+            switch result {
+            case .success(let value):
+                let verifiedRequestedTheme = requestedNames.isEmpty || value.themedIconCount > 0
+                let missingSuffix = requestedNames.count == validNames.count
+                    ? ""
+                    : LaraL10n.text(en: " Some referenced themes were not installed.", es: " Algunos temas referenciados no estaban instalados.")
+                results.append(.init(
+                    component: .icons,
+                    state: verifiedRequestedTheme ? .applied : .failed,
+                    detail: verifiedRequestedTheme
+                        ? LaraL10n.text(
+                            en: "\(value.shapedIconCount) Home Screen icons were verified; \(value.themedIconCount) received theme artwork.",
+                            es: "Se verificaron \(value.shapedIconCount) iconos de inicio; \(value.themedIconCount) recibieron el tema."
+                        ) + missingSuffix
+                        : LaraL10n.text(
+                            en: "The icon shape was verified, but no requested theme artwork was applied.",
+                            es: "La forma de los iconos se verificó, pero no se aplicó el tema solicitado."
+                        )
+                ))
+            case .failure(let error):
+                results.append(.init(
+                    component: .icons,
+                    state: .failed,
+                    detail: error.localizedDescription
+                ))
+            }
+        }
+        return results
+    }
+
+    /// Compatibility adapter for Complete Styles while Scenes consumes the
+    /// structured component results directly.
     func apply(
         dockCapacity: Int?,
         iconThemeNames: [String]?,
         iconShapeRaw: String?,
         applyIcons: Bool
     ) async -> String {
-        let iconManager = IconThemeManager.shared
-        let availableNames = Set(iconManager.themes.map(\.name))
-        let requestedNames = iconThemeNames ?? []
-        let validNames = requestedNames.filter { availableNames.contains($0) }
-
-        if let dockCapacity, (4...6).contains(dockCapacity) {
-            UserDefaults.standard.set(dockCapacity, forKey: "eagle.dock.capacity")
-        }
-        if iconThemeNames != nil {
-            iconManager.selectedThemeNames = validNames
-            iconManager.saveSelection()
-        }
-        if let iconShapeRaw, let shape = EagleIconShape(rawValue: iconShapeRaw) {
-            iconManager.selectedIconShape = shape
-        }
-
-        guard dockCapacity != nil || applyIcons else {
-            return LaraL10n.text(en: "No live Home Screen layer was requested.", es: "No se solicitó una capa en vivo de la pantalla de inicio.")
-        }
-        guard laramgr.shared.dsready else {
-            return LaraL10n.text(
-                en: "The saved Home Screen preferences were recovered and will take effect after Eagle access is prepared.",
-                es: "Se recuperaron las preferencias de inicio y se aplicarán cuando prepares el acceso de Eagle."
-            )
-        }
-        guard await prepareSpringBoardSession(), let process = laramgr.shared.sbProc else {
-            return LaraL10n.text(
-                en: "System files were restored, but SpringBoard was unavailable for the live Dock and icon layer.",
-                es: "Los archivos se restauraron, pero SpringBoard no estaba disponible para la capa de Dock e iconos."
-            )
-        }
-
-        var notes: [String] = []
-        if let dockCapacity, (4...6).contains(dockCapacity) {
-            let processBox = EagleRemoteCallBox(process)
-            let result: Int32 = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    continuation.resume(returning: set_dock_icon_count(processBox.value, Int32(dockCapacity)))
-                }
-            }
-            notes.append(result == 0
-                ? LaraL10n.text(en: "Dock restored to \(dockCapacity)", es: "Dock restaurado a \(dockCapacity)")
-                : LaraL10n.text(en: "Dock needs another attempt", es: "El Dock necesita otro intento"))
-        }
-
-        if applyIcons {
-            let result: Result<EagleLiveIconResult, Error> = await withCheckedContinuation { continuation in
-                iconManager.applyLiveIcons { continuation.resume(returning: $0) }
-            }
-            switch result {
-            case .success(let value):
-                notes.append(LaraL10n.text(
-                    en: "\(value.shapedIconCount) Home Screen icons refreshed",
-                    es: "\(value.shapedIconCount) iconos de inicio actualizados"
-                ))
-            case .failure:
-                notes.append(LaraL10n.text(
-                    en: "Icons need another attempt from the Home Screen",
-                    es: "Los iconos necesitan otro intento desde la pantalla de inicio"
-                ))
-            }
-        }
-        if requestedNames.count != validNames.count {
-            notes.append(LaraL10n.text(
-                en: "One referenced icon theme is not installed",
-                es: "Un tema de iconos referenciado no está instalado"
-            ))
-        }
-        return notes.joined(separator: ". ") + (notes.isEmpty ? "" : ".")
+        let results = await applyForScene(
+            dockCapacity: dockCapacity,
+            iconThemeNames: iconThemeNames,
+            iconShapeRaw: iconShapeRaw,
+            applyIcons: applyIcons
+        )
+        return results.map {
+            "\($0.component.localizedName): \($0.state.localizedName) — \($0.detail)"
+        }.joined(separator: ". ")
     }
 
     private func prepareSpringBoardSession() async -> Bool {
@@ -759,10 +917,14 @@ final class EagleSceneManager: ObservableObject {
     @Published private(set) var activeTransientScene: EagleScene?
     @Published private(set) var isApplying = false
     @Published private(set) var progress: Double = 0
+    @Published private(set) var lastRun: EagleSceneRunReport?
+    @Published private(set) var pendingScene: EagleScene?
     @Published var notice: EagleNotice?
 
     private let fm = FileManager.default
     private let fileURL: URL
+    private let lastRunURL: URL
+    private let pendingSceneURL: URL
     private let activeKey = "eagle.scenes.active"
 
     private init() {
@@ -770,9 +932,17 @@ final class EagleSceneManager: ObservableObject {
             .appendingPathComponent("Eagle", isDirectory: true)
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         fileURL = directory.appendingPathComponent("Scenes.plist")
+        lastRunURL = directory.appendingPathComponent("LastSceneRun.plist")
+        pendingSceneURL = directory.appendingPathComponent("PendingScene.plist")
         if let data = try? Data(contentsOf: fileURL),
            let decoded = try? PropertyListDecoder().decode([EagleScene].self, from: data) {
             customScenes = decoded.filter { !$0.isBuiltIn }
+        }
+        if let data = try? Data(contentsOf: lastRunURL) {
+            lastRun = try? PropertyListDecoder().decode(EagleSceneRunReport.self, from: data)
+        }
+        if let data = try? Data(contentsOf: pendingSceneURL) {
+            pendingScene = try? PropertyListDecoder().decode(EagleScene.self, from: data)
         }
         if let raw = UserDefaults.standard.string(forKey: activeKey) {
             activeSceneID = UUID(uuidString: raw)
@@ -787,8 +957,13 @@ final class EagleSceneManager: ObservableObject {
     }
 
     var hasPendingShortcut: Bool {
-        UserDefaults.standard.string(forKey: EagleSceneShortcutBridge.pendingSceneKey) != nil ||
+        guard EagleFeaturePolicy.allows(.scenes) else { return false }
+        return UserDefaults.standard.string(forKey: EagleSceneShortcutBridge.pendingSceneKey) != nil ||
             UserDefaults.standard.bool(forKey: EagleSceneShortcutBridge.pendingMomentKey)
+    }
+
+    var hasPendingPreparation: Bool {
+        pendingScene != nil
     }
 
     func save(_ scene: EagleScene) {
@@ -814,6 +989,25 @@ final class EagleSceneManager: ObservableObject {
 
     func applyPendingShortcutIfNeeded() {
         guard !isApplying else { return }
+        guard EagleFeaturePolicy.allows(.scenes) else {
+            let hadPendingShortcut = UserDefaults.standard.string(
+                forKey: EagleSceneShortcutBridge.pendingSceneKey
+            ) != nil || UserDefaults.standard.bool(
+                forKey: EagleSceneShortcutBridge.pendingMomentKey
+            )
+            guard hadPendingShortcut else { return }
+            UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingSceneKey)
+            UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingMomentKey)
+            notice = EagleNotice(LaraL10n.text(
+                en: "Scenes require the Beta or Experimental feature channel. Nothing was applied.",
+                es: "Escenas requiere el canal Beta o Experimental. No se aplicó ningún cambio."
+            ))
+            return
+        }
+        if pendingScene != nil {
+            resumePendingIfReady()
+            if isApplying || pendingScene != nil { return }
+        }
         let scene: EagleScene
         if UserDefaults.standard.bool(forKey: EagleSceneShortcutBridge.pendingMomentKey) {
             scene = EagleMomentEngine.suggestion().scene
@@ -826,45 +1020,44 @@ final class EagleSceneManager: ObservableObject {
         } else {
             return
         }
-        guard scene.selectedPartCount == 0 || laramgr.shared.sbxready else {
-            objectWillChange.send()
-            notice = EagleNotice(LaraL10n.text(
-                en: "Your Scene is waiting. Tap Continue in the secure access card, then Eagle will apply it automatically.",
-                es: "Tu Scene está esperando. Pulsa Continuar en la tarjeta de acceso seguro y Eagle la aplicará automáticamente."
-            ))
-            return
-        }
         UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingSceneKey)
         UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingMomentKey)
         apply(scene)
     }
 
+    func resumePendingIfReady() {
+        guard EagleFeaturePolicy.allows(.scenes) else { return }
+        guard let pendingScene, !isApplying else { return }
+        guard hasRequiredAccess(for: pendingScene) else { return }
+        apply(pendingScene)
+    }
+
     func apply(_ scene: EagleScene) {
+        guard EagleFeaturePolicy.allows(.scenes) else {
+            notice = EagleNotice(LaraL10n.text(
+                en: "Scenes are unavailable on the Stable channel. Choose Beta in Compatibility first.",
+                es: "Escenas no está disponible en el canal Estable. Elige Beta en Compatibilidad primero."
+            ))
+            return
+        }
         guard !isApplying, !CompleteStyleManager.shared.isWorking else { return }
         let wallpaperPack = scene.wallpaper ? scene.wallpaperPack : nil
         let passcodePack = scene.passcode ? scene.passcodePack : nil
         let cardPack = scene.card ? scene.cardPack : nil
-        guard (!scene.wallpaper || wallpaperPack != nil),
-              (!scene.passcode || passcodePack != nil),
-              (!scene.card || cardPack != nil) else {
-            notice = EagleNotice(LaraL10n.text(
-                en: "One part of this Fusion references a Style that is not available.",
-                es: "Una parte de esta Fusion usa un Estilo que no está disponible."
-            ))
-            return
-        }
-        guard scene.selectedPartCount > 0 || scene.dockCapacity != nil ||
-                !scene.iconThemeNames.isEmpty || scene.iconShapeRaw != nil else {
+        let requestedComponents = scene.requestedComponents
+        guard !requestedComponents.isEmpty else {
             notice = EagleNotice(LaraL10n.text(
                 en: "This Scene does not contain any changes.",
                 es: "Esta Scene no contiene cambios."
             ))
             return
         }
-        if scene.selectedPartCount > 0, !laramgr.shared.sbxready {
+
+        guard hasRequiredAccess(for: scene) else {
+            queuePending(scene, components: requestedComponents)
             notice = EagleNotice(LaraL10n.text(
-                en: "Prepare Eagle access before applying a Scene.",
-                es: "Prepara el acceso de Eagle antes de aplicar una Scene."
+                en: "This Scene is saved as pending. Prepare Eagle once and it will continue in order from the first component.",
+                es: "Esta Scene quedó pendiente. Prepara Eagle una vez y continuará en orden desde el primer componente."
             ))
             return
         }
@@ -888,42 +1081,195 @@ final class EagleSceneManager: ObservableObject {
         }
 
         isApplying = true
-        progress = 0.05
-
-        if scene.selectedPartCount > 0 {
-            CompleteStyleManager.shared.apply(selection: CompleteStyleSelection(
-                title: scene.localizedName,
-                wallpaperPack: wallpaperPack,
-                passcodePack: passcodePack,
-                cardPack: cardPack
-            ))
-        }
+        progress = 0
+        clearPendingScene()
+        let startedAt = Date()
+        lastRun = EagleSceneRunReport(
+            id: UUID(),
+            sceneID: scene.id,
+            sceneName: scene.localizedName,
+            startedAt: startedAt,
+            finishedAt: nil,
+            results: []
+        )
+        persistLastRun()
 
         Task {
-            if scene.selectedPartCount > 0 {
+            var results: [EagleSceneComponentResult] = []
+
+            let hasValidStylePart = wallpaperPack != nil || passcodePack != nil || cardPack != nil
+            if hasValidStylePart {
+                CompleteStyleManager.shared.apply(selection: CompleteStyleSelection(
+                    title: scene.localizedName,
+                    wallpaperPack: wallpaperPack,
+                    passcodePack: passcodePack,
+                    cardPack: cardPack
+                ))
                 while CompleteStyleManager.shared.isWorking {
-                    progress = max(progress, CompleteStyleManager.shared.progress * 0.78)
+                    let styleWeight = Double(scene.selectedPartCount) / Double(requestedComponents.count)
+                    progress = max(progress, CompleteStyleManager.shared.progress * styleWeight)
                     try? await Task.sleep(nanoseconds: 180_000_000)
                 }
             }
-            progress = 0.82
-            let liveMessage = await EagleLiveConfigurationController.shared.apply(
-                dockCapacity: scene.dockCapacity,
-                iconThemeNames: scene.iconThemeNames,
-                iconShapeRaw: scene.iconShapeRaw,
-                applyIcons: !scene.iconThemeNames.isEmpty || scene.iconShapeRaw != nil
+
+            let completedStyleComponents = hasValidStylePart
+                ? (CompleteStyleManager.shared.lastResult?.components ?? [])
+                : []
+            let styleResults = Dictionary(
+                uniqueKeysWithValues: completedStyleComponents.map {
+                    (sceneComponent(for: $0.component), EagleSceneComponentResult(
+                        component: sceneComponent(for: $0.component),
+                        state: sceneState(for: $0.state),
+                        detail: $0.detail
+                    ))
+                }
             )
-            activeSceneID = scene.id
-            activeTransientScene = allScenes.contains(where: { $0.id == scene.id }) ? nil : scene
-            UserDefaults.standard.set(scene.id.uuidString, forKey: activeKey)
+            for component in [EagleSceneComponent.wallpaper, .passcode, .card]
+                where requestedComponents.contains(component) {
+                if let value = styleResults[component] {
+                    results.append(value)
+                } else {
+                    results.append(.init(
+                        component: component,
+                        state: .failed,
+                        detail: LaraL10n.text(
+                            en: "The referenced Style pack is unavailable; this component was not applied.",
+                            es: "El paquete de Estilo referenciado no está disponible; este componente no se aplicó."
+                        )
+                    ))
+                }
+                updateProgress(results.count, total: requestedComponents.count)
+            }
+
+            if scene.dockCapacity != nil || !scene.iconThemeNames.isEmpty || scene.iconShapeRaw != nil {
+                let liveResults = await EagleLiveConfigurationController.shared.applyForScene(
+                    dockCapacity: scene.dockCapacity,
+                    iconThemeNames: scene.iconThemeNames,
+                    iconShapeRaw: scene.iconShapeRaw,
+                    applyIcons: !scene.iconThemeNames.isEmpty || scene.iconShapeRaw != nil
+                )
+                results.append(contentsOf: liveResults)
+                updateProgress(results.count, total: requestedComponents.count)
+            }
+
+            if let islandAura = scene.islandAura {
+                results.append(await EagleSceneAuraExecutor.shared.apply(islandAura, to: .island))
+                updateProgress(results.count, total: requestedComponents.count)
+            }
+            if let dockAura = scene.dockAura {
+                results.append(await EagleSceneAuraExecutor.shared.apply(dockAura, to: .dock))
+                updateProgress(results.count, total: requestedComponents.count)
+            }
+
+            let remainsPending = results.contains { $0.state == .pending }
+            lastRun = EagleSceneRunReport(
+                id: lastRun?.id ?? UUID(),
+                sceneID: scene.id,
+                sceneName: scene.localizedName,
+                startedAt: startedAt,
+                finishedAt: remainsPending ? nil : Date(),
+                results: results
+            )
+            if remainsPending {
+                persistPendingScene(scene)
+            } else {
+                clearPendingScene()
+            }
+            persistLastRun()
+
+            if lastRun?.hasAppliedChanges == true {
+                activeSceneID = scene.id
+                activeTransientScene = allScenes.contains(where: { $0.id == scene.id }) ? nil : scene
+                UserDefaults.standard.set(scene.id.uuidString, forKey: activeKey)
+            }
             progress = 1
             isApplying = false
-            notice = EagleNotice(LaraL10n.text(
-                en: "\(scene.localizedName) is active. \(liveMessage)",
-                es: "\(scene.localizedName) está activa. \(liveMessage)"
-            ))
+            notice = EagleNotice(runSummary(for: scene, results: results))
             EagleGuardianStore.shared.refresh()
         }
+    }
+
+    private func hasRequiredAccess(for scene: EagleScene) -> Bool {
+        if scene.selectedPartCount > 0, !laramgr.shared.sbxready { return false }
+        let needsProtectedLiveAccess = scene.dockCapacity != nil ||
+            !scene.iconThemeNames.isEmpty || scene.iconShapeRaw != nil ||
+            scene.islandAura != nil || scene.dockAura != nil
+        if needsProtectedLiveAccess, !laramgr.shared.dsready { return false }
+        return true
+    }
+
+    private func queuePending(_ scene: EagleScene, components: [EagleSceneComponent]) {
+        persistPendingScene(scene)
+        lastRun = EagleSceneRunReport(
+            id: UUID(),
+            sceneID: scene.id,
+            sceneName: scene.localizedName,
+            startedAt: Date(),
+            finishedAt: nil,
+            results: components.map {
+                EagleSceneComponentResult(
+                    component: $0,
+                    state: .pending,
+                    detail: LaraL10n.text(
+                        en: "Waiting for one explicit Prepare attempt.",
+                        es: "Esperando un intento explícito de Preparar."
+                    )
+                )
+            }
+        )
+        persistLastRun()
+    }
+
+    private func persistPendingScene(_ scene: EagleScene) {
+        pendingScene = scene
+        if let data = try? PropertyListEncoder().encode(scene) {
+            try? data.write(to: pendingSceneURL, options: .atomic)
+        }
+    }
+
+    private func clearPendingScene() {
+        pendingScene = nil
+        try? fm.removeItem(at: pendingSceneURL)
+    }
+
+    private func persistLastRun() {
+        guard let lastRun,
+              let data = try? PropertyListEncoder().encode(lastRun) else { return }
+        try? data.write(to: lastRunURL, options: .atomic)
+    }
+
+    private func sceneComponent(for component: CompleteStyleComponent) -> EagleSceneComponent {
+        switch component {
+        case .wallpaper: return .wallpaper
+        case .passcode: return .passcode
+        case .card: return .card
+        }
+    }
+
+    private func sceneState(for state: CompleteStyleResultState) -> EagleSceneResultState {
+        switch state {
+        case .applied: return .applied
+        case .skipped: return .skipped
+        case .failed: return .failed
+        }
+    }
+
+    private func updateProgress(_ completed: Int, total: Int) {
+        progress = Double(min(completed, total)) / Double(max(total, 1))
+    }
+
+    private func runSummary(
+        for scene: EagleScene,
+        results: [EagleSceneComponentResult]
+    ) -> String {
+        let applied = results.filter { $0.state == .applied }.count
+        let skipped = results.filter { $0.state == .skipped }.count
+        let failed = results.filter { $0.state == .failed }.count
+        let pending = results.filter { $0.state == .pending }.count
+        return LaraL10n.text(
+            en: "\(scene.localizedName): \(applied) applied, \(skipped) skipped, \(failed) failed, \(pending) pending. Review the component report below.",
+            es: "\(scene.localizedName): \(applied) aplicado(s), \(skipped) omitido(s), \(failed) fallido(s), \(pending) pendiente(s). Revisa el informe por componente."
+        )
     }
 
     private func persist() {
@@ -1040,7 +1386,8 @@ enum EagleCapsuleCodec {
               scene.dockCapacity.map({ (4...6).contains($0) }) ?? true,
               scene.iconThemeNames.count <= 8,
               scene.iconThemeNames.allSatisfy({ $0.count <= 80 && !$0.contains("/") && !$0.contains("\\") }),
-              scene.iconShapeRaw.map({ EagleIconShape(rawValue: $0) != nil }) ?? true else {
+              scene.iconShapeRaw.map({ EagleIconShape(rawValue: $0) != nil }) ?? true,
+              scene.dockAura?.mode != .tint else {
             throw EagleCapsuleError.invalidScene
         }
         return scene.importedCopy()
@@ -1079,6 +1426,15 @@ struct EagleCapsuleDocument: FileDocument {
 struct EagleSystemView: View {
     @ObservedObject private var guardian = EagleGuardianStore.shared
     @ObservedObject private var scenes = EagleSceneManager.shared
+    @AppStorage(EagleReleaseChannel.storageKey)
+    private var channelRaw = EagleReleaseChannel.stable.rawValue
+
+    private var scenesAllowed: Bool {
+        EagleFeaturePolicy.allows(
+            .scenes,
+            channel: EagleFeaturePolicy.channel(from: channelRaw)
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -1096,32 +1452,54 @@ struct EagleSystemView: View {
                     )
                 }
 
-                NavigationLink(destination: EagleScenesView()) {
-                    systemRow(
-                        title: "Scenes",
-                        subtitle: scenes.activeScene.map {
-                            LaraL10n.text(en: "\($0.localizedName) is active", es: "\($0.localizedName) está activa")
-                        } ?? LaraL10n.text(en: "Change the whole mood in one action", es: "Cambia todo el ambiente en una acción"),
-                        symbol: "rectangle.3.group.fill",
-                        color: .indigo
-                    )
-                }
+                if scenesAllowed {
+                    NavigationLink(destination: EagleScenesView()) {
+                        systemRow(
+                            title: LaraL10n.text(en: "Scenes", es: "Escenas"),
+                            subtitle: scenes.activeScene.map {
+                                LaraL10n.text(en: "\($0.localizedName) is active", es: "\($0.localizedName) está activa")
+                            } ?? LaraL10n.text(en: "Change the whole mood in one action", es: "Cambia todo el ambiente en una acción"),
+                            symbol: "rectangle.3.group.fill",
+                            color: .indigo
+                        )
+                    }
 
-                NavigationLink(destination: EagleCapsulesView()) {
-                    systemRow(
-                        title: "Capsules",
-                        subtitle: LaraL10n.text(en: "Share safe, checksum-verified Scenes", es: "Comparte Scenes seguras y verificadas"),
-                        symbol: "shippingbox.fill",
-                        color: .orange
-                    )
+                    NavigationLink(destination: EagleCapsulesView()) {
+                        systemRow(
+                            title: "Capsules",
+                            subtitle: LaraL10n.text(en: "Share safe, checksum-verified Scenes", es: "Comparte Escenas seguras y verificadas"),
+                            symbol: "shippingbox.fill",
+                            color: .orange
+                        )
+                    }
+                } else {
+                    NavigationLink(destination: EagleCompatibilityCenterView()) {
+                        systemRow(
+                            title: LaraL10n.text(en: "Scenes require Beta", es: "Escenas requiere Beta"),
+                            subtitle: LaraL10n.text(
+                                en: "Open Compatibility to choose the Beta channel",
+                                es: "Abre Compatibilidad para elegir el canal Beta"
+                            ),
+                            symbol: "lock.shield.fill",
+                            color: .secondary
+                        )
+                    }
+                    .accessibilityHint(LaraL10n.text(
+                        en: "Opens feature channel settings",
+                        es: "Abre los ajustes del canal de funciones"
+                    ))
                 }
 
                 HStack(alignment: .top, spacing: 11) {
                     Image(systemName: "lock.doc.fill")
                         .foregroundStyle(.blue)
                     Text(LaraL10n.text(
-                        en: "One engine connects all three: every Scene uses Guardian, and every Capsule can contain only a validated Scene recipe.",
-                        es: "Un solo motor conecta las tres: cada Scene usa Guardian y cada Capsule solo puede contener una receta de Scene validada."
+                        en: scenesAllowed
+                            ? "One engine connects all three: every Scene uses Guardian, and every Capsule can contain only a validated Scene recipe."
+                            : "Guardian remains available on Stable. Scenes and Capsules appear only when the Beta or Experimental channel is selected.",
+                        es: scenesAllowed
+                            ? "Un solo motor conecta las tres: cada Escena usa Guardian y cada Capsule solo puede contener una receta validada."
+                            : "Guardian permanece disponible en Estable. Escenas y Capsules aparecen solo al elegir Beta o Experimental."
                     ))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -1499,6 +1877,16 @@ struct EagleScenesView: View {
             VStack(alignment: .leading, spacing: 20) {
                 sceneHero
 
+                if manager.hasPendingPreparation {
+                    LaraAccessView(compact: true) {
+                        manager.resumePendingIfReady()
+                    }
+                }
+
+                if let report = manager.lastRun {
+                    sceneRunReport(report)
+                }
+
                 momentCard
 
                 Text(LaraL10n.text(en: "Ready-made Scenes", es: "Scenes listas"))
@@ -1561,6 +1949,7 @@ struct EagleScenesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             moment = EagleMomentEngine.suggestion()
+            manager.resumePendingIfReady()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             moment = EagleMomentEngine.suggestion()
@@ -1589,6 +1978,50 @@ struct EagleScenesView: View {
                 )
             }
         }
+    }
+
+    private func sceneRunReport(_ report: EagleSceneRunReport) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    report.isPending
+                        ? LaraL10n.text(en: "Scene pending", es: "Scene pendiente")
+                        : LaraL10n.text(en: "Last Scene result", es: "Último resultado de Scene"),
+                    systemImage: report.isPending ? "clock.badge.exclamationmark" : "checklist"
+                )
+                .font(.headline)
+                Spacer()
+                Text(report.sceneName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            ForEach(report.results) { item in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: item.state.systemImage)
+                        .foregroundStyle(item.state.color)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(item.component.localizedName)
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text(item.state.localizedName)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(item.state.color)
+                        }
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var sceneHero: some View {
@@ -1761,9 +2194,57 @@ struct EagleScenesView: View {
     }
 }
 
+private enum EagleSceneAuraColorPreset: String, CaseIterable, Identifiable {
+    case cyan
+    case violet
+    case pink
+    case amber
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .cyan: return LaraL10n.text(en: "Electric cyan", es: "Cian eléctrico")
+        case .violet: return LaraL10n.text(en: "Deep violet", es: "Violeta intenso")
+        case .pink: return LaraL10n.text(en: "Neon pink", es: "Rosa neón")
+        case .amber: return LaraL10n.text(en: "Warm amber", es: "Ámbar cálido")
+        }
+    }
+
+    var color: Color {
+        let rgb = components
+        return Color(
+            red: Double(rgb.red) / 255,
+            green: Double(rgb.green) / 255,
+            blue: Double(rgb.blue) / 255
+        )
+    }
+
+    var components: (red: Int, green: Int, blue: Int) {
+        switch self {
+        case .cyan: return (26, 199, 255)
+        case .violet: return (158, 64, 255)
+        case .pink: return (255, 54, 174)
+        case .amber: return (255, 174, 46)
+        }
+    }
+
+    func profile(mode: EagleSceneAuraMode) -> EagleSceneAuraProfile {
+        let rgb = components
+        return EagleSceneAuraProfile(
+            mode: mode,
+            red: rgb.red,
+            green: rgb.green,
+            blue: rgb.blue
+        )
+    }
+}
+
 private struct EagleSceneEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var iconManager = IconThemeManager.shared
+    @AppStorage(EagleReleaseChannel.storageKey)
+    private var channelRaw = EagleReleaseChannel.stable.rawValue
     @State private var name = ""
     @State private var symbol = "sparkles"
     @State private var packID = CompleteStylePack.all.first?.id ?? "obsidian"
@@ -1776,6 +2257,28 @@ private struct EagleSceneEditorView: View {
     @State private var card = true
     @State private var dockCapacity = 5
     @State private var includeCurrentIcons = false
+    @State private var includeIslandAura = false
+    @State private var islandAuraMode = EagleSceneAuraMode.glow
+    @State private var islandAuraColor = EagleSceneAuraColorPreset.cyan
+    @State private var includeDockAura = false
+    @State private var dockAuraMode = EagleSceneAuraMode.glow
+    @State private var dockAuraColor = EagleSceneAuraColorPreset.violet
+
+    private var channel: EagleReleaseChannel {
+        EagleFeaturePolicy.channel(from: channelRaw)
+    }
+
+    private var islandAuraModes: [EagleSceneAuraMode] {
+        EagleSceneAuraMode.allCases.filter {
+            EagleFeaturePolicy.allowsSceneAura($0, target: .island, channel: channel)
+        }
+    }
+
+    private var dockAuraModes: [EagleSceneAuraMode] {
+        EagleSceneAuraMode.allCases.filter {
+            EagleFeaturePolicy.allowsSceneAura($0, target: .dock, channel: channel)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -1868,6 +2371,47 @@ private struct EagleSceneEditorView: View {
                         es: "Eagle guarda nombres de temas, nunca archivos de iconos de terceros, dentro de una Scene."
                     ))
                 }
+
+                Section {
+                    Toggle("Dynamic Island Aura", isOn: $includeIslandAura)
+                    if includeIslandAura {
+                        Picker(LaraL10n.text(en: "Island effect", es: "Efecto de Island"), selection: $islandAuraMode) {
+                            ForEach(islandAuraModes) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
+                        }
+                        Picker(LaraL10n.text(en: "Island color", es: "Color de Island"), selection: $islandAuraColor) {
+                            ForEach(EagleSceneAuraColorPreset.allCases) { preset in
+                                Label(preset.localizedName, systemImage: "circle.fill")
+                                    .foregroundStyle(preset.color)
+                                    .tag(preset)
+                            }
+                        }
+                    }
+
+                    Toggle("Dock Aura", isOn: $includeDockAura)
+                    if includeDockAura {
+                        Picker(LaraL10n.text(en: "Dock effect", es: "Efecto del Dock"), selection: $dockAuraMode) {
+                            ForEach(dockAuraModes) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
+                        }
+                        Picker(LaraL10n.text(en: "Dock color", es: "Color del Dock"), selection: $dockAuraColor) {
+                            ForEach(EagleSceneAuraColorPreset.allCases) { preset in
+                                Label(preset.localizedName, systemImage: "circle.fill")
+                                    .foregroundStyle(preset.color)
+                                    .tag(preset)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Aura profiles")
+                } footer: {
+                    Text(LaraL10n.text(
+                        en: "Island and Dock keep separate modes and RGB colors. Eagle applies them one at a time and never restarts the iPhone automatically.",
+                        es: "Island y Dock conservan modos y colores RGB separados. Eagle los aplica uno por uno y nunca reinicia el iPhone automáticamente."
+                    ))
+                }
             }
             .onChange(of: fusion) { enabled in
                 if enabled {
@@ -1910,6 +2454,8 @@ private struct EagleSceneEditorView: View {
             dockCapacity: dockCapacity,
             iconThemeNames: includeCurrentIcons ? iconManager.selectedThemeNames : [],
             iconShapeRaw: includeCurrentIcons ? iconManager.selectedIconShape.rawValue : nil,
+            islandAura: includeIslandAura ? islandAuraColor.profile(mode: islandAuraMode) : nil,
+            dockAura: includeDockAura ? dockAuraColor.profile(mode: dockAuraMode) : nil,
             isBuiltIn: false,
             createdAt: Date()
         )
