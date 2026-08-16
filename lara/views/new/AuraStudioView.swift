@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.16-r16-dock-color-preflight"
+    private let auraEngineBuild = "2026.08.16-r17-dock-stable-transaction"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
