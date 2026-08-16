@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.16-r13-dock-direct-discovery"
+    private let auraEngineBuild = "2026.08.16-r14-dock-list-only"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
