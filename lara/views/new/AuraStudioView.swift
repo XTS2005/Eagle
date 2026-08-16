@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.16-r14-dock-list-only"
+    private let auraEngineBuild = "2026.08.16-r15-dock-transaction"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
