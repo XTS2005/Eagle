@@ -5,8 +5,8 @@
 
   **Focused iOS personalization powered by DarkSword.**
 
-  A bilingual customization toolbox for wallpapers, passcode themes, Wallet cards,
-  icons and carefully verified SpringBoard lighting.
+  Customize wallpapers, passcode keys, Wallet card artwork, icons,
+  Dynamic Island and Dock lighting from one app.
 
   [![Public beta](https://img.shields.io/github/v/release/leonardob8777-bit/Eagle?include_prereleases&sort=semver&style=for-the-badge&label=PUBLIC%20BETA&color=7C3AED)](https://github.com/leonardob8777-bit/Eagle/releases)
   [![Total IPA downloads](https://img.shields.io/github/downloads/leonardob8777-bit/Eagle/total?style=for-the-badge&logo=icloud&logoColor=white&label=IPA%20DOWNLOADS&color=0891B2)](https://github.com/leonardob8777-bit/Eagle/releases)
@@ -37,7 +37,7 @@
 | **Current release** | Eagle 0.3.0 Public Beta 7 · build 32 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
-| **Interface** | English and Spanish |
+| **Verified Aura surfaces** | Dynamic Island and Dock · isolated apply and verification |
 | **Project status** | Public beta · test one change at a time |
 
 > [!WARNING]
@@ -139,20 +139,6 @@ and include:
 - the relevant end of `Documents/lara.log`, with personal paths removed.
 
 Do not publish tokens, certificates, provisioning profiles or unrelated personal files.
-
-## Español
-
-Eagle es una beta pública de personalización avanzada para iOS, probada
-principalmente en un **iPhone 16 Pro con iOS 18.6.2**.
-
-1. Pulsa el botón grande **Download Eagle.ipa** al inicio de esta página.
-2. Firma el IPA sin firmar con tu método de instalación habitual.
-3. Abre Eagle manualmente desde la pantalla de inicio.
-4. Prueba una función a la vez.
-5. Si algo falla, conserva el mensaje exacto y comparte el diagnóstico generado.
-
-Un fallo puede provocar un respring o reinicio. Las combinaciones de dispositivo
-y versión no verificadas deben considerarse experimentales.
 
 ## Project lineage, license and acknowledgements
 
