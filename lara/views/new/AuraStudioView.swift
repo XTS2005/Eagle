@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.16-r18-dock-direct-snapshot"
+    private let auraEngineBuild = "2026.08.16-r19-dock-pointer-transaction"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
