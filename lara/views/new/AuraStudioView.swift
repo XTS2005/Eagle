@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.17-r21-dock-direct-overlay-create"
+    private let auraEngineBuild = "2026.08.17-r22-dock-alloc-init-overlay-create"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
