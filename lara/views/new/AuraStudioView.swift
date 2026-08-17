@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.17-r23-dock-main-create-direct-frame"
+    private let auraEngineBuild = "2026.08.17-r24-dock-main-color-abi"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
