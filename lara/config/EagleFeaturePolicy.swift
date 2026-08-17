@@ -147,7 +147,8 @@ enum EagleFeaturePolicy {
         case .pulse:
             return allows(.auraPulse, channel: channel)
         case .rainbow:
-            return allows(.auraRainbow, channel: channel)
+            return target == .island &&
+                allows(.auraRainbow, channel: channel)
         case .tint:
             return target == .island &&
                 operatingSystemVersion.majorVersion == 18 &&

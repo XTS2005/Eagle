@@ -392,7 +392,7 @@ struct AuraStudioView: View {
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
 
-    private let auraEngineBuild = "2026.08.17-r27-dock-no-root-fallback"
+    private let auraEngineBuild = "2026.08.17-r30-dock-prezoom-island-rainbow"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -456,7 +456,10 @@ struct AuraStudioView: View {
         case .pulse:
             return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
         case .rainbow:
-            return EagleFeaturePolicy.allows(.auraRainbow, channel: releaseChannel)
+            // Rainbow was device-proven on Dynamic Island and was only hidden
+            // later by release-channel policy. It was never a working Dock
+            // renderer, so keep the two capabilities deliberately separate.
+            return target == .island
         case .tint:
             return target == .island &&
                 ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 18 &&
