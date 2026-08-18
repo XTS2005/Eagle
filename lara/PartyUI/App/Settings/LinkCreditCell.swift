@@ -23,7 +23,8 @@ public struct LinkCreditCell<Icon: View>: View {
     
     public var body: some View {
         Button(action: {
-            if !url.isEmpty { openURL(URL(string: url)!) }
+            guard !url.isEmpty, let destination = URL(string: url) else { return }
+            openURL(destination)
         }) {
             HStack(spacing: spacing.creditCell) {
                 image
@@ -45,6 +46,9 @@ public struct LinkCreditCell<Icon: View>: View {
             }
         }
         .foregroundStyle(Color(.label))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityValue(description)
     }
 }
 

@@ -41,6 +41,8 @@ struct FontPicker: View {
     @AppStorage("eagle.fonts.selectedTarget")
     private var selectedTarget: styletarget = .standard
     @State private var searchText = ""
+    @State private var pendingFontRemoval: importedfont?
+    @State private var fontRemovalError: String?
     private let emojipath = "/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc"
 
     private var normalizedSearch: String {
@@ -133,7 +135,10 @@ struct FontPicker: View {
 	                
                 Section {
                     Picker(
-                        LaraL10n.text(en: "Target style", es: "Estilo de destino"),
+                        LaraL10n.text(
+                            en: "Target for imported fonts",
+                            es: "Destino de fuentes importadas"
+                        ),
                         selection: $selectedTarget
                     ) {
                         ForEach(styletarget.allCases, id: \.self) { target in
@@ -157,6 +162,28 @@ struct FontPicker: View {
                             } label: {
                                 Text(font.name)
                                     .font(viewfontfile(path: font.path, size: 17))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .accessibilityLabel(font.name)
+                            .accessibilityHint(LaraL10n.text(
+                                en: "Applies this font to the selected target style.",
+                                es: "Aplica esta fuente al estilo de destino seleccionado."
+                            ))
+                            .accessibilityAction(named: LaraL10n.text(
+                                en: "Remove from library",
+                                es: "Quitar de la biblioteca"
+                            )) {
+                                pendingFontRemoval = font
+                            }
+                            .swipeActions(allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    pendingFontRemoval = font
+                                } label: {
+                                    Label(
+                                        LaraL10n.text(en: "Remove", es: "Quitar"),
+                                        systemImage: "trash"
+                                    )
+                                }
                             }
                         }
                     }
@@ -165,9 +192,12 @@ struct FontPicker: View {
                         showimporter = true
                     }
                 } header: {
-                    Text(LaraL10n.text(en: "Settings", es: "Ajustes"))
+                    Text(LaraL10n.text(en: "Imported fonts", es: "Fuentes importadas"))
                 } footer: {
-                    Text("Some custom fonts will not work for app icons and other stuff, some will not work at all. If you want them to work, patch your .ttf [here](https://neonmodder123.github.io/lara-font-patcher/).")
+                    Text(LaraL10n.text(
+                        en: "Some custom fonts may not work everywhere. Removing a font from this library does not restore a font that is already applied.",
+                        es: "Algunas fuentes pueden no funcionar en todas partes. Quitar una fuente de esta biblioteca no restaura una fuente que ya esté aplicada."
+                    ))
                 }
                 
                 Section {
@@ -206,12 +236,69 @@ struct FontPicker: View {
                     } label: {
                         Image(systemName: "shippingbox")
                     }
+                    .accessibilityLabel(LaraL10n.text(
+                        en: "Manage font repositories",
+                        es: "Administrar repositorios de fuentes"
+                    ))
                 }
             }
             .sheet(isPresented: $showrepomgr) {
                 FontRepoView(repostore: repostore)
             }
+            .confirmationDialog(
+                removalConfirmationTitle,
+                isPresented: Binding(
+                    get: { pendingFontRemoval != nil },
+                    set: { if !$0 { pendingFontRemoval = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(
+                    LaraL10n.text(en: "Remove from Library", es: "Quitar de la biblioteca"),
+                    role: .destructive
+                ) {
+                    if let font = pendingFontRemoval {
+                        removeImportedFont(font)
+                    }
+                    pendingFontRemoval = nil
+                }
+                Button(LaraL10n.text(en: "Cancel", es: "Cancelar"), role: .cancel) {
+                    pendingFontRemoval = nil
+                }
+            } message: {
+                Text(LaraL10n.text(
+                    en: "This deletes Eagle's imported copy. It does not restore a font that is already applied.",
+                    es: "Esto elimina la copia importada de Eagle. No restaura una fuente que ya esté aplicada."
+                ))
+            }
+            .alert(
+                LaraL10n.text(en: "Font Library Error", es: "Error de la biblioteca de fuentes"),
+                isPresented: Binding(
+                    get: { fontRemovalError != nil },
+                    set: { if !$0 { fontRemovalError = nil } }
+                )
+            ) {
+                Button("OK") { fontRemovalError = nil }
+            } message: {
+                Text(fontRemovalError ?? "")
+            }
         }
+    }
+
+    private var removalConfirmationTitle: String {
+        guard let font = pendingFontRemoval else {
+            return LaraL10n.text(en: "Remove imported font?", es: "¿Quitar fuente importada?")
+        }
+        return LaraL10n.text(
+            en: "Remove “\(font.name)” from the library?",
+            es: "¿Quitar “\(font.name)” de la biblioteca?"
+        )
+    }
+
+    private var customFontRoot: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Custom", isDirectory: true)
+            .standardizedFileURL
     }
 
     private func filtered(_ items: [fontrepofont]) -> [fontrepofont] {
@@ -229,12 +316,11 @@ struct FontPicker: View {
     
     func importfont(_ url: URL) {
         let fm = FileManager.default
-        let dir = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Custom")
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dest = dir.appendingPathComponent(url.lastPathComponent)
+        let dir = customFontRoot
 
         do {
+            _ = try validatedCustomFontRoot(createIfNeeded: true)
+            let dest = dir.appendingPathComponent(url.lastPathComponent)
             if !fm.fileExists(atPath: dest.path) {
                 try fm.copyItem(at: url, to: dest)
             }
@@ -248,8 +334,68 @@ struct FontPicker: View {
             }
 
         } catch {
-            print("font import failed:", error)
+            fontRemovalError = error.localizedDescription
         }
+    }
+
+    private func removeImportedFont(_ font: importedfont) {
+        let manager = FileManager.default
+        let rawURL = URL(fileURLWithPath: font.path).standardizedFileURL
+        let lexicalRoot = customFontRoot
+
+        guard rawURL.deletingLastPathComponent() == lexicalRoot,
+              rawURL != lexicalRoot else {
+            fontRemovalError = LaraL10n.text(
+                en: "Eagle refused to remove a file outside the imported-font folder.",
+                es: "Eagle rechazó borrar un archivo fuera de la carpeta de fuentes importadas."
+            )
+            return
+        }
+
+        do {
+            if manager.fileExists(atPath: rawURL.path) {
+                let resolvedRoot = try validatedCustomFontRoot(createIfNeeded: false)
+                let resolvedURL = rawURL.resolvingSymlinksInPath()
+                guard resolvedURL.deletingLastPathComponent() == resolvedRoot,
+                      resolvedURL != resolvedRoot else {
+                    throw CocoaError(.fileReadUnsupportedScheme)
+                }
+                let values = try rawURL.resourceValues(forKeys: [
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                ])
+                guard values.isRegularFile == true,
+                      values.isSymbolicLink != true else {
+                    throw CocoaError(.fileReadUnsupportedScheme)
+                }
+                try manager.removeItem(at: rawURL)
+            }
+
+            customfonts.removeAll {
+                $0.path == font.path && $0.name == font.name
+            }
+            save(customfonts)
+        } catch {
+            fontRemovalError = error.localizedDescription
+        }
+    }
+
+    private func validatedCustomFontRoot(createIfNeeded: Bool) throws -> URL {
+        let manager = FileManager.default
+        let root = customFontRoot
+        if !manager.fileExists(atPath: root.path), createIfNeeded {
+            try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        }
+
+        let values = try root.resourceValues(forKeys: [
+            .isDirectoryKey,
+            .isSymbolicLinkKey,
+        ])
+        guard values.isDirectory == true,
+              values.isSymbolicLink != true else {
+            throw CocoaError(.fileReadUnsupportedScheme)
+        }
+        return root.resolvingSymlinksInPath()
     }
 
     

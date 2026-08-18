@@ -28,6 +28,22 @@ private struct PendingSingleIconImport: Identifiable {
     let data: Data
 }
 
+private enum EagleIconThemeOrder: String, CaseIterable, Identifiable {
+    case alphabetical
+    case selectedFirst
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .alphabetical:
+            return LaraL10n.text(en: "A–Z", es: "A–Z")
+        case .selectedFirst:
+            return LaraL10n.text(en: "Selected first", es: "Seleccionados primero")
+        }
+    }
+}
+
 private struct EagleIconShapePreviewMask: Shape {
     let style: EagleIconShape
 
@@ -52,12 +68,16 @@ private struct EagleIconShapePreviewMask: Shape {
 struct DarkBoardView: View {
     @ObservedObject private var manager = IconThemeManager.shared
     @ObservedObject private var mgr = laramgr.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var showImporter = false
     @State private var showRestoreConfirmation = false
     @State private var alert: DarkBoardAlert?
     @State private var pendingImportURL: URL?
     @State private var pendingSingleIconImport: PendingSingleIconImport?
+    @State private var themeSearch = ""
+    @AppStorage("eagle.icons.themeOrder")
+    private var themeOrder: EagleIconThemeOrder = .alphabetical
 
     private let previewBundleIDs = [
         "com.apple.mobilephone",
@@ -70,7 +90,52 @@ struct DarkBoardView: View {
         "com.apple.calculator",
     ]
 
-    private let grid = [GridItem(.adaptive(minimum: 160), spacing: 12)]
+    private var grid: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 160), spacing: 12)]
+    }
+
+    private var displayedThemes: [LaraIconTheme] {
+        let query = themeSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        var themes = manager.themes
+        if !query.isEmpty {
+            themes = themes.filter {
+                $0.name.range(
+                    of: query,
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    locale: .current
+                ) != nil
+            }
+        }
+
+        guard themeOrder == .selectedFirst else {
+            return themes.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        }
+
+        var selectedPositions: [String: Int] = [:]
+        for (index, name) in manager.selectedThemeNames.enumerated()
+            where selectedPositions[name] == nil {
+            selectedPositions[name] = index
+        }
+
+        return themes.sorted { lhs, rhs in
+            let lhsPosition = selectedPositions[lhs.name]
+            let rhsPosition = selectedPositions[rhs.name]
+            switch (lhsPosition, rhsPosition) {
+            case let (.some(left), .some(right)):
+                return left < right
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -78,6 +143,9 @@ struct DarkBoardView: View {
                 VStack(spacing: 16) {
                     helperCards
                     shapePicker
+                    if !manager.themes.isEmpty {
+                        themeBrowserControls
+                    }
                     themeGrid
                 }
                 .padding()
@@ -339,17 +407,120 @@ struct DarkBoardView: View {
     }
 
     private var themeGrid: some View {
-        LazyVGrid(columns: grid, spacing: 12) {
-            ForEach(manager.themes) { theme in
-                ThemeCardView(
-                    theme: theme,
-                    previews: manager.icons(forAppIDs: previewBundleIDs, from: theme),
-                    shape: manager.selectedIconShape,
-                    selectionIndex: manager.selectedThemeNames.firstIndex(of: theme.name),
-                    onToggle: { manager.toggleThemeSelection(theme) },
-                    onDelete: { removeTheme(theme) }
+        Group {
+            if displayedThemes.isEmpty && !themeSearch.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text(LaraL10n.text(en: "No matching themes", es: "No hay temas coincidentes"))
+                        .font(.headline)
+                    Button(LaraL10n.text(en: "Clear Search", es: "Limpiar búsqueda")) {
+                        themeSearch = ""
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
+            } else {
+                LazyVGrid(columns: grid, spacing: 12) {
+                    ForEach(displayedThemes) { theme in
+                        ThemeCardView(
+                            theme: theme,
+                            previews: manager.icons(forAppIDs: previewBundleIDs, from: theme),
+                            shape: manager.selectedIconShape,
+                            selectionIndex: manager.selectedThemeNames.firstIndex(of: theme.name),
+                            onToggle: { manager.toggleThemeSelection(theme) },
+                            onDelete: { removeTheme(theme) }
+                        )
+                    }
+                }
             }
+        }
+    }
+
+    private var themeBrowserControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                TextField(
+                    LaraL10n.text(en: "Search themes", es: "Buscar temas"),
+                    text: $themeSearch
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+
+                if !themeSearch.isEmpty {
+                    Button {
+                        themeSearch = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(LaraL10n.text(en: "Clear search", es: "Limpiar búsqueda"))
+                }
+            }
+            .padding(.leading, 13)
+            .padding(.trailing, themeSearch.isEmpty ? 13 : 2)
+            .background(
+                Color(uiColor: .tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    themeCountLabel
+                    Spacer()
+                    themeOrderMenu
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    themeCountLabel
+                    themeOrderMenu
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+        }
+    }
+
+    private var themeCountLabel: some View {
+        Text(LaraL10n.text(
+            en: "\(displayedThemes.count) of \(manager.themes.count) themes",
+            es: "\(displayedThemes.count) de \(manager.themes.count) temas"
+        ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private var themeOrderMenu: some View {
+        Menu {
+            Picker(
+                LaraL10n.text(en: "Theme order", es: "Orden de temas"),
+                selection: $themeOrder
+            ) {
+                ForEach(EagleIconThemeOrder.allCases) { order in
+                    Text(order.title).tag(order)
+                }
+            }
+        } label: {
+            Label(themeOrder.title, systemImage: "arrow.up.arrow.down")
+                .font(.caption.weight(.semibold))
         }
     }
 
@@ -497,7 +668,7 @@ private struct ThemeCardView: View {
             HStack {
                 Text(theme.name)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Spacer()
                 Text("\(theme.iconCount)")
                     .font(.caption)

@@ -63,18 +63,12 @@ struct LogsView: View {
                         .font(.system(.footnote, design: .monospaced))
                         .lineSpacing(1)
                         .textSelection(.enabled)
-                        .onTapGesture {
-                            copy(combined)
-                        }
                 } else {
                     ForEach(Array(filteredLogs.enumerated()), id: \.offset) { _, log in
                         Text(log)
                             .font(.system(.footnote, design: .monospaced))
                             .lineSpacing(1)
                             .textSelection(.enabled)
-                            .onTapGesture {
-                                copy(log)
-                            }
                     }
                 }
             }

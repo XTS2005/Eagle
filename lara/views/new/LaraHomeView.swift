@@ -295,43 +295,37 @@ struct LaraHomeView: View {
     }
 
     private var headerBadges: some View {
-        HStack(spacing: 8) {
-            Menu {
-                Picker("Language", selection: $language) {
-                    ForEach(LaraLanguage.allCases) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "globe")
-                    Text(language.shortName)
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 11)
-                .frame(minHeight: 34)
-                .background(
-                    Color(uiColor: .secondarySystemGroupedBackground),
-                    in: Capsule()
-                )
-                .overlay {
-                    Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                languageBadge
+                readinessBadge
             }
-            .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
-            .accessibilityValue(language.displayName)
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
-                    .frame(width: 8, height: 8)
-                Text(mgr.sbxready
-                    ? LaraL10n.text(en: "Ready", es: "Lista")
-                    : LaraL10n.text(en: "Setup", es: "Preparar"))
-                    .font(.caption.weight(.semibold))
+            VStack(alignment: .leading, spacing: 8) {
+                languageBadge
+                readinessBadge
             }
-            .padding(.horizontal, 10)
+        }
+    }
+
+    private var languageBadge: some View {
+        Menu {
+            Picker(
+                LaraL10n.text(en: "Language", es: "Idioma"),
+                selection: $language
+            ) {
+                ForEach(LaraLanguage.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                Text(language.shortName)
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 11)
             .frame(minHeight: 34)
             .background(
                 Color(uiColor: .secondarySystemGroupedBackground),
@@ -340,13 +334,36 @@ struct LaraHomeView: View {
             .overlay {
                 Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                mgr.sbxready
-                    ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
-                    : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
-            )
         }
+        .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
+        .accessibilityValue(language.displayName)
+    }
+
+    private var readinessBadge: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
+                .frame(width: 8, height: 8)
+            Text(mgr.sbxready
+                ? LaraL10n.text(en: "Ready", es: "Lista")
+                : LaraL10n.text(en: "Setup", es: "Preparar"))
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 34)
+        .background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: Capsule()
+        )
+        .overlay {
+            Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            mgr.sbxready
+                ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
+                : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
+        )
     }
 
     private var interfaceModeControl: some View {

@@ -63,9 +63,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section(header: HeaderLabel(text: "About", icon: "info.circle")) {
+                Section(header: HeaderLabel(
+                    text: LaraL10n.text(en: "About", es: "Acerca de"),
+                    icon: "info.circle"
+                )) {
                     AppInfoCell()
-                    NavigationLink("Credits", destination: CreditsView())
+                    NavigationLink(
+                        LaraL10n.text(en: "Credits", es: "Créditos"),
+                        destination: CreditsView()
+                    )
                 }
 
                 Section {

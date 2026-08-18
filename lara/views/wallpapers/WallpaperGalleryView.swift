@@ -250,6 +250,9 @@ final class WallpaperCatalogManager: ObservableObject {
 struct WallpaperGalleryView: View {
     @ObservedObject private var gallery = WallpaperCatalogManager.shared
     @ObservedObject private var mgr = laramgr.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @AppStorage(EagleWallpaperFavorites.storageKey)
     private var favoriteIDsJSON = "[]"
 
@@ -258,10 +261,18 @@ struct WallpaperGalleryView: View {
     @State private var searchText = ""
     @State private var showsFavoritesOnly = false
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible())]
+        }
+        if horizontalSizeClass == .regular || verticalSizeClass == .compact {
+            return [
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12),
+            ]
+        }
+        return [GridItem(.adaptive(minimum: 170), spacing: 12)]
+    }
 
     private var displayedItems: [NuggetWallpaper] {
         let currentMajorVersion = ProcessInfo.processInfo.operatingSystemVersion.majorVersion

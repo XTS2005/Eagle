@@ -44,6 +44,6 @@ struct CreditsView: View {
                     LinkCreditIcon(url: "https://github.com/leminlimez.png")
                 }
         }
-        .navigationTitle("Credits")
+        .navigationTitle(LaraL10n.text(en: "Credits", es: "Créditos"))
     }
 }
