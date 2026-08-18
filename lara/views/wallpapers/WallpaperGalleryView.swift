@@ -55,6 +55,26 @@ struct NuggetWallpaper: Decodable, Identifiable, Hashable {
     }
 }
 
+private enum EagleWallpaperFavorites {
+    static let storageKey = "eagle.wallpapers.favoriteIDs"
+
+    static func decode(_ value: String) -> Set<String> {
+        guard let data = value.data(using: .utf8),
+              let identifiers = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(identifiers)
+    }
+
+    static func encode(_ identifiers: Set<String>) -> String {
+        guard let data = try? JSONEncoder().encode(identifiers.sorted()),
+              let value = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return value
+    }
+}
+
 enum CommunityWallpaperError: LocalizedError {
     case invalidResponse
     case invalidPackage
@@ -230,9 +250,12 @@ final class WallpaperCatalogManager: ObservableObject {
 struct WallpaperGalleryView: View {
     @ObservedObject private var gallery = WallpaperCatalogManager.shared
     @ObservedObject private var mgr = laramgr.shared
+    @AppStorage(EagleWallpaperFavorites.storageKey)
+    private var favoriteIDsJSON = "[]"
 
     @State private var category: WallpaperCatalogKind = .community
     @State private var searchText = ""
+    @State private var showsFavoritesOnly = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -241,8 +264,12 @@ struct WallpaperGalleryView: View {
 
     private var displayedItems: [NuggetWallpaper] {
         let currentMajorVersion = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
-        let items = gallery.items(for: category).filter {
+        var items = gallery.items(for: category).filter {
             currentMajorVersion >= 26 || !$0.requiresIOS26
+        }
+        if showsFavoritesOnly {
+            let favoriteIDs = EagleWallpaperFavorites.decode(favoriteIDsJSON)
+            items = items.filter { favoriteIDs.contains($0.id) }
         }
         guard !searchText.isEmpty else { return items }
         let query = searchText.lowercased()
@@ -276,13 +303,22 @@ struct WallpaperGalleryView: View {
                     emptyView
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
+                        let favoriteIDs = EagleWallpaperFavorites.decode(favoriteIDsJSON)
                         ForEach(displayedItems) { wallpaper in
-                            NavigationLink {
-                                CommunityWallpaperDetail(wallpaper: wallpaper)
-                            } label: {
-                                CommunityWallpaperCard(wallpaper: wallpaper)
+                            ZStack(alignment: .topTrailing) {
+                                NavigationLink {
+                                    CommunityWallpaperDetail(wallpaper: wallpaper)
+                                } label: {
+                                    CommunityWallpaperCard(wallpaper: wallpaper)
+                                }
+                                .buttonStyle(.plain)
+
+                                favoriteButton(
+                                    for: wallpaper,
+                                    favorite: favoriteIDs.contains(wallpaper.id)
+                                )
+                                    .padding(6)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -297,13 +333,60 @@ struct WallpaperGalleryView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 36)
         }
-        .searchable(text: $searchText, prompt: "Buscar fondo o creador")
+        .searchable(
+            text: $searchText,
+            prompt: LaraL10n.text(en: "Search wallpaper or creator", es: "Buscar fondo o creador")
+        )
         .refreshable { await gallery.load(forceRefresh: true) }
         .task {
             if gallery.community.isEmpty || gallery.apple.isEmpty {
                 await gallery.load()
             }
         }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showsFavoritesOnly.toggle()
+                } label: {
+                    Image(systemName: showsFavoritesOnly ? "heart.fill" : "heart")
+                }
+                .accessibilityLabel(showsFavoritesOnly
+                    ? LaraL10n.text(en: "Show all wallpapers", es: "Mostrar todos los fondos")
+                    : LaraL10n.text(en: "Show favorite wallpapers", es: "Mostrar fondos favoritos"))
+                .accessibilityValue(showsFavoritesOnly
+                    ? LaraL10n.text(en: "Favorites only", es: "Solo favoritos")
+                    : LaraL10n.text(en: "All wallpapers", es: "Todos los fondos"))
+            }
+        }
+    }
+
+    private func toggleFavorite(_ wallpaper: NuggetWallpaper) {
+        var favoriteIDs = EagleWallpaperFavorites.decode(favoriteIDsJSON)
+        if !favoriteIDs.insert(wallpaper.id).inserted {
+            favoriteIDs.remove(wallpaper.id)
+        }
+        favoriteIDsJSON = EagleWallpaperFavorites.encode(favoriteIDs)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func favoriteButton(
+        for wallpaper: NuggetWallpaper,
+        favorite: Bool
+    ) -> some View {
+        return Button {
+            toggleFavorite(wallpaper)
+        } label: {
+            Image(systemName: favorite ? "heart.fill" : "heart")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(favorite ? Color.pink : Color.primary)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(favorite
+            ? LaraL10n.text(en: "Remove from favorites", es: "Quitar de favoritos")
+            : LaraL10n.text(en: "Add to favorites", es: "Agregar a favoritos"))
+        .accessibilityValue(wallpaper.name)
     }
 
     private var loadingView: some View {
@@ -348,12 +431,12 @@ struct WallpaperGalleryView: View {
 
     private var emptyView: some View {
         VStack(spacing: 10) {
-            Image(systemName: "sparkles.rectangle.stack")
+            Image(systemName: showsFavoritesOnly ? "heart.slash" : "sparkles.rectangle.stack")
                 .font(.system(size: 32, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("Sin resultados")
+            Text(emptyTitle)
                 .font(.headline)
-            Text("Prueba con otro nombre o creador.")
+            Text(emptyMessage)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -361,6 +444,34 @@ struct WallpaperGalleryView: View {
         .padding(.vertical, 44)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var emptyTitle: String {
+        if showsFavoritesOnly {
+            return searchText.isEmpty
+                ? LaraL10n.text(
+                    en: "No favorites in this collection",
+                    es: "No hay favoritos en esta colección"
+                )
+                : LaraL10n.text(
+                    en: "No matching favorites",
+                    es: "No hay favoritos coincidentes"
+                )
+        }
+        return LaraL10n.text(en: "No results", es: "Sin resultados")
+    }
+
+    private var emptyMessage: String {
+        if showsFavoritesOnly && searchText.isEmpty {
+            return LaraL10n.text(
+                en: "Tap the heart on a wallpaper to save it here.",
+                es: "Toca el corazón de un fondo para guardarlo aquí."
+            )
+        }
+        return LaraL10n.text(
+            en: "Try another name or creator.",
+            es: "Prueba con otro nombre o creador."
+        )
     }
 }
 
@@ -413,6 +524,8 @@ private struct CommunityWallpaperDetail: View {
 
     @ObservedObject private var gallery = WallpaperCatalogManager.shared
     @ObservedObject private var mgr = laramgr.shared
+    @AppStorage(EagleWallpaperFavorites.storageKey)
+    private var favoriteIDsJSON = "[]"
 
     private var isInstalling: Bool {
         gallery.installingID == wallpaper.id
@@ -420,6 +533,10 @@ private struct CommunityWallpaperDetail: View {
 
     private var isIncompatible: Bool {
         wallpaper.requiresIOS26 && ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
+    }
+
+    private var isFavorite: Bool {
+        EagleWallpaperFavorites.decode(favoriteIDsJSON).contains(wallpaper.id)
     }
 
     var body: some View {
@@ -500,6 +617,25 @@ private struct CommunityWallpaperDetail: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Vista previa")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    var favoriteIDs = EagleWallpaperFavorites.decode(favoriteIDsJSON)
+                    if !favoriteIDs.insert(wallpaper.id).inserted {
+                        favoriteIDs.remove(wallpaper.id)
+                    }
+                    favoriteIDsJSON = EagleWallpaperFavorites.encode(favoriteIDs)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } label: {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .foregroundStyle(isFavorite ? Color.pink : Color.primary)
+                }
+                .accessibilityLabel(isFavorite
+                    ? LaraL10n.text(en: "Remove from favorites", es: "Quitar de favoritos")
+                    : LaraL10n.text(en: "Add to favorites", es: "Agregar a favoritos"))
+                .accessibilityValue(wallpaper.name)
+            }
+        }
         .alert("Fondos", isPresented: Binding(
             get: { gallery.resultMessage != nil },
             set: { if !$0 { gallery.clearResult() } }

@@ -8,6 +8,7 @@ struct LaraHomeView: View {
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
     @State private var showingAdvancedSystemTools = false
+    @State private var toolSearchQuery = ""
 
     private var channel: EagleReleaseChannel {
         EagleFeaturePolicy.channel(from: channelRaw)
@@ -43,12 +44,14 @@ struct LaraHomeView: View {
 
                     interfaceModeControl
                     compatibilityLink
+                    toolSearchField
 
-                    if interfaceMode == .advanced {
-                        EaglePrepareCrashReportCard()
-                    }
+                    if normalizedToolQuery.isEmpty {
+                        if interfaceMode == .advanced {
+                            EaglePrepareCrashReportCard()
+                        }
 
-                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 20) {
                         NavigationLink(destination: CompleteStylesView()) {
                             LaraFeatureCard(
                                 title: LaraL10n.text(en: "Styles", es: "Estilos"),
@@ -218,6 +221,9 @@ struct LaraHomeView: View {
                                     .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
                             }
                         }
+                        }
+                    } else {
+                        toolSearchResults
                     }
 
                     trustNote
@@ -226,6 +232,7 @@ struct LaraHomeView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 36)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -427,6 +434,193 @@ struct LaraHomeView: View {
         ))
     }
 
+    private var normalizedToolQuery: String {
+        toolSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var availableToolRoutes: [LaraHomeToolRoute] {
+        LaraHomeToolRoute.allCases.filter { route in
+            switch route {
+            case .completeStyles:
+                return allows(.completeStyles)
+            case .wallpapers:
+                return allows(.wallpapers)
+            case .auraStudio:
+                return allows(.islandGlow) || allows(.dockGlow)
+            case .eagleSystem, .cards, .passcode, .icons, .dock:
+                return interfaceMode == .advanced
+            case .advancedSettings:
+                return interfaceMode == .advanced && allows(.advancedSystemTools)
+            }
+        }
+    }
+
+    private var filteredToolRoutes: [LaraHomeToolRoute] {
+        guard !normalizedToolQuery.isEmpty else { return [] }
+        return availableToolRoutes.filter { route in
+            let searchableText = "\(route.title) \(route.subtitle) \(route.keywords)"
+            return searchableText.range(
+                of: normalizedToolQuery,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            ) != nil
+        }
+    }
+
+    private var toolSearchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField(
+                LaraL10n.text(en: "Search tools", es: "Buscar herramientas"),
+                text: $toolSearchQuery
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .frame(minHeight: 44)
+            .accessibilityLabel(LaraL10n.text(
+                en: "Search tools",
+                es: "Buscar herramientas"
+            ))
+            .accessibilityHint(LaraL10n.text(
+                en: "Results follow the current interface mode and feature channel.",
+                es: "Los resultados respetan el modo de interfaz y el canal actuales."
+            ))
+
+            if !toolSearchQuery.isEmpty {
+                Button {
+                    toolSearchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(LaraL10n.text(
+                    en: "Clear search",
+                    es: "Limpiar búsqueda"
+                ))
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, toolSearchQuery.isEmpty ? 14 : 4)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var toolSearchResults: some View {
+        if filteredToolRoutes.isEmpty {
+            VStack(spacing: 9) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(LaraL10n.text(
+                    en: "No matching tools",
+                    es: "No hay herramientas coincidentes"
+                ))
+                    .font(.headline)
+                Text(LaraL10n.text(
+                    en: "Available results follow \(interfaceMode.title) · \(channel.title).",
+                    es: "Los resultados disponibles respetan \(interfaceMode.title) · \(channel.title)."
+                ))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 34)
+            .padding(.horizontal, 18)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .accessibilityElement(children: .combine)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(filteredToolRoutes) { route in
+                    searchResult(for: route)
+                    if route != filteredToolRoutes.last {
+                        Divider().padding(.leading, 62)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func searchResult(for route: LaraHomeToolRoute) -> some View {
+        if route == .advancedSettings {
+            Button {
+                showingAdvancedSystemTools = true
+            } label: {
+                toolSearchRow(for: route)
+            }
+            .accessibilityHint(LaraL10n.text(
+                en: "Opens advanced settings",
+                es: "Abre los ajustes avanzados"
+            ))
+        } else {
+            NavigationLink {
+                toolDestination(for: route)
+            } label: {
+                toolSearchRow(for: route)
+            }
+            .accessibilityHint(LaraL10n.text(
+                en: "Opens \(route.title)",
+                es: "Abre \(route.title)"
+            ))
+        }
+    }
+
+    private func toolSearchRow(for route: LaraHomeToolRoute) -> some View {
+        LaraToolRow(
+            title: route.title,
+            subtitle: route.subtitle,
+            systemImage: route.systemImage,
+            accent: route.accent
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(route.title)
+        .accessibilityValue(route.subtitle)
+    }
+
+    @ViewBuilder
+    private func toolDestination(for route: LaraHomeToolRoute) -> some View {
+        switch route {
+        case .completeStyles:
+            CompleteStylesView()
+        case .eagleSystem:
+            EagleSystemView()
+        case .wallpapers:
+            AnimatedWallpapersView()
+        case .cards:
+            CardView()
+        case .passcode:
+            PasscodeView(mgr: mgr)
+        case .icons:
+            DarkBoardView()
+        case .dock:
+            DockCustomizerView()
+        case .advancedSettings:
+            EmptyView()
+        case .auraStudio:
+            AuraStudioView()
+        }
+    }
+
     private var homeAccessCard: some View {
         LaraAccessView(compact: false)
         .accessibilityElement(children: .contain)
@@ -450,6 +644,100 @@ struct LaraHomeView: View {
             Spacer()
         }
         .padding(.top, 4)
+    }
+}
+
+private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
+    case completeStyles
+    case eagleSystem
+    case wallpapers
+    case cards
+    case passcode
+    case icons
+    case dock
+    case advancedSettings
+    case auraStudio
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .completeStyles: return LaraL10n.text(en: "Styles", es: "Estilos")
+        case .eagleSystem: return "Eagle System"
+        case .wallpapers: return LaraL10n.text(en: "Wallpapers", es: "Fondos")
+        case .cards: return LaraL10n.text(en: "Cards", es: "Tarjetas")
+        case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
+        case .icons: return LaraL10n.text(en: "Icons", es: "Iconos")
+        case .dock: return "Dock"
+        case .advancedSettings:
+            return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas")
+        case .auraStudio: return "Aura Studio"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .completeStyles:
+            return LaraL10n.text(en: "Complete visual styles", es: "Estilos visuales completos")
+        case .eagleSystem:
+            return LaraL10n.text(en: "Guardian and recovery", es: "Guardian y recuperación")
+        case .wallpapers:
+            return LaraL10n.text(en: "Explore or create", es: "Explora o crea")
+        case .cards:
+            return LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet")
+        case .passcode:
+            return LaraL10n.text(en: "Unlock key styles", es: "Números de desbloqueo")
+        case .icons:
+            return LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android")
+        case .dock:
+            return LaraL10n.text(en: "Fit up to six apps", es: "Hasta seis apps")
+        case .advancedSettings:
+            return LaraL10n.text(en: "Expert controls", es: "Controles expertos")
+        case .auraStudio:
+            return LaraL10n.text(en: "System neon controls", es: "Controles de neón del sistema")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .completeStyles: return "sparkles"
+        case .eagleSystem: return "checkmark.shield.fill"
+        case .wallpapers: return "photo.on.rectangle.angled"
+        case .cards: return "creditcard.fill"
+        case .passcode: return "circle.grid.3x3.fill"
+        case .icons: return "square.grid.2x2.fill"
+        case .dock: return "dock.rectangle"
+        case .advancedSettings: return "wrench.and.screwdriver.fill"
+        case .auraStudio: return "sparkles"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .completeStyles: return Color(red: 0.33, green: 0.25, blue: 0.82)
+        case .eagleSystem: return .indigo
+        case .wallpapers: return Color(red: 0.34, green: 0.31, blue: 0.88)
+        case .cards: return Color(red: 0.08, green: 0.48, blue: 0.52)
+        case .passcode: return Color(red: 0.56, green: 0.28, blue: 0.72)
+        case .icons: return Color(red: 0.18, green: 0.60, blue: 0.42)
+        case .dock: return Color(red: 0.12, green: 0.46, blue: 0.86)
+        case .advancedSettings: return .orange
+        case .auraStudio: return Color(red: 0.10, green: 0.78, blue: 1.00)
+        }
+    }
+
+    var keywords: String {
+        switch self {
+        case .completeStyles: return "style styles estilo estilos complete completo visual"
+        case .eagleSystem: return "system sistema guardian recovery recuperación"
+        case .wallpapers: return "wallpaper wallpapers fondo fondos creator creador gallery galería"
+        case .cards: return "card cards tarjeta tarjetas wallet"
+        case .passcode: return "passcode code código unlock desbloqueo key keys números"
+        case .icons: return "icon icons icono iconos theme themes tema temas android shape formas"
+        case .dock: return "dock apps icons iconos capacity capacidad"
+        case .advancedSettings: return "advanced avanzado settings ajustes expert experto kernelcache"
+        case .auraStudio: return "aura neon neón island isla dock glow"
+        }
     }
 }
 
@@ -669,6 +957,7 @@ private struct LaraToolRow: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Image(systemName: "chevron.right")

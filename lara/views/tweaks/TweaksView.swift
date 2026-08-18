@@ -92,10 +92,16 @@ struct TweaksView: View {
                             .disabled(!mgr.vfsready)
                     }
                     if LaraCustomProfile.includes(.otaUpdates) {
-                        NavigationLink("OTA Updates", destination: OTAView(mgr: mgr))
+                        NavigationLink(
+                            LaraL10n.text(en: "OTA Updates", es: "Actualizaciones OTA"),
+                            destination: OTAView(mgr: mgr)
+                        )
                     }
                     if LaraCustomProfile.includes(.screenTime) {
-                        NavigationLink("Screen Time", destination: ScreenTimeView(mgr: mgr))
+                        NavigationLink(
+                            LaraL10n.text(en: "Screen Time", es: "Tiempo en Pantalla"),
+                            destination: ScreenTimeView(mgr: mgr)
+                        )
                     }
                 }
                 
