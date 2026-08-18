@@ -3,6 +3,7 @@ import SwiftUI
 struct EagleCompatibilityCenterView: View {
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @State private var showingLogs = false
 
     private var channel: EagleReleaseChannel {
         EagleFeaturePolicy.channel(from: channelRaw)
@@ -104,6 +105,15 @@ struct EagleCompatibilityCenterView: View {
             }
 
             Section {
+                Button {
+                    showingLogs = true
+                } label: {
+                    Label(
+                        LaraL10n.text(en: "Open live logs", es: "Abrir logs en vivo"),
+                        systemImage: "terminal"
+                    )
+                }
+
                 EagleSupportSnapshotCard()
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -122,6 +132,9 @@ struct EagleCompatibilityCenterView: View {
         }
         .navigationTitle(LaraL10n.text(en: "Compatibility", es: "Compatibilidad"))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingLogs) {
+            LogsView(logger: globallogger)
+        }
     }
 
     @ViewBuilder

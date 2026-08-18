@@ -44,10 +44,12 @@ struct AnimatedWallpapersView: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var movieURL: URL?
     @State private var player: AVPlayer?
-    @State private var autoReverses = false
+    @AppStorage("eagle.wallpapers.autoReverses")
+    private var autoReverses = false
     @State private var loadingSelection = false
     @State private var message: String?
-    @State private var mode: WallpaperMode = .explore
+    @AppStorage("eagle.wallpapers.mode")
+    private var mode: WallpaperMode = .explore
 
     var body: some View {
         VStack(spacing: 0) {

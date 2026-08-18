@@ -7,11 +7,35 @@
 
 import SwiftUI
 
+private enum EaglePasscodeFavorites {
+    static let storageKey = "eagle.passcode.favoriteThemeIDs"
+
+    static func decode(_ value: String) -> Set<String> {
+        guard let data = value.data(using: .utf8),
+              let identifiers = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(identifiers)
+    }
+
+    static func encode(_ identifiers: Set<String>) -> String {
+        guard let data = try? JSONEncoder().encode(identifiers.sorted()),
+              let value = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return value
+    }
+}
+
 struct PasscodeExploreView: View {
     @ObservedObject var mgr: laramgr
     @ObservedObject private var gallery = PasscodeGalleryManager.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @AppStorage(EaglePasscodeFavorites.storageKey)
+    private var favoriteThemeIDsJSON = "[]"
 
     @State private var searchTerm = ""
+    @State private var showsFavoritesOnly = false
     @State private var alertMessage: String?
     var onImport: ((URL) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
@@ -28,13 +52,26 @@ struct PasscodeExploreView: View {
     }
 
     private var displayed: [PasscodeGalleryTheme] {
-        guard !searchTerm.isEmpty else { return gallery.themes }
-        let q = searchTerm.lowercased()
-        return gallery.themes.filter {
-            $0.name.lowercased().contains(q) ||
-            $0.description.lowercased().contains(q) ||
-            $0.authorLine.lowercased().contains(q)
+        var themes = gallery.themes
+        if showsFavoritesOnly {
+            let favorites = EaglePasscodeFavorites.decode(favoriteThemeIDsJSON)
+            themes = themes.filter { favorites.contains($0.id) }
         }
+        guard !searchTerm.isEmpty else { return themes }
+        return themes.filter {
+            "\($0.name) \($0.description) \($0.authorLine)".range(
+                of: searchTerm,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            ) != nil
+        }
+    }
+
+    private var gridColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible())]
+        }
+        return [GridItem(.adaptive(minimum: 155), spacing: 12)]
     }
 
     var body: some View {
@@ -49,27 +86,33 @@ struct PasscodeExploreView: View {
                         Image(systemName: "circle.grid.3x3")
                             .font(.system(size: 32, weight: .medium))
                             .foregroundStyle(.secondary)
-                        Text("No encontramos estilos")
+                        Text(emptyTitle)
                             .font(.headline)
-                        Text("Prueba con otro nombre o creador.")
+                        Text(emptyMessage)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 50)
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 12)], spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                        let favoriteIDs = EaglePasscodeFavorites.decode(favoriteThemeIDsJSON)
                         ForEach(displayed) { theme in
                             PasscodeGalleryCard(
                                 theme: theme,
                                 previewURL: gallery.previewURL(for: theme),
-                                isDownloading: gallery.isDownloading(theme)
+                                isDownloading: gallery.isDownloading(theme),
+                                isFavorite: favoriteIDs.contains(theme.id),
+                                onToggleFavorite: { toggleFavorite(theme) }
                             ) { Task { await handleDownload(theme) } }
                         }
                     }
                 }
 
                 Link(
-                    "Colección oficial de Nugget Wallpapers",
+                    LaraL10n.text(
+                        en: "Official Nugget collection",
+                        es: "Colección oficial de Nugget"
+                    ),
                     destination: URL(string: "https://github.com/SerStars/Nugget-Wallpapers")!
                 )
                 .font(.footnote.weight(.medium))
@@ -77,18 +120,74 @@ struct PasscodeExploreView: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Explorar estilos")
+        .navigationTitle(LaraL10n.text(en: "Explore styles", es: "Explorar estilos"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchTerm, prompt: "Buscar estilo o creador")
+        .searchable(
+            text: $searchTerm,
+            prompt: LaraL10n.text(en: "Search style or creator", es: "Buscar estilo o creador")
+        )
         .refreshable { await gallery.loadThemes(forceRefresh: true) }
         .task { if gallery.themes.isEmpty { await gallery.loadThemes() } }
-        .alert("Estilos del código", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) { Button("Aceptar", role: .cancel) {} } message: { Text(alertMessage ?? "") }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showsFavoritesOnly.toggle()
+                } label: {
+                    Image(systemName: showsFavoritesOnly ? "heart.fill" : "heart")
+                }
+                .accessibilityLabel(showsFavoritesOnly
+                    ? LaraL10n.text(en: "Show all styles", es: "Mostrar todos los estilos")
+                    : LaraL10n.text(en: "Show favorite styles", es: "Mostrar estilos favoritos"))
+                .accessibilityValue(showsFavoritesOnly
+                    ? LaraL10n.text(en: "Favorites only", es: "Solo favoritos")
+                    : LaraL10n.text(en: "All styles", es: "Todos los estilos"))
+            }
+        }
+        .alert(
+            LaraL10n.text(en: "Passcode styles", es: "Estilos del código"),
+            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+        ) {
+            Button(LaraL10n.text(en: "OK", es: "Aceptar"), role: .cancel) {}
+        } message: {
+            Text(alertMessage ?? "")
+        }
+    }
+
+    private var emptyTitle: String {
+        if showsFavoritesOnly {
+            return searchTerm.isEmpty
+                ? LaraL10n.text(en: "No favorite styles yet", es: "Todavía no hay estilos favoritos")
+                : LaraL10n.text(en: "No matching favorites", es: "No hay favoritos coincidentes")
+        }
+        return LaraL10n.text(en: "No styles found", es: "No encontramos estilos")
+    }
+
+    private var emptyMessage: String {
+        if showsFavoritesOnly && searchTerm.isEmpty {
+            return LaraL10n.text(
+                en: "Tap the heart on a style to save it here.",
+                es: "Toca el corazón de un estilo para guardarlo aquí."
+            )
+        }
+        return LaraL10n.text(
+            en: "Try another name or creator.",
+            es: "Prueba con otro nombre o creador."
+        )
+    }
+
+    private func toggleFavorite(_ theme: PasscodeGalleryTheme) {
+        var favorites = EaglePasscodeFavorites.decode(favoriteThemeIDsJSON)
+        if !favorites.insert(theme.id).inserted {
+            favorites.remove(theme.id)
+        }
+        favoriteThemeIDsJSON = EaglePasscodeFavorites.encode(favorites)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private var loadingView: some View {
         VStack(spacing: 12) {
             ProgressView().controlSize(.large)
-            Text("Cargando estilos…")
+            Text(LaraL10n.text(en: "Loading styles…", es: "Cargando estilos…"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -98,12 +197,17 @@ struct PasscodeExploreView: View {
 
     private func errorView(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("No se pudieron cargar los estilos")
+            Text(LaraL10n.text(
+                en: "Styles could not be loaded",
+                es: "No se pudieron cargar los estilos"
+            ))
                 .font(.headline)
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Button("Intentar de nuevo") { Task { await gallery.loadThemes(forceRefresh: true) } }
+            Button(LaraL10n.text(en: "Try Again", es: "Intentar de nuevo")) {
+                Task { await gallery.loadThemes(forceRefresh: true) }
+            }
             .buttonStyle(.borderedProminent)
         }
         .padding()
@@ -117,6 +221,8 @@ private struct PasscodeGalleryCard: View {
     let theme: PasscodeGalleryTheme
     let previewURL: URL?
     let isDownloading: Bool
+    let isFavorite: Bool
+    let onToggleFavorite: () -> Void
     let onDownload: () -> Void
 
     var body: some View {
@@ -140,6 +246,17 @@ private struct PasscodeGalleryCard: View {
                             .lineLimit(1)
                     }
                     Spacer()
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: isFavorite ? "heart.fill" : "heart")
+                            .foregroundStyle(isFavorite ? Color.pink : Color.secondary)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isFavorite
+                        ? LaraL10n.text(en: "Remove from favorites", es: "Quitar de favoritos")
+                        : LaraL10n.text(en: "Add to favorites", es: "Agregar a favoritos"))
+                    .accessibilityValue(theme.name)
                 }
 
                 if !theme.description.isEmpty {
@@ -151,7 +268,7 @@ private struct PasscodeGalleryCard: View {
                 Button(action: onDownload) {
                     HStack {
                         if isDownloading { ProgressView().controlSize(.small).tint(.white) } else { Image(systemName: "arrow.down.circle") }
-                        Text("Usar estilo")
+                        Text(LaraL10n.text(en: "Use style", es: "Usar estilo"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)

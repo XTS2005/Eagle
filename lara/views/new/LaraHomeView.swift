@@ -9,6 +9,7 @@ struct LaraHomeView: View {
     private var channelRaw = EagleReleaseChannel.stable.rawValue
     @State private var showingAdvancedSystemTools = false
     @State private var toolSearchQuery = ""
+    @FocusState private var isToolSearchFocused: Bool
 
     private var channel: EagleReleaseChannel {
         EagleFeaturePolicy.channel(from: channelRaw)
@@ -117,6 +118,7 @@ struct LaraHomeView: View {
                             Text(LaraL10n.text(en: "Customize one part", es: "Personalizar una parte"))
                                 .font(.headline)
                                 .padding(.horizontal, 2)
+                                .accessibilityAddTraits(.isHeader)
 
                             VStack(spacing: 0) {
                                 NavigationLink(destination: AnimatedWallpapersView()) {
@@ -289,6 +291,7 @@ struct LaraHomeView: View {
         Text("Eagle")
             .font(.system(size: 38, weight: .bold, design: .rounded))
             .minimumScaleFactor(0.82)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private var headerBadges: some View {
@@ -477,6 +480,11 @@ struct LaraHomeView: View {
                 LaraL10n.text(en: "Search tools", es: "Buscar herramientas"),
                 text: $toolSearchQuery
             )
+            .focused($isToolSearchFocused)
+            .submitLabel(.search)
+            .onSubmit {
+                isToolSearchFocused = false
+            }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .frame(minHeight: 44)
@@ -527,6 +535,7 @@ struct LaraHomeView: View {
                     es: "No hay herramientas coincidentes"
                 ))
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Text(LaraL10n.text(
                     en: "Available results follow \(interfaceMode.title) · \(channel.title).",
                     es: "Los resultados disponibles respetan \(interfaceMode.title) · \(channel.title)."
@@ -592,9 +601,6 @@ struct LaraHomeView: View {
             systemImage: route.systemImage,
             accent: route.accent
         )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(route.title)
-        .accessibilityValue(route.subtitle)
     }
 
     @ViewBuilder
@@ -967,5 +973,8 @@ private struct LaraToolRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
     }
 }

@@ -38,8 +38,26 @@ struct FontPicker: View {
     @State private var customfonts: [importedfont] = load()
     @StateObject private var repostore = fontrepostore()
     @State private var showrepomgr = false
-    @State private var selectedTarget: styletarget = .standard
+    @AppStorage("eagle.fonts.selectedTarget")
+    private var selectedTarget: styletarget = .standard
+    @State private var searchText = ""
     private let emojipath = "/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc"
+
+    private var normalizedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var filteredCustomFonts: [importedfont] {
+        guard !normalizedSearch.isEmpty else { return customfonts }
+        return customfonts.filter { matchesSearch($0.name) }
+    }
+
+    private var hasCatalogMatch: Bool {
+        repostore.repos.contains { repo in
+            guard let data = repo.data else { return false }
+            return !filtered(data.fonts).isEmpty || !filtered(data.emojis).isEmpty
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -52,16 +70,23 @@ struct FontPicker: View {
                 }
 
                 ForEach(repostore.repos) { repo in
-                    Section {
-                        if let repodata = repo.data {
-                            ForEach(repodata.fonts) { font in
-                                repofontrow(mgr: mgr, repo: repodata, font: font, repostore: repostore)
+                    if let repodata = repo.data {
+                        let fonts = filtered(repodata.fonts)
+                        if !fonts.isEmpty {
+                            Section {
+                                ForEach(fonts) { font in
+                                    repofontrow(mgr: mgr, repo: repodata, font: font, repostore: repostore)
+                                }
+                            } header: {
+                                Text(repodata.name)
                             }
-                        } else {
+                        }
+                    } else {
+                        Section {
                             HStack {
-                                Text("Loading...")
+                                Text(LaraL10n.text(en: "Loading…", es: "Cargando…"))
                                 Spacer()
-                                
+
                                 if repo.isloading {
                                     ProgressView()
                                 } else if let error = repo.error {
@@ -70,26 +95,47 @@ struct FontPicker: View {
                                         .foregroundColor(.orange)
                                 }
                             }
+                        } header: {
+                            Text(repo.url)
                         }
-                    } header: {
-                        Text(repo.data?.name ?? repo.url)
                     }
                 }
 
                 ForEach(repostore.repos) { repo in
-                    if let repodata = repo.data, !repodata.emojis.isEmpty {
-                        Section {
-                            ForEach(repodata.emojis) { emoji in
-                                repoemojirow(mgr: mgr, repo: repodata, emoji: emoji, repostore: repostore, emojipath: emojipath)
+                    if let repodata = repo.data {
+                        let emojis = filtered(repodata.emojis)
+                        if !emojis.isEmpty {
+                            Section {
+                                ForEach(emojis) { emoji in
+                                    repoemojirow(mgr: mgr, repo: repodata, emoji: emoji, repostore: repostore, emojipath: emojipath)
+                                }
+                            } header: {
+                                Text("Emojis — \(repodata.name)")
                             }
-                        } header: {
-                            Text("Emojis — \(repodata.name)")
                         }
+                    }
+                }
+
+                if !normalizedSearch.isEmpty &&
+                    !hasCatalogMatch &&
+                    filteredCustomFonts.isEmpty {
+                    Section {
+                        Label(
+                            LaraL10n.text(
+                                en: "No matching fonts or emoji",
+                                es: "No hay fuentes ni emojis coincidentes"
+                            ),
+                            systemImage: "magnifyingglass"
+                        )
+                        .foregroundStyle(.secondary)
                     }
                 }
 	                
                 Section {
-                    Picker("Target Style", selection: $selectedTarget) {
+                    Picker(
+                        LaraL10n.text(en: "Target style", es: "Estilo de destino"),
+                        selection: $selectedTarget
+                    ) {
                         ForEach(styletarget.allCases, id: \.self) { target in
                             Text(target.rawValue).tag(target)
                         }
@@ -97,8 +143,8 @@ struct FontPicker: View {
                     .pickerStyle(.segmented)
                     .padding(.vertical, 5)
 
-                    if !customfonts.isEmpty {
-                        ForEach(customfonts) { font in
+                    if !filteredCustomFonts.isEmpty {
+                        ForEach(filteredCustomFonts) { font in
                             Button {
                                 if !FileManager.default.fileExists(atPath: font.path) {
                                     mgr.logmsg("custom font missing: \(font.name)")
@@ -115,11 +161,11 @@ struct FontPicker: View {
                         }
                     }
                     
-                    Button("Import Font") {
+                    Button(LaraL10n.text(en: "Import Font", es: "Importar fuente")) {
                         showimporter = true
                     }
                 } header: {
-                    Text("Settings")
+                    Text(LaraL10n.text(en: "Settings", es: "Ajustes"))
                 } footer: {
                     Text("Some custom fonts will not work for app icons and other stuff, some will not work at all. If you want them to work, patch your .ttf [here](https://neonmodder123.github.io/lara-font-patcher/).")
                 }
@@ -134,6 +180,13 @@ struct FontPicker: View {
                 }
             }
             .navigationTitle("Font Overwrite")
+            .searchable(
+                text: $searchText,
+                prompt: LaraL10n.text(
+                    en: "Search fonts or emoji",
+                    es: "Buscar fuentes o emojis"
+                )
+            )
             .task {
                 await repostore.refreshrepos()
             }
@@ -159,6 +212,19 @@ struct FontPicker: View {
                 FontRepoView(repostore: repostore)
             }
         }
+    }
+
+    private func filtered(_ items: [fontrepofont]) -> [fontrepofont] {
+        guard !normalizedSearch.isEmpty else { return items }
+        return items.filter { matchesSearch($0.name) }
+    }
+
+    private func matchesSearch(_ value: String) -> Bool {
+        value.range(
+            of: normalizedSearch,
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: .current
+        ) != nil
     }
     
     func importfont(_ url: URL) {

@@ -253,7 +253,8 @@ struct WallpaperGalleryView: View {
     @AppStorage(EagleWallpaperFavorites.storageKey)
     private var favoriteIDsJSON = "[]"
 
-    @State private var category: WallpaperCatalogKind = .community
+    @AppStorage("eagle.wallpapers.category")
+    private var category: WallpaperCatalogKind = .community
     @State private var searchText = ""
     @State private var showsFavoritesOnly = false
 

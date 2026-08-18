@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct TweaksView: View {
-    @AppStorage("logsdisplaymode") private var selectedlogsdisplaymode: logsdisplaymode = .toolbar
     @ObservedObject var mgr: laramgr
     
     var body: some View {
@@ -112,13 +111,15 @@ struct TweaksView: View {
             .disabled(!mgr.dsready)
             .navigationTitle("Tweaks")
             .toolbar {
-                if selectedlogsdisplaymode == .toolbar {
-                    Button(action: {
-                        mgr.showLogs.toggle()
-                    }) {
-                        Image(systemName: "terminal")
-                    }
+                Button(action: {
+                    mgr.showLogs = true
+                }) {
+                    Image(systemName: "terminal")
                 }
+                .accessibilityLabel(LaraL10n.text(en: "Open logs", es: "Abrir logs"))
+            }
+            .sheet(isPresented: $mgr.showLogs) {
+                LogsView(logger: globallogger)
             }
         }
     }

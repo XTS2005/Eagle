@@ -44,7 +44,6 @@ struct SettingsView: View {
     @State private var showkcachetips: Bool = false
     @State private var stashingKRWNow: Bool = false
     
-    @AppStorage("logsdisplaymode") private var selectedlogdisplaymode: logsdisplaymode = .toolbar
     @AppStorage(EaglePreferenceKeys.disableLogDividers) private var loggerNoBS: Bool = true
     
     @AppStorage("showFMInTabs") private var showFMInTabs: Bool = true
@@ -238,12 +237,6 @@ struct SettingsView: View {
                         .onChange(of: loggerNoBS) { disabled in
                             EaglePreferenceMigration.persistDisableLogDividers(disabled)
                         }
-                    Picker("Logs Display", selection: $selectedlogdisplaymode) {
-                        ForEach(logsdisplaymode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
                 }
                 
                 if advancedToolsAllowed {
