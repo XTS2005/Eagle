@@ -15,13 +15,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.7/Eagle.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_7-06B6D4?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 7 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.8/Eagle.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_8-06B6D4?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 8 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.7)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.8)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -34,7 +34,7 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 0.3.0 Public Beta 7 · build 32 |
+| **Current release** | Eagle 0.3.0 Public Beta 8 · build 35 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
 | **Verified Aura surfaces** | Dynamic Island and Dock · isolated apply and verification |
@@ -57,6 +57,14 @@
 | 📱 **Dock · Beta** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
 | ✨ **Aura Studio · Experimental** | Applies independently colored Dynamic Island and Dock lighting with Glow, Pulse, Island Rainbow, guarded Tint and per-surface verification. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
+
+### New in Beta 8
+
+- Faster navigation with local tool search and clearer Home organization.
+- Favorites for wallpapers and passcode themes, plus remembered wallpaper choices.
+- Search and responsive layouts for Font Library and Icon Studio, including safe removal of Eagle's local imported-font copies.
+- Truthful OTA and Screen Time configuration readback, a live log viewer and a shareable support snapshot.
+- Better layouts for Display Zoom, Dynamic Type and VoiceOver without changing the restored Dock or Dynamic Island Aura engine.
 
 ### Aura Studio safety model
 
