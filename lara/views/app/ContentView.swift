@@ -11,9 +11,9 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @EnvironmentObject private var mgr: laramgr
     @ObservedObject private var logger = globallogger
-    @AppStorage("selectedMethod") private var selectedmethod: method = .hybrid
+    @AppStorage(EaglePreferenceKeys.accessMethod) private var selectedmethod: method = .hybrid
     @AppStorage("logsdisplaymode") private var selectedlogsdisplaymode: logsdisplaymode = .toolbar
-    @AppStorage("loggerNoBS") private var loggernobs: Bool = true
+    @AppStorage(EaglePreferenceKeys.disableLogDividers) private var loggernobs: Bool = true
     
     @State private var showSettings: Bool = false
     @State private var dlingkcache: Bool = false

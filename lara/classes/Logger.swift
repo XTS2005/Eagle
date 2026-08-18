@@ -31,7 +31,7 @@ class Logger: ObservableObject {
     private var ogstderr: Int32 = -1
     private var logfileurl: URL?
     private var logfilehandle: FileHandle?
-    private let nobullshitkey = "loggernobullshit"
+    private let nobullshitkey = EaglePreferenceKeys.disableLogDividers
     private let ignoredlogsubstrings = [
         "Faulty glyph",
         "outline detected - replacing with a space/null glyph",

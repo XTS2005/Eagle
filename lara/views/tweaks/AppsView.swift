@@ -19,7 +19,7 @@ struct scannedapp: Identifiable, Hashable {
 
 struct AppsView: View {
     @EnvironmentObject private var mgr: laramgr
-    @AppStorage("selectedmethod") private var selectedmethod: method = .vfs
+    @AppStorage(EaglePreferenceKeys.accessMethod) private var selectedmethod: method = .hybrid
     
     @State private var scannedapps: [scannedapp] = []
     @State private var iconcache: [String: UIImage] = [:]

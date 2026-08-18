@@ -35,7 +35,7 @@ struct EagleCompatibilityCenterView: View {
 
                 statusRow(
                     title: LaraL10n.text(en: "Device", es: "Dispositivo"),
-                    value: island.modelIdentifier,
+                    value: island.displayModel,
                     systemImage: "iphone",
                     color: .blue
                 )
@@ -104,6 +104,10 @@ struct EagleCompatibilityCenterView: View {
             }
 
             Section {
+                EagleSupportSnapshotCard()
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+
                 EaglePrepareCrashReportCard()
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -111,8 +115,8 @@ struct EagleCompatibilityCenterView: View {
                 Text(LaraL10n.text(en: "Support", es: "Soporte"))
             } footer: {
                 Text(LaraL10n.text(
-                    en: "The report is created only when you request it and never runs during Prepare.",
-                    es: "El reporte se crea solo cuando lo solicitas y nunca se ejecuta durante Preparar."
+                    en: "The snapshot contains no logs. A diagnostic report is created only when you request it and never runs during Prepare.",
+                    es: "El resumen no contiene logs. El reporte de diagnóstico se crea solo cuando lo solicitas y nunca se ejecuta durante Preparar."
                 ))
             }
         }
@@ -127,17 +131,33 @@ struct EagleCompatibilityCenterView: View {
         systemImage: String,
         color: Color
     ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .foregroundStyle(color)
-                .frame(width: 24)
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.trailing)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(color)
+                    .frame(width: 24)
+                Text(title)
+                Spacer()
+                Text(value)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 12) {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(color)
+                        .frame(width: 24)
+                    Text(title)
+                }
+                Text(value)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 36)
+            }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 
     private var supportTitle: String {

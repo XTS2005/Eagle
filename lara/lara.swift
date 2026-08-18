@@ -19,6 +19,8 @@ struct LaraCustomApp: App {
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
     
     init() {
+        EaglePreferenceMigration.runIfNeeded()
+
         #if DEBUG
         weonadebugbuild_pjbweouttahereexclamationmark = true
         #endif

@@ -9,8 +9,7 @@ import SwiftUI
 
 struct CreditsView: View {
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 LinkCreditCell(name: "roooot", description: "Main Developer", url: "https://github.com/rooootdev") {
                     LinkCreditIcon(url: "https://github.com/rooootdev.png")
                 }
@@ -44,8 +43,7 @@ struct CreditsView: View {
                 LinkCreditCell(name: "leminlimez", description: "Various Cowabunga Tweaks", url: "https://github.com/leminlimez") {
                     LinkCreditIcon(url: "https://github.com/leminlimez.png")
                 }
-            }
-            .navigationTitle("Credits")
         }
+        .navigationTitle("Credits")
     }
 }

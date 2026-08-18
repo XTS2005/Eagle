@@ -10,7 +10,7 @@ import SwiftUI
 struct LogsView: View {
     @ObservedObject var logger: Logger
     
-    private let nobullshitkey = "loggernobullshit"
+    private let nobullshitkey = EaglePreferenceKeys.disableLogDividers
     let logsURL: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("lara.log")

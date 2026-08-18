@@ -22,8 +22,6 @@ struct LaraHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     header
-                    interfaceModeControl
-                    compatibilityLink
 
                     if interfaceMode == .advanced &&
                         allows(.scenes) &&
@@ -42,6 +40,9 @@ struct LaraHomeView: View {
                     } else {
                         homeAccessCard
                     }
+
+                    interfaceModeControl
+                    compatibilityLink
 
                     if interfaceMode == .advanced {
                         EaglePrepareCrashReportCard()
@@ -255,58 +256,17 @@ struct LaraHomeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Eagle")
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                Spacer()
-                Menu {
-                    Picker("Language", selection: $language) {
-                        ForEach(LaraLanguage.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "globe")
-                        Text(language.shortName)
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 11)
-                    .frame(height: 34)
-                    .background(
-                        Color(uiColor: .secondarySystemGroupedBackground),
-                        in: Capsule()
-                    )
-                    .overlay {
-                        Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    eagleTitle
+                    Spacer(minLength: 8)
+                    headerBadges
                 }
-                .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
 
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
-                        .frame(width: 8, height: 8)
-                    Text(mgr.sbxready
-                        ? LaraL10n.text(en: "Ready", es: "Lista")
-                        : LaraL10n.text(en: "Setup", es: "Preparar"))
-                        .font(.caption.weight(.semibold))
+                VStack(alignment: .leading, spacing: 10) {
+                    eagleTitle
+                    headerBadges
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 34)
-                .background(
-                    Color(uiColor: .secondarySystemGroupedBackground),
-                    in: Capsule()
-                )
-                .overlay {
-                    Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                }
-                .accessibilityLabel(
-                    mgr.sbxready
-                        ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
-                        : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
-                )
             }
 
             Text(LaraL10n.text(
@@ -315,6 +275,67 @@ struct LaraHomeView: View {
             ))
                 .font(.title3)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var eagleTitle: some View {
+        Text("Eagle")
+            .font(.system(size: 38, weight: .bold, design: .rounded))
+            .minimumScaleFactor(0.82)
+    }
+
+    private var headerBadges: some View {
+        HStack(spacing: 8) {
+            Menu {
+                Picker("Language", selection: $language) {
+                    ForEach(LaraLanguage.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "globe")
+                    Text(language.shortName)
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 11)
+                .frame(minHeight: 34)
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                }
+            }
+            .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
+            .accessibilityValue(language.displayName)
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
+                    .frame(width: 8, height: 8)
+                Text(mgr.sbxready
+                    ? LaraL10n.text(en: "Ready", es: "Lista")
+                    : LaraL10n.text(en: "Setup", es: "Preparar"))
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 34)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                mgr.sbxready
+                    ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
+                    : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
+            )
         }
     }
 
@@ -464,6 +485,7 @@ private struct LaraFeatureCard: View {
             }
             .frame(height: 154)
             .clipped()
+            .accessibilityHidden(true)
 
             HStack(alignment: .center, spacing: 14) {
                 Image(systemName: systemImage)
@@ -497,6 +519,9 @@ private struct LaraFeatureCard: View {
                 .stroke(Color.primary.opacity(0.055), lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
     }
 
     private var stylesArtwork: some View {

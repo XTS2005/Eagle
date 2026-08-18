@@ -28,11 +28,12 @@ enum logsdisplaymode: String, CaseIterable {
 }
 
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var mgr: laramgr
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
     
-    @AppStorage("selectedMethod") private var selectedMethod: method = .hybrid
+    @AppStorage(EaglePreferenceKeys.accessMethod) private var selectedMethod: method = .hybrid
     @AppStorage("keepAlive") private var keepAlive: Bool = false
     @AppStorage("stashKRW") private var stashKRW: Bool = false
     @AppStorage("keepSpringBoardRemoteCallAliveIOS16") private var keepSpringBoardRemoteCallAliveIOS16: Bool = false
@@ -44,7 +45,7 @@ struct SettingsView: View {
     @State private var stashingKRWNow: Bool = false
     
     @AppStorage("logsdisplaymode") private var selectedlogdisplaymode: logsdisplaymode = .toolbar
-    @AppStorage("loggerNoBS") private var loggerNoBS: Bool = true
+    @AppStorage(EaglePreferenceKeys.disableLogDividers) private var loggerNoBS: Bool = true
     
     @AppStorage("showFMInTabs") private var showFMInTabs: Bool = true
     @AppStorage("selectedFMAppsDisplayMode") private var selectedFMAppsDisplayMode: fmAppsDisplayMode = .appName
@@ -95,12 +96,23 @@ struct SettingsView: View {
                 
                 if advancedToolsAllowed {
                     Section(header: HeaderLabel(text: "Exploit", icon: "ant")) {
-                    Picker("", selection: $selectedMethod) {
+                    Picker(
+                        LaraL10n.text(en: "Access method", es: "Método de acceso"),
+                        selection: $selectedMethod
+                    ) {
                         ForEach(method.allCases, id: \.self) { method in
                             Text(method.rawValue).tag(method)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .accessibilityLabel(LaraL10n.text(
+                        en: "Access method",
+                        es: "Método de acceso"
+                    ))
+                    .onChange(of: selectedMethod) { newValue in
+                        EaglePreferenceMigration.persistAccessMethod(newValue.rawValue)
+                    }
                     
                     NavigationLink("Modify Offsets", destination: OffsetManagementView())
                     }
@@ -223,6 +235,9 @@ struct SettingsView: View {
                             }
                         }
                     Toggle("Disable Log Dividers", isOn: $loggerNoBS)
+                        .onChange(of: loggerNoBS) { disabled in
+                            EaglePreferenceMigration.persistDisableLogDividers(disabled)
+                        }
                     Picker("Logs Display", selection: $selectedlogdisplaymode) {
                         ForEach(logsdisplaymode.allCases, id: \.self) { mode in
                             Text(mode.rawValue).tag(mode)
@@ -299,6 +314,13 @@ struct SettingsView: View {
                 #endif
             }
             .navigationTitle(LaraL10n.text(en: "Advanced Settings", es: "Ajustes avanzados"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(LaraL10n.text(en: "Close", es: "Cerrar")) {
+                        dismiss()
+                    }
+                }
+            }
             .fileImporter(isPresented: $showkcacheimport, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):
