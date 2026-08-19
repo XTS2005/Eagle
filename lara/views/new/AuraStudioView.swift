@@ -378,14 +378,10 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
-    @AppStorage("eagle.batteryX.activePalette")
-    private var batteryXActivePaletteRaw = 0
-    @AppStorage("eagle.batteryX.cleanupRequired")
-    private var batteryXCleanupRequired = false
-    @AppStorage("eagle.libraryNeon.activePalette")
-    private var libraryNeonActivePaletteRaw = 0
-    @AppStorage("eagle.libraryNeon.cleanupRequired")
-    private var libraryNeonCleanupRequired = false
+    @AppStorage("eagle.homeIconNeon.activePalette")
+    private var homeIconNeonActivePaletteRaw = 0
+    @AppStorage("eagle.homeIconNeon.cleanupRequired")
+    private var homeIconNeonCleanupRequired = false
 
     @State private var isApplying = false
     @State private var previewPulse = false
@@ -1195,8 +1191,7 @@ struct AuraStudioView: View {
                 profileButton(for: target)
             }
 
-            batteryXProfileLink
-            libraryNeonProfileLink
+            homeIconNeonProfileLink
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -1297,174 +1292,78 @@ struct AuraStudioView: View {
         ))
     }
 
-    private var batteryXProfileLink: some View {
+    private var homeIconNeonProfileLink: some View {
         NavigationLink {
-            BatteryXAuraView()
-        } label: {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 11) {
-                    ZStack {
-                        Image(systemName: "battery.75percent")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "xmark")
-                            .font(.caption.bold())
-                            .foregroundStyle(.red)
-                            .shadow(color: .red, radius: 4)
-                    }
-                    .frame(width: 34, height: 34)
-                    .background(Color.red.opacity(0.14))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LaraL10n.text(en: "Battery X", es: "Batería X"))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(LaraL10n.text(
-                            en: "Neon X over the system battery",
-                            es: "X neón sobre la batería del sistema"
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 6)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
-                }
-
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(
-                            batteryXCleanupRequired
-                                ? Color.orange
-                                : (batteryXActivePaletteRaw != 0
-                                   ? Color.green
-                                   : Color.secondary.opacity(0.45))
-                        )
-                        .frame(width: 7, height: 7)
-                    Text(
-                        batteryXCleanupRequired
-                            ? LaraL10n.text(
-                                en: "Cleanup required",
-                                es: "Se requiere limpieza"
-                            )
-                            : (batteryXActivePaletteRaw != 0
-                               ? LaraL10n.text(
-                                    en: "Last apply verified",
-                                    es: "Última aplicación verificada"
-                                 )
-                               : LaraL10n.text(
-                                    en: "Ready to configure",
-                                    es: "Lista para configurar"
-                                 ))
-                    )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(
-                        batteryXCleanupRequired
-                            ? Color.orange
-                            : (batteryXActivePaletteRaw != 0
-                               ? Color.green
-                               : Color.secondary)
-                    )
-                    Spacer(minLength: 0)
-                }
-            }
-            .padding(13)
-            .background(
-                Color(uiColor: .tertiarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isApplying)
-        .accessibilityLabel(LaraL10n.text(
-            en: "Battery X. Neon X over the system battery.",
-            es: "Batería X. X neón sobre la batería del sistema."
-        ))
-        .accessibilityHint(LaraL10n.text(
-            en: "Opens the independent Battery X controls.",
-            es: "Abre los controles independientes de Batería X."
-        ))
-    }
-
-    private var libraryNeonProfileLink: some View {
-        NavigationLink {
-            LibraryPodNeonView()
+            HomeIconNeonView()
         } label: {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(spacing: 11) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(.orange, lineWidth: 2)
+                            .fill(.cyan.opacity(0.32))
                             .frame(width: 25, height: 25)
-                            .shadow(color: .orange, radius: 4)
-                        Image(systemName: "square.grid.2x2.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.orange)
+                            .shadow(color: .cyan, radius: 7)
+                        Image(systemName: "app.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
                     .frame(width: 34, height: 34)
-                    .background(Color.orange.opacity(0.14))
+                    .background(Color.cyan.opacity(0.14))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("App Library Neon")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
                         Text(LaraL10n.text(
-                            en: "Neon edge around every category pod",
-                            es: "Borde neón alrededor de cada categoría"
+                            en: "Home Icon Neon",
+                            es: "Neón de iconos"
+                        ))
+                        .font(.subheadline.weight(.semibold))
+                        Text(LaraL10n.text(
+                            en: "Glow behind apps on the current Home page",
+                            es: "Brillo detrás de las apps de la página actual"
                         ))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 6)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
+                    Text(LaraL10n.text(en: "EXPERIMENTAL", es: "EXPERIMENTAL"))
+                        .font(.caption2.bold())
+                        .foregroundStyle(.cyan)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Color.cyan.opacity(0.12), in: Capsule())
                 }
 
                 HStack(spacing: 7) {
                     Circle()
                         .fill(
-                            libraryNeonCleanupRequired
+                            homeIconNeonCleanupRequired
                                 ? Color.orange
-                                : (libraryNeonActivePaletteRaw != 0
+                                : (homeIconNeonActivePaletteRaw != 0
                                    ? Color.green
                                    : Color.secondary.opacity(0.45))
                         )
                         .frame(width: 7, height: 7)
                         .accessibilityHidden(true)
                     Text(
-                        libraryNeonCleanupRequired
-                            ? LaraL10n.text(
-                                en: "Cleanup required",
-                                es: "Se requiere limpieza"
-                            )
-                            : (libraryNeonActivePaletteRaw != 0
-                               ? LaraL10n.text(
-                                    en: "Last apply verified",
-                                    es: "Última aplicación verificada"
-                                 )
-                               : LaraL10n.text(
-                                    en: "Ready to configure",
-                                    es: "Listo para configurar"
-                                 ))
+                        homeIconNeonCleanupRequired
+                            ? LaraL10n.text(en: "Cleanup required", es: "Requiere limpieza")
+                            : (homeIconNeonActivePaletteRaw != 0
+                               ? LaraL10n.text(en: "Page snapshot applied", es: "Aplicado a la página")
+                               : LaraL10n.text(en: "Ready to configure", es: "Listo para configurar"))
                     )
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(
-                        libraryNeonCleanupRequired
+                        homeIconNeonCleanupRequired
                             ? Color.orange
-                            : (libraryNeonActivePaletteRaw != 0
-                               ? Color.green
-                               : Color.secondary)
+                            : (homeIconNeonActivePaletteRaw != 0 ? .green : .secondary)
                     )
                     Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(13)
@@ -1476,14 +1375,13 @@ struct AuraStudioView: View {
         }
         .buttonStyle(.plain)
         .disabled(isApplying)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(LaraL10n.text(
-            en: "App Library Neon. Neon edge around every category pod.",
-            es: "App Library Neon. Borde neón alrededor de cada categoría."
+            en: "Home Icon Neon. Glow behind apps on the current Home page.",
+            es: "Neón de iconos. Brillo detrás de las apps de la página actual."
         ))
         .accessibilityHint(LaraL10n.text(
-            en: "Opens the independent App Library Neon controls.",
-            es: "Abre los controles independientes de App Library Neon."
+            en: "Opens independent experimental controls.",
+            es: "Abre controles experimentales independientes."
         ))
     }
 

@@ -59,6 +59,7 @@ enum EagleProductFeature: String, CaseIterable, Identifiable {
     case auraPulse
     case auraRainbow
     case islandTint
+    case homeIconNeon
     case advancedSystemTools
 
     var id: String { rawValue }
@@ -69,7 +70,7 @@ enum EagleProductFeature: String, CaseIterable, Identifiable {
             return .stable
         case .scenes, .auraPulse, .auraRainbow:
             return .beta
-        case .islandTint, .advancedSystemTools:
+        case .islandTint, .homeIconNeon, .advancedSystemTools:
             return .experimental
         }
     }
@@ -85,6 +86,8 @@ enum EagleProductFeature: String, CaseIterable, Identifiable {
         case .auraPulse: return "Aura Pulse"
         case .auraRainbow: return "Aura Rainbow"
         case .islandTint: return "True Tint"
+        case .homeIconNeon:
+            return LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos")
         case .advancedSystemTools:
             return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas del sistema")
         }
