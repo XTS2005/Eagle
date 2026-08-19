@@ -378,6 +378,10 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
+    @AppStorage("eagle.batteryX.activePalette")
+    private var batteryXActivePaletteRaw = 0
+    @AppStorage("eagle.batteryX.cleanupRequired")
+    private var batteryXCleanupRequired = false
 
     @State private var isApplying = false
     @State private var previewPulse = false
@@ -638,6 +642,12 @@ struct AuraStudioView: View {
                 surfaceProfilesCard
                 appearanceCard
                 adaptiveNote
+
+                if releaseChannel == .experimental ||
+                    batteryXActivePaletteRaw != 0 ||
+                    batteryXCleanupRequired {
+                    beta9LabCard
+                }
 
                 if !mgr.dsready {
                     LaraAccessView(compact: true)
@@ -1313,6 +1323,74 @@ struct AuraStudioView: View {
             Spacer(minLength: 0)
         }
         .padding(18)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var beta9LabCard: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Label(
+                LaraL10n.text(en: "Beta 9 Lab", es: "Laboratorio Beta 9"),
+                systemImage: "testtube.2"
+            )
+            .font(.headline)
+            .foregroundStyle(.orange)
+
+            Text(LaraL10n.text(
+                en: "New surfaces run through their own native transaction and never enter the Island/Dock apply pipeline.",
+                es: "Las superficies nuevas usan una transacción nativa propia y nunca entran en el flujo de aplicación de Isla o Dock."
+            ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            NavigationLink {
+                BatteryXAuraView()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.red.opacity(0.14))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "battery.75percent")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "xmark")
+                            .font(.headline.bold())
+                            .foregroundStyle(.red)
+                            .shadow(color: .red, radius: 4)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Battery X")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(LaraL10n.text(
+                            en: "Neon X anchored only to the live battery glyph",
+                            es: "X neón anclada únicamente al icono activo de batería"
+                        ))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(12)
+                .background(Color.primary.opacity(0.035))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(LaraL10n.text(
+                en: "Battery X · Neon X anchored only to the live battery glyph",
+                es: "Battery X · X neón anclada únicamente al icono activo de batería"
+            ))
+            .accessibilityHint(LaraL10n.text(
+                en: "Opens the isolated Battery X field test.",
+                es: "Abre la prueba de campo aislada de Battery X."
+            ))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
