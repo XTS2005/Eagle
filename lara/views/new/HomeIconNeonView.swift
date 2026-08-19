@@ -107,6 +107,8 @@ struct HomeIconNeonView: View {
     private var activeIntensityRaw = 0
     @AppStorage("eagle.homeIconNeon.activeSpringBoardPID")
     private var activeSpringBoardPID = 0
+    @AppStorage("eagle.homeIconNeon.activePageCount")
+    private var activePageCount = 0
     @AppStorage("eagle.homeIconNeon.cleanupRequired")
     private var cleanupRequired = false
 
@@ -141,8 +143,12 @@ struct HomeIconNeonView: View {
             version.patchVersion == 2
     }
 
+    private var recordedPageCount: Int {
+        max(activePageCount, activePaletteRaw != 0 ? 1 : 0)
+    }
+
     private var hasRecordedEffect: Bool {
-        activePaletteRaw != 0 || cleanupRequired
+        recordedPageCount > 0 || cleanupRequired
     }
 
     private var paletteColumns: [GridItem] {
@@ -250,8 +256,12 @@ struct HomeIconNeonView: View {
             Label(
                 hasRecordedEffect
                     ? LaraL10n.text(
-                        en: cleanupRequired ? "Cleanup required" : "Last page snapshot applied",
-                        es: cleanupRequired ? "Se requiere limpieza" : "Aplicado a la última página"
+                        en: cleanupRequired
+                            ? "Cleanup required"
+                            : "\(recordedPageCount) Home page\(recordedPageCount == 1 ? "" : "s") recorded",
+                        es: cleanupRequired
+                            ? "Se requiere limpieza"
+                            : "\(recordedPageCount) página\(recordedPageCount == 1 ? "" : "s") registrada\(recordedPageCount == 1 ? "" : "s")"
                     )
                     : LaraL10n.text(
                         en: "No icon glow recorded",
@@ -318,7 +328,7 @@ struct HomeIconNeonView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(isApplying || hasRecordedEffect)
+                    .disabled(isApplying)
                     .accessibilityLabel(palette.title)
                     .accessibilityAddTraits(selectedPalette == palette ? .isSelected : [])
                 }
@@ -342,7 +352,7 @@ struct HomeIconNeonView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .disabled(isApplying || hasRecordedEffect)
+            .disabled(isApplying)
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -374,6 +384,13 @@ struct HomeIconNeonView: View {
             ))
             .font(.caption)
             .foregroundStyle(.orange)
+
+            Text(LaraL10n.text(
+                en: "You can repeat Apply page by page. Up to 24 app icons are accepted on each page; two simultaneous pages were verified in the jailbreak lab.",
+                es: "Puedes repetir Aplicar página por página. Se aceptan hasta 24 iconos de apps por página; el laboratorio jailbreak verificó dos páginas simultáneas."
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -394,11 +411,11 @@ struct HomeIconNeonView: View {
         .buttonStyle(.borderedProminent)
         .tint(selectedPalette.color)
         .disabled(
-            isApplying || hasRecordedEffect || !mgr.dsready || mgr.rcSafetyLocked ||
+            isApplying || !mgr.dsready || mgr.rcSafetyLocked ||
             !supportedDevice || !policyAllowsApply
         )
         .opacity(
-            !hasRecordedEffect && mgr.dsready && supportedDevice && policyAllowsApply ? 1 : 0.55
+            mgr.dsready && supportedDevice && policyAllowsApply ? 1 : 0.55
         )
     }
 
@@ -472,6 +489,9 @@ struct HomeIconNeonView: View {
 
     private func reconcileState() {
         guard hasRecordedEffect else { return }
+        if activePageCount == 0, activePaletteRaw != 0 {
+            activePageCount = 1
+        }
         let currentPID = "SpringBoard".withCString { find_process_pid($0) }
         guard currentPID > 0 else {
             cleanupRequired = true
@@ -481,6 +501,7 @@ struct HomeIconNeonView: View {
             activePaletteRaw = 0
             activeIntensityRaw = 0
             activeSpringBoardPID = 0
+            activePageCount = 0
             cleanupRequired = false
         }
     }
@@ -587,9 +608,6 @@ struct HomeIconNeonView: View {
                 guard !nativeFinished else { return }
                 deadlineExceeded = true
                 cleanupRequired = true
-                activePaletteRaw = 0
-                activeIntensityRaw = 0
-                activeSpringBoardPID = 0
                 let reason = "Home Icon Neon exceeded the 60-second safety deadline"
                 mgr.quarantineRemoteCall(reason: reason)
                 operationStage = LaraL10n.text(
@@ -636,9 +654,6 @@ struct HomeIconNeonView: View {
                     let transportVerified = healthy && !timedOut && pidAfter == targetPID
                     if !transportVerified || result == -7 || result == -12 {
                         cleanupRequired = true
-                        activePaletteRaw = 0
-                        activeIntensityRaw = 0
-                        activeSpringBoardPID = 0
                         let reason = "Home Icon Neon unverified transport/result \(result)"
                         mgr.quarantineRemoteCall(reason: reason)
                         notice = HomeIconNeonNotice(message: LaraL10n.text(
@@ -650,13 +665,15 @@ struct HomeIconNeonView: View {
 
                     if removing {
                         if result > 0 {
-                            activePaletteRaw = 0
-                            activeIntensityRaw = 0
-                            activeSpringBoardPID = 0
-                            cleanupRequired = false
+                            activePageCount = max(0, recordedPageCount - 1)
+                            if activePageCount == 0 {
+                                activePaletteRaw = 0
+                                activeIntensityRaw = 0
+                                activeSpringBoardPID = 0
+                            }
                             notice = HomeIconNeonNotice(message: LaraL10n.text(
-                                en: "Removed \(result) tagged icon glow\(result == 1 ? "" : "s") from the current page. Dock and Island were not changed.",
-                                es: "Se quitaron \(result) brillo\(result == 1 ? "" : "s") etiquetado\(result == 1 ? "" : "s") de la página actual. Dock e Isla no cambiaron."
+                                en: "Removed \(result) tagged icon glow\(result == 1 ? "" : "s") from the current page. \(activePageCount) other page\(activePageCount == 1 ? " remains" : "s remain") recorded. Dock and Island were not changed.",
+                                es: "Se quitaron \(result) brillo\(result == 1 ? "" : "s") etiquetado\(result == 1 ? "" : "s") de la página actual. Quedan \(activePageCount) página\(activePageCount == 1 ? "" : "s") registrada\(activePageCount == 1 ? "" : "s"). Dock e Isla no cambiaron."
                             ))
                         } else if result == 0 {
                             cleanupRequired = true
@@ -671,13 +688,13 @@ struct HomeIconNeonView: View {
                     }
 
                     if result > 0 {
+                        activePageCount = min(32, recordedPageCount + 1)
                         activePaletteRaw = selectedPalette.rawValue
                         activeIntensityRaw = intensity
                         activeSpringBoardPID = Int(targetPID)
-                        cleanupRequired = false
                         notice = HomeIconNeonNotice(message: LaraL10n.text(
-                            en: "Applied and verified glow behind \(result) app icon\(result == 1 ? "" : "s") on the current Home page. Dock, folders, App Library, Island, and Prepare were not changed.",
-                            es: "Se aplicó y verificó brillo detrás de \(result) icono\(result == 1 ? "" : "s") de la página actual. Dock, carpetas, Biblioteca, Isla y Preparar no cambiaron."
+                            en: "Applied and verified diffuse glow behind \(result) app icon\(result == 1 ? "" : "s") on this Home page. \(activePageCount) page\(activePageCount == 1 ? " is" : "s are") now recorded. Dock, folders, App Library, Island, and Prepare were not changed.",
+                            es: "Se aplicó y verificó resplandor difuminado detrás de \(result) icono\(result == 1 ? "" : "s") de esta página. Ahora hay \(activePageCount) página\(activePageCount == 1 ? "" : "s") registrada\(activePageCount == 1 ? "" : "s"). Dock, carpetas, Biblioteca, Isla y Preparar no cambiaron."
                         ))
                     } else {
                         if result == -9 { cleanupRequired = true }
