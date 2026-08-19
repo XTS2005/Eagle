@@ -1,9 +1,85 @@
 import SwiftUI
 import Darwin
+import UIKit
 
 private struct BatteryXNotice: Identifiable {
     let id = UUID()
     let message: String
+    let offersReport: Bool
+
+    init(message: String, offersReport: Bool = false) {
+        self.message = message
+        self.offersReport = offersReport
+    }
+}
+
+private struct BatteryXReport: Identifiable {
+    let id = UUID()
+    let url: URL
+    let text: String
+    let summary: String
+}
+
+private struct BatteryXReportView: View {
+    @Environment(\.dismiss) private var dismiss
+    let report: BatteryXReport
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label(
+                        LaraL10n.text(
+                            en: "Battery X diagnostic report",
+                            es: "Reporte de diagnóstico de Batería X"
+                        ),
+                        systemImage: "doc.text.magnifyingglass"
+                    )
+                    .font(.headline)
+
+                    Text(report.summary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text(report.text)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(18)
+            }
+            .navigationTitle(LaraL10n.text(en: "Battery X Report", es: "Reporte Batería X"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(LaraL10n.text(en: "Close", es: "Cerrar")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    ShareLink(item: report.url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel(LaraL10n.text(
+                        en: "Share Battery X report",
+                        es: "Compartir reporte de Batería X"
+                    ))
+
+                    Button {
+                        UIPasteboard.general.string = report.text
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        copied = true
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .accessibilityLabel(copied
+                        ? LaraL10n.text(en: "Copied", es: "Copiado")
+                        : LaraL10n.text(en: "Copy report", es: "Copiar reporte"))
+                }
+            }
+        }
+    }
 }
 
 private enum BatteryXPalette: Int, CaseIterable, Identifiable {
@@ -79,10 +155,24 @@ struct BatteryXAuraView: View {
     private var activeSpringBoardPID = 0
     @AppStorage("eagle.batteryX.cleanupRequired")
     private var cleanupRequired = false
+    @AppStorage("eagle.batteryX.lastReportFilename")
+    private var lastReportFilename = ""
 
     @State private var isApplying = false
     @State private var applyStage = ""
     @State private var notice: BatteryXNotice?
+    @State private var latestReport: BatteryXReport?
+    @State private var showingReport = false
+    @State private var lastDiagnosticSummary = "Manual Battery X report"
+    @State private var lastOperationID = "none"
+    @State private var lastRequestedPalette = 0
+    @State private var lastNativeResult: Int32?
+    @State private var lastElapsed = 0.0
+    @State private var lastTargetPID: Int32 = 0
+    @State private var lastCurrentPID: Int32 = 0
+    @State private var lastProcessHealthy = true
+    @State private var lastTimedOut = false
+    @State private var lastProcessError: String?
 
     private var selectedPalette: BatteryXPalette {
         get { BatteryXPalette(rawValue: selectedPaletteRaw) ?? .red }
@@ -144,6 +234,7 @@ struct BatteryXAuraView: View {
 
                 applyButton
                 restoreButton
+                diagnosticsCard
             }
             .padding(20)
         }
@@ -153,11 +244,35 @@ struct BatteryXAuraView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isApplying)
         .alert(item: $notice) { notice in
-            Alert(
-                title: Text("Battery X"),
-                message: Text(notice.message),
-                dismissButton: .default(Text("OK"))
-            )
+            if notice.offersReport {
+                Alert(
+                    title: Text("Battery X"),
+                    message: Text(notice.message),
+                    primaryButton: .default(Text(LaraL10n.text(
+                        en: "View Report",
+                        es: "Ver reporte"
+                    ))) {
+                        DispatchQueue.main.async {
+                            showingReport = latestReport != nil
+                        }
+                    },
+                    secondaryButton: .cancel(Text(LaraL10n.text(
+                        en: "Close",
+                        es: "Cerrar"
+                    )))
+                )
+            } else {
+                Alert(
+                    title: Text("Battery X"),
+                    message: Text(notice.message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        }
+        .sheet(isPresented: $showingReport) {
+            if let latestReport {
+                BatteryXReportView(report: latestReport)
+            }
         }
         .overlay {
             if isApplying {
@@ -182,7 +297,10 @@ struct BatteryXAuraView: View {
                 }
             }
         }
-        .onAppear(perform: reconcileActiveState)
+        .onAppear {
+            reconcileActiveState()
+            restoreLastReport()
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active { reconcileActiveState() }
         }
@@ -452,6 +570,83 @@ struct BatteryXAuraView: View {
         .opacity(activePalette == nil && !cleanupRequired ? 0.52 : 1)
     }
 
+    private var diagnosticsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(
+                LaraL10n.text(
+                    en: "Battery X diagnostics",
+                    es: "Diagnóstico de Batería X"
+                ),
+                systemImage: "doc.text.magnifyingglass"
+            )
+            .font(.headline)
+
+            Text(LaraL10n.text(
+                en: "If Apply returns an error, Eagle creates a focused report here with the Battery X and protected-call trace.",
+                es: "Si Aplicar devuelve un error, Eagle crea aquí un reporte específico con el registro de Batería X y la llamada protegida."
+            ))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    reportButton
+                    if let latestReport {
+                        reportShareButton(latestReport)
+                    }
+                }
+
+                VStack(spacing: 10) {
+                    reportButton
+                        .frame(maxWidth: .infinity)
+                    if let latestReport {
+                        reportShareButton(latestReport)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var reportButton: some View {
+        Button {
+            if latestReport == nil {
+                latestReport = makeDiagnosticsReport(
+                    summary: lastDiagnosticSummary
+                )
+            }
+            DispatchQueue.main.async {
+                showingReport = latestReport != nil
+            }
+        } label: {
+            Label(
+                latestReport == nil
+                    ? LaraL10n.text(en: "Create Report", es: "Crear reporte")
+                    : LaraL10n.text(en: "View Report", es: "Ver reporte"),
+                systemImage: latestReport == nil
+                    ? "doc.badge.plus"
+                    : "doc.text.magnifyingglass"
+            )
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private func reportShareButton(_ report: BatteryXReport) -> some View {
+        ShareLink(item: report.url) {
+            Label(
+                LaraL10n.text(en: "Share", es: "Compartir"),
+                systemImage: "square.and.arrow.up"
+            )
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
     private func reconcileActiveState() {
         let currentPID = "SpringBoard".withCString { find_process_pid($0) }
         if activePaletteRaw != 0, activePalette == nil {
@@ -491,6 +686,18 @@ struct BatteryXAuraView: View {
 
     private func run(palette: Int) {
         let operationID = String(UUID().uuidString.prefix(8))
+        lastOperationID = operationID
+        lastRequestedPalette = palette
+        lastNativeResult = nil
+        lastElapsed = 0
+        lastTargetPID = 0
+        lastCurrentPID = 0
+        lastProcessHealthy = true
+        lastTimedOut = false
+        lastProcessError = nil
+        lastDiagnosticSummary = palette == 0
+            ? "Battery X remove requested"
+            : "Battery X apply requested"
         BatteryXDiagnostics.log(
             "request",
             "op=\(operationID) palette=\(palette) device=\(devicemachine()) " +
@@ -664,6 +871,14 @@ struct BatteryXAuraView: View {
                     deadlineWork.cancel()
                     mgr.endExclusiveRemoteCall(label: label)
 
+                    lastNativeResult = result
+                    lastElapsed = elapsed
+                    lastTargetPID = targetPID
+                    lastCurrentPID = currentPID
+                    lastProcessHealthy = processHealthy
+                    lastTimedOut = timedOut
+                    lastProcessError = processError
+
                     let livePID = "SpringBoard".withCString {
                         find_process_pid($0)
                     }
@@ -710,7 +925,11 @@ struct BatteryXAuraView: View {
                         return
                     }
 
-                    finish(message: message(for: result))
+                    finish(
+                        message: message(for: result),
+                        offersReport: true,
+                        summary: "Battery X native result \(result)"
+                    )
                 }
             }
         }
@@ -723,17 +942,201 @@ struct BatteryXAuraView: View {
             activeSpringBoardPID = 0
         }
         mgr.quarantineRemoteCall(reason: reason)
-        finish(message: LaraL10n.text(
-            en: "Battery X stopped because the protected call could not be verified. No automatic retry will start. Fully close and reopen Eagle before another test. Island and Dock were not marked as changed.",
-            es: "Battery X se detuvo porque la llamada protegida no pudo verificarse. No se iniciará otro intento automático. Cierra Eagle completamente y vuelve a abrirlo antes de otra prueba. Isla y Dock no se marcaron como cambiados."
-        ))
+        finish(
+            message: LaraL10n.text(
+                en: "Battery X stopped because the protected call could not be verified. No automatic retry will start. Fully close and reopen Eagle before another test. Island and Dock were not marked as changed.",
+                es: "Battery X se detuvo porque la llamada protegida no pudo verificarse. No se iniciará otro intento automático. Cierra Eagle completamente y vuelve a abrirlo antes de otra prueba. Isla y Dock no se marcaron como cambiados."
+            ),
+            offersReport: true,
+            summary: reason
+        )
     }
 
-    private func finish(message: String) {
-        BatteryXApplyGate.end()
-        isApplying = false
-        applyStage = ""
-        notice = BatteryXNotice(message: message)
+    private func finish(
+        message: String,
+        offersReport: Bool = false,
+        summary: String? = nil
+    ) {
+        if let summary {
+            lastDiagnosticSummary = summary
+        }
+        guard offersReport else {
+            BatteryXApplyGate.end()
+            isApplying = false
+            applyStage = ""
+            notice = BatteryXNotice(message: message)
+            return
+        }
+
+        // stdout from the target arrives through a Pipe callback. Give that
+        // callback one short main-runloop turn before freezing this attempt's
+        // report, so discovery/target/result are not omitted from the file.
+        // Keep the local gate held until then so a second tap cannot replace
+        // this attempt's operation ID/result while its report is being built.
+        applyStage = LaraL10n.text(
+            en: "Creating the Battery X report…",
+            es: "Creando el reporte de Batería X…"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            latestReport = makeDiagnosticsReport(
+                summary: lastDiagnosticSummary
+            )
+            BatteryXApplyGate.end()
+            isApplying = false
+            applyStage = ""
+            notice = BatteryXNotice(
+                message: message,
+                offersReport: latestReport != nil
+            )
+        }
+    }
+
+    private func restoreLastReport() {
+        guard latestReport == nil,
+              !lastReportFilename.isEmpty,
+              lastReportFilename == URL(fileURLWithPath: lastReportFilename).lastPathComponent else {
+            return
+        }
+        let url = reportDirectory.appendingPathComponent(lastReportFilename)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            lastReportFilename = ""
+            return
+        }
+        latestReport = BatteryXReport(
+            url: url,
+            text: text,
+            summary: LaraL10n.text(
+                en: "Last saved Battery X report",
+                es: "Último reporte guardado de Batería X"
+            )
+        )
+    }
+
+    private var reportDirectory: URL {
+        let documents = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )[0]
+        return documents.appendingPathComponent(
+            "EagleAuraReports",
+            isDirectory: true
+        )
+    }
+
+    private func filteredReportLogLines(
+        matching fragments: [String]
+    ) -> [String] {
+        let documents = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )[0]
+        let logURL = documents.appendingPathComponent("lara.log")
+        var sourceLines: [String] = []
+        if let handle = try? FileHandle(forReadingFrom: logURL) {
+            defer { try? handle.close() }
+            do {
+                let end = try handle.seekToEnd()
+                let maximumBytes: UInt64 = 384 * 1024
+                try handle.seek(toOffset: end > maximumBytes
+                    ? end - maximumBytes
+                    : 0)
+                let data = try handle.readToEnd() ?? Data()
+                sourceLines = String(decoding: data, as: UTF8.self)
+                    .components(separatedBy: .newlines)
+            } catch {
+                sourceLines = []
+            }
+        }
+        if sourceLines.isEmpty {
+            sourceLines = globallogger.logs.flatMap {
+                $0.components(separatedBy: .newlines)
+            }
+        }
+        return Array(sourceLines.filter { line in
+            fragments.contains { fragment in
+                line.localizedCaseInsensitiveContains(fragment)
+            }
+        }.suffix(900))
+    }
+
+    private func makeDiagnosticsReport(summary: String) -> BatteryXReport? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: Date())
+        let relevantFragments = [
+            "eagle.battery-x",
+            "eagle.battery.native",
+            "(rc)",
+            "remote call",
+            "RemoteCall",
+        ]
+        let lines = filteredReportLogLines(matching: relevantFragments)
+        let paletteName = BatteryXPalette(rawValue: lastRequestedPalette)?.title
+            ?? (lastRequestedPalette == 0 ? "remove" : "unknown")
+        let header = [
+            EagleSupportSnapshot.makeText(),
+            "",
+            "Eagle Battery X diagnostics",
+            "timestamp=\(timestamp)",
+            "summary=\(summary)",
+            "operation=\(lastOperationID)",
+            "request=palette:\(lastRequestedPalette) name:\(paletteName)",
+            "nativeResult=\(lastNativeResult.map(String.init) ?? "none")",
+            "elapsed=\(String(format: "%.3f", lastElapsed))",
+            "targetSpringBoardPID=\(lastTargetPID)",
+            "currentSpringBoardPID=\(lastCurrentPID)",
+            "liveSpringBoardPID=\("SpringBoard".withCString { find_process_pid($0) })",
+            "processHealthy=\(lastProcessHealthy)",
+            "processTimedOut=\(lastTimedOut)",
+            "processError=\(lastProcessError ?? "none")",
+            "dsready=\(mgr.dsready)",
+            "rcrunning=\(mgr.rcrunning)",
+            "rcready=\(mgr.rcready)",
+            "rcSafetyLocked=\(mgr.rcSafetyLocked)",
+            "rcSafetyReason=\(mgr.rcSafetyReason ?? "none")",
+            "activePalette=\(activePaletteRaw)",
+            "activeSpringBoardPID=\(activeSpringBoardPID)",
+            "cleanupRequired=\(cleanupRequired)",
+            "--- filtered log ---",
+        ]
+        let text = (header + lines).joined(separator: "\n") + "\n"
+        let filename = "Eagle-Battery-X-Diagnostics-" +
+            timestamp.replacingOccurrences(of: ":", with: "-") + ".txt"
+        let url = reportDirectory.appendingPathComponent(filename)
+        do {
+            try FileManager.default.createDirectory(
+                at: reportDirectory,
+                withIntermediateDirectories: true,
+                attributes: [
+                    .protectionKey:
+                        FileProtectionType.completeUntilFirstUserAuthentication,
+                ]
+            )
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes(
+                [
+                    .protectionKey:
+                        FileProtectionType.completeUntilFirstUserAuthentication,
+                ],
+                ofItemAtPath: url.path
+            )
+            lastReportFilename = filename
+            BatteryXDiagnostics.log(
+                "diagnostics.ready",
+                "path=\(filename) lines=\(lines.count)"
+            )
+            return BatteryXReport(
+                url: url,
+                text: text,
+                summary: summary
+            )
+        } catch {
+            BatteryXDiagnostics.log(
+                "diagnostics.failed",
+                "error=\(error.localizedDescription)"
+            )
+            return nil
+        }
     }
 
     private func message(for result: Int32) -> String {
@@ -782,6 +1185,11 @@ struct BatteryXAuraView: View {
             return LaraL10n.text(
                 en: "Battery X rejected the update and verified its rollback. You may retry with a fresh session.",
                 es: "Battery X rechazó la actualización y verificó la reversión. Puedes intentarlo de nuevo con una sesión nueva."
+            )
+        case -13:
+            return LaraL10n.text(
+                en: "Battery discovery reached its safe call limit before changing anything. Open the report and share it so Eagle can identify the remaining host.",
+                es: "El descubrimiento de la batería alcanzó su límite seguro antes de cambiar nada. Abre y comparte el reporte para que Eagle pueda identificar el host restante."
             )
         default:
             return LaraL10n.text(
