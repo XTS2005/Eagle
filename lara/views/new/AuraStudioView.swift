@@ -382,6 +382,10 @@ struct AuraStudioView: View {
     private var batteryXActivePaletteRaw = 0
     @AppStorage("eagle.batteryX.cleanupRequired")
     private var batteryXCleanupRequired = false
+    @AppStorage("eagle.libraryNeon.activePalette")
+    private var libraryNeonActivePaletteRaw = 0
+    @AppStorage("eagle.libraryNeon.cleanupRequired")
+    private var libraryNeonCleanupRequired = false
 
     @State private var isApplying = false
     @State private var previewPulse = false
@@ -1192,6 +1196,7 @@ struct AuraStudioView: View {
             }
 
             batteryXProfileLink
+            libraryNeonProfileLink
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -1382,6 +1387,103 @@ struct AuraStudioView: View {
         .accessibilityHint(LaraL10n.text(
             en: "Opens the independent Battery X controls.",
             es: "Abre los controles independientes de Batería X."
+        ))
+    }
+
+    private var libraryNeonProfileLink: some View {
+        NavigationLink {
+            LibraryPodNeonView()
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 11) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(.orange, lineWidth: 2)
+                            .frame(width: 25, height: 25)
+                            .shadow(color: .orange, radius: 4)
+                        Image(systemName: "square.grid.2x2.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    .frame(width: 34, height: 34)
+                    .background(Color.orange.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("App Library Neon")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(LaraL10n.text(
+                            en: "Neon edge around every category pod",
+                            es: "Borde neón alrededor de cada categoría"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 6)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(
+                            libraryNeonCleanupRequired
+                                ? Color.orange
+                                : (libraryNeonActivePaletteRaw != 0
+                                   ? Color.green
+                                   : Color.secondary.opacity(0.45))
+                        )
+                        .frame(width: 7, height: 7)
+                        .accessibilityHidden(true)
+                    Text(
+                        libraryNeonCleanupRequired
+                            ? LaraL10n.text(
+                                en: "Cleanup required",
+                                es: "Se requiere limpieza"
+                            )
+                            : (libraryNeonActivePaletteRaw != 0
+                               ? LaraL10n.text(
+                                    en: "Last apply verified",
+                                    es: "Última aplicación verificada"
+                                 )
+                               : LaraL10n.text(
+                                    en: "Ready to configure",
+                                    es: "Listo para configurar"
+                                 ))
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        libraryNeonCleanupRequired
+                            ? Color.orange
+                            : (libraryNeonActivePaletteRaw != 0
+                               ? Color.green
+                               : Color.secondary)
+                    )
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(13)
+            .background(
+                Color(uiColor: .tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isApplying)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LaraL10n.text(
+            en: "App Library Neon. Neon edge around every category pod.",
+            es: "App Library Neon. Borde neón alrededor de cada categoría."
+        ))
+        .accessibilityHint(LaraL10n.text(
+            en: "Opens the independent App Library Neon controls.",
+            es: "Abre los controles independientes de App Library Neon."
         ))
     }
 
