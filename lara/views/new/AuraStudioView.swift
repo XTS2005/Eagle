@@ -643,12 +643,6 @@ struct AuraStudioView: View {
                 appearanceCard
                 adaptiveNote
 
-                if releaseChannel == .experimental ||
-                    batteryXActivePaletteRaw != 0 ||
-                    batteryXCleanupRequired {
-                    beta9LabCard
-                }
-
                 if !mgr.dsready {
                     LaraAccessView(compact: true)
                 }
@@ -1196,6 +1190,8 @@ struct AuraStudioView: View {
             ForEach(AuraStudioTarget.allCases) { target in
                 profileButton(for: target)
             }
+
+            batteryXProfileLink
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -1296,6 +1292,99 @@ struct AuraStudioView: View {
         ))
     }
 
+    private var batteryXProfileLink: some View {
+        NavigationLink {
+            BatteryXAuraView()
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 11) {
+                    ZStack {
+                        Image(systemName: "battery.75percent")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "xmark")
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
+                            .shadow(color: .red, radius: 4)
+                    }
+                    .frame(width: 34, height: 34)
+                    .background(Color.red.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(LaraL10n.text(en: "Battery X", es: "Batería X"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(LaraL10n.text(
+                            en: "Neon X over the system battery",
+                            es: "X neón sobre la batería del sistema"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 6)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
+
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(
+                            batteryXCleanupRequired
+                                ? Color.orange
+                                : (batteryXActivePaletteRaw != 0
+                                   ? Color.green
+                                   : Color.secondary.opacity(0.45))
+                        )
+                        .frame(width: 7, height: 7)
+                    Text(
+                        batteryXCleanupRequired
+                            ? LaraL10n.text(
+                                en: "Cleanup required",
+                                es: "Se requiere limpieza"
+                            )
+                            : (batteryXActivePaletteRaw != 0
+                               ? LaraL10n.text(
+                                    en: "Last apply verified",
+                                    es: "Última aplicación verificada"
+                                 )
+                               : LaraL10n.text(
+                                    en: "Ready to configure",
+                                    es: "Lista para configurar"
+                                 ))
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        batteryXCleanupRequired
+                            ? Color.orange
+                            : (batteryXActivePaletteRaw != 0
+                               ? Color.green
+                               : Color.secondary)
+                    )
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(13)
+            .background(
+                Color(uiColor: .tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isApplying)
+        .accessibilityLabel(LaraL10n.text(
+            en: "Battery X. Neon X over the system battery.",
+            es: "Batería X. X neón sobre la batería del sistema."
+        ))
+        .accessibilityHint(LaraL10n.text(
+            en: "Opens the independent Battery X controls.",
+            es: "Abre los controles independientes de Batería X."
+        ))
+    }
+
     private var adaptiveNote: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: applySafetyBlocked || mgr.rcSafetyLocked
@@ -1323,74 +1412,6 @@ struct AuraStudioView: View {
             Spacer(minLength: 0)
         }
         .padding(18)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private var beta9LabCard: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            Label(
-                LaraL10n.text(en: "Beta 9 Lab", es: "Laboratorio Beta 9"),
-                systemImage: "testtube.2"
-            )
-            .font(.headline)
-            .foregroundStyle(.orange)
-
-            Text(LaraL10n.text(
-                en: "New surfaces run through their own native transaction and never enter the Island/Dock apply pipeline.",
-                es: "Las superficies nuevas usan una transacción nativa propia y nunca entran en el flujo de aplicación de Isla o Dock."
-            ))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            NavigationLink {
-                BatteryXAuraView()
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.red.opacity(0.14))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: "battery.75percent")
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "xmark")
-                            .font(.headline.bold())
-                            .foregroundStyle(.red)
-                            .shadow(color: .red, radius: 4)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Battery X")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(LaraL10n.text(
-                            en: "Neon X anchored only to the live battery glyph",
-                            es: "X neón anclada únicamente al icono activo de batería"
-                        ))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(12)
-                .background(Color.primary.opacity(0.035))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(LaraL10n.text(
-                en: "Battery X · Neon X anchored only to the live battery glyph",
-                es: "Battery X · X neón anclada únicamente al icono activo de batería"
-            ))
-            .accessibilityHint(LaraL10n.text(
-                en: "Opens the isolated Battery X field test.",
-                es: "Abre la prueba de campo aislada de Battery X."
-            ))
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }

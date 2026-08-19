@@ -79,8 +79,6 @@ struct BatteryXAuraView: View {
     private var activeSpringBoardPID = 0
     @AppStorage("eagle.batteryX.cleanupRequired")
     private var cleanupRequired = false
-    @AppStorage(EagleReleaseChannel.storageKey)
-    private var releaseChannelRaw = EagleReleaseChannel.stable.rawValue
 
     @State private var isApplying = false
     @State private var applyStage = ""
@@ -93,10 +91,6 @@ struct BatteryXAuraView: View {
 
     private var activePalette: BatteryXPalette? {
         BatteryXPalette(rawValue: activePaletteRaw)
-    }
-
-    private var releaseChannel: EagleReleaseChannel {
-        EagleFeaturePolicy.channel(from: releaseChannelRaw)
     }
 
     private var paletteColumns: [GridItem] {
@@ -379,8 +373,8 @@ struct BatteryXAuraView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(isFieldTestDevice
                      ? LaraL10n.text(
-                        en: "Isolated field test",
-                        es: "Prueba de campo aislada"
+                        en: "Independent battery surface",
+                        es: "Superficie de batería independiente"
                      )
                      : LaraL10n.text(
                         en: "Hardware not allowlisted",
@@ -427,13 +421,12 @@ struct BatteryXAuraView: View {
         }
         .buttonStyle(.plain)
         .disabled(
-            isApplying || releaseChannel != .experimental ||
-            !isFieldTestDevice || cleanupRequired ||
+            isApplying || !isFieldTestDevice || cleanupRequired ||
             !mgr.dsready || mgr.rcSafetyLocked
         )
         .opacity(
-            releaseChannel != .experimental || !isFieldTestDevice ||
-            cleanupRequired || !mgr.dsready || mgr.rcSafetyLocked ? 0.48 : 1
+            !isFieldTestDevice || cleanupRequired ||
+                !mgr.dsready || mgr.rcSafetyLocked ? 0.48 : 1
         )
     }
 
@@ -501,7 +494,7 @@ struct BatteryXAuraView: View {
         BatteryXDiagnostics.log(
             "request",
             "op=\(operationID) palette=\(palette) device=\(devicemachine()) " +
-            "channel=\(releaseChannel.rawValue) cleanup=\(cleanupRequired) " +
+            "cleanup=\(cleanupRequired) " +
             "dsready=\(mgr.dsready) safety=\(mgr.rcSafetyLocked)"
         )
 
@@ -509,13 +502,6 @@ struct BatteryXAuraView: View {
             notice = BatteryXNotice(message: LaraL10n.text(
                 en: "Battery X is still finishing the previous operation.",
                 es: "Battery X todavía está terminando la operación anterior."
-            ))
-            return
-        }
-        guard releaseChannel == .experimental || palette == 0 else {
-            finish(message: LaraL10n.text(
-                en: "Battery X sent nothing because Apply is available only in the Experimental channel.",
-                es: "Battery X no envió nada porque Aplicar solo está disponible en el canal Experimental."
             ))
             return
         }
