@@ -7,8 +7,10 @@ struct LaraHomeView: View {
     @AppStorage(EagleInterfaceMode.storageKey) private var interfaceMode = EagleInterfaceMode.simple
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
-    @AppStorage("eagle.home.auraStudio.beta9Seen")
-    private var hasSeenAuraStudioBeta9 = false
+    @AppStorage("eagle.home.auraStudio.beta10Seen")
+    private var hasSeenAuraStudioBeta10 = false
+    @AppStorage("eagle.home.homeLabelColor.beta10Seen")
+    private var hasSeenHomeLabelColorBeta10 = false
     @State private var showingAdvancedSystemTools = false
     @State private var toolSearchQuery = ""
     @FocusState private var isToolSearchFocused: Bool
@@ -59,13 +61,13 @@ struct LaraHomeView: View {
                             LaraFeatureCard(
                                 title: "Aura Studio",
                                 subtitle: LaraL10n.text(
-                                    en: "Dynamic Island, Dock, and Home icon neon.",
-                                    es: "Neón para Dynamic Island, Dock e iconos de Inicio."
+                                    en: "Dynamic Island neon, rainbow, and glow.",
+                                    es: "Neón, arcoíris y brillo para Dynamic Island."
                                 ),
-                                systemImage: "sparkles",
+                                systemImage: "capsule.fill",
                                 accent: Color(red: 0.46, green: 0.24, blue: 1.00),
                                 artwork: .aura,
-                                badge: hasSeenAuraStudioBeta9
+                                badge: hasSeenAuraStudioBeta10
                                     ? nil
                                     : LaraL10n.text(en: "NEW", es: "NUEVO")
                             )
@@ -151,7 +153,7 @@ struct LaraHomeView: View {
 
                                 Divider().padding(.leading, 62)
 
-                                NavigationLink(destination: HomeLabelColorView()) {
+                                NavigationLink(destination: homeLabelColorDestination) {
                                     LaraToolRow(
                                         title: LaraL10n.text(en: "App Name Color", es: "Color de nombres"),
                                         subtitle: LaraL10n.text(
@@ -159,7 +161,10 @@ struct LaraHomeView: View {
                                             es: "Colores sólidos para los textos de Inicio · Beta"
                                         ),
                                         systemImage: "textformat",
-                                        accent: Color(red: 0.36, green: 0.30, blue: 0.88)
+                                        accent: Color(red: 0.36, green: 0.30, blue: 0.88),
+                                        badge: hasSeenHomeLabelColorBeta10
+                                            ? nil
+                                            : LaraL10n.text(en: "NEW", es: "NUEVO")
                                     )
                                 }
 
@@ -638,7 +643,12 @@ struct LaraHomeView: View {
             title: route.title,
             subtitle: route.subtitle,
             systemImage: route.systemImage,
-            accent: route.accent
+            accent: route.accent,
+            badge: route == .auraStudio && !hasSeenAuraStudioBeta10
+                ? LaraL10n.text(en: "NEW", es: "NUEVO")
+                : (route == .homeLabelColor && !hasSeenHomeLabelColorBeta10
+                    ? LaraL10n.text(en: "NEW", es: "NUEVO")
+                    : nil)
         )
     }
 
@@ -652,7 +662,7 @@ struct LaraHomeView: View {
         case .wallpapers:
             AnimatedWallpapersView()
         case .homeLabelColor:
-            HomeLabelColorView()
+            homeLabelColorDestination
         case .cards:
             CardView()
         case .passcode:
@@ -671,7 +681,14 @@ struct LaraHomeView: View {
     private var auraStudioDestination: some View {
         AuraStudioView()
             .onAppear {
-                hasSeenAuraStudioBeta9 = true
+                hasSeenAuraStudioBeta10 = true
+            }
+    }
+
+    private var homeLabelColorDestination: some View {
+        HomeLabelColorView()
+            .onAppear {
+                hasSeenHomeLabelColorBeta10 = true
             }
     }
 
@@ -926,8 +943,13 @@ private struct LaraFeatureCard: View {
             )
 
             Capsule(style: .continuous)
+                .stroke(Color.purple.opacity(0.20), lineWidth: 15)
+                .frame(width: 164, height: 58)
+                .blur(radius: 13)
+
+            Capsule(style: .continuous)
                 .fill(Color.black)
-                .frame(width: 116, height: 36)
+                .frame(width: 154, height: 49)
                 .overlay {
                     Capsule(style: .continuous)
                         .stroke(
@@ -935,48 +957,11 @@ private struct LaraFeatureCard: View {
                                 colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
                                 center: .center
                             ),
-                            lineWidth: 3
+                            lineWidth: 3.5
                         )
                 }
-                .shadow(color: .cyan.opacity(0.55), radius: 10)
-                .offset(y: -35)
-
-            HStack(spacing: 12) {
-                ForEach(0..<4, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(hue: Double(index) / 5.0, saturation: 0.72, brightness: 0.98),
-                                    Color(hue: Double(index + 1) / 5.0, saturation: 0.80, brightness: 0.58),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 38, height: 38)
-                        .shadow(
-                            color: Color(hue: Double(index) / 5.0, saturation: 0.9, brightness: 1).opacity(0.62),
-                            radius: 10
-                        )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [.pink, .purple, .cyan],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 2
-                    )
-            }
-            .shadow(color: .purple.opacity(0.38), radius: 14, y: 4)
-            .offset(y: 30)
+                .shadow(color: .cyan.opacity(0.52), radius: 11)
+                .shadow(color: .pink.opacity(0.34), radius: 20)
         }
     }
 
@@ -1109,6 +1094,7 @@ private struct LaraToolRow: View {
     let subtitle: String
     let systemImage: String
     let accent: Color
+    var badge: String? = nil
 
     var body: some View {
         HStack(spacing: 13) {
@@ -1128,6 +1114,22 @@ private struct LaraToolRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .frame(minHeight: 22)
+                    .background(
+                        LinearGradient(
+                            colors: [.pink, .purple, .blue],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: Capsule()
+                    )
+                    .accessibilityHidden(true)
+            }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
@@ -1137,6 +1139,10 @@ private struct LaraToolRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue(subtitle)
+        .accessibilityValue(
+            badge == nil
+                ? subtitle
+                : "\(subtitle). \(LaraL10n.text(en: "New", es: "Nuevo"))"
+        )
     }
 }
