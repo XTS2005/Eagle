@@ -145,7 +145,7 @@ struct BatteryAuraView: View {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView()
+                        EagleRainbowSpinner(size: 28)
                         Text(LaraL10n.text(
                             en: "Coloring the system battery…",
                             es: "Coloreando la batería del sistema…"

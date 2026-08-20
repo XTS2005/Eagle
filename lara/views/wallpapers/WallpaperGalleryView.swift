@@ -404,7 +404,7 @@ struct WallpaperGalleryView: View {
     private var loadingView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                ProgressView()
+                EagleRainbowSpinner(size: 22)
                 Text("Cargando la colección…")
                     .font(.headline)
             }

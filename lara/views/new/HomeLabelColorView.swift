@@ -157,7 +157,7 @@ struct HomeLabelColorView: View {
                 ZStack {
                     Color.black.opacity(0.18).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView()
+                        EagleRainbowSpinner(size: 28)
                         Text(operationStage)
                             .font(.headline)
                             .multilineTextAlignment(.center)

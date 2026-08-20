@@ -251,7 +251,7 @@ struct EaglePrepareCrashReportCard: View {
                 } label: {
                     HStack {
                         if diagnostics.isCreatingReport {
-                            ProgressView()
+                            EagleRainbowSpinner(size: 18)
                         }
                         Text(LaraL10n.text(en: "Create Prepare Report", es: "Crear reporte de preparación"))
                             .frame(maxWidth: .infinity)

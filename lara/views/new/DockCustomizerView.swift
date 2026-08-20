@@ -39,7 +39,7 @@ struct DockCustomizerView: View {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView()
+                        EagleRainbowSpinner(size: 28)
                         Text(LaraL10n.text(
                             en: "Updating the Dock…",
                             es: "Actualizando el Dock…"

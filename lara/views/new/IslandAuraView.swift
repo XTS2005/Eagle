@@ -126,7 +126,7 @@ struct IslandAuraView: View {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView()
+                        EagleRainbowSpinner(size: 28)
                         Text(LaraL10n.text(
                             en: "Lighting the Island…",
                             es: "Iluminando la Island…"

@@ -669,7 +669,7 @@ struct AuraStudioView: View {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                 VStack(spacing: 12) {
-                    ProgressView()
+                    EagleRainbowSpinner(size: 28)
                         Text(applyStage.isEmpty
                              ? LaraL10n.text(
                                 en: "Preparing a safe system update…",

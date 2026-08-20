@@ -134,7 +134,7 @@ struct LaraRemoteMediaPreview: View {
 
     private var loadingView: some View {
         VStack(spacing: 9) {
-            ProgressView()
+            EagleRainbowSpinner(size: 22)
             Text("Cargando vista previa…")
                 .font(.caption)
                 .foregroundStyle(.secondary)
