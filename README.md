@@ -15,13 +15,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.9/Eagle.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_9-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 9 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.10/Eagle.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_10-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 10 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.9)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.10)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -34,10 +34,10 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 0.3.0 Public Beta 9 · build 50 |
+| **Current release** | Eagle 0.3.0 Public Beta 10 · build 58 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
-| **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow · isolated apply and verification |
+| **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow/outline · isolated apply and verification |
 | **Project status** | Public beta · test one change at a time |
 
 > [!WARNING]
@@ -56,15 +56,18 @@
 | 🧩 **Icon Studio · Beta** | Imports icon themes and offers alternate icon shapes. |
 | 📱 **Dock · Beta** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
 | ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting, plus Beta Home Icon Neon on its verified device/build. |
+| 🔤 **App Name Color · Beta** | Applies a page-owned solid color to app names on the current Home Screen page. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Beta 9
+### New in Beta 10
 
-- **Home Icon Neon** adds a verified diffuse glow behind visible app icons on the current Home page without outlining or replacing the icons.
-- Six quick neon presets and a full color picker provide any custom glow color, with three intensity levels and independent removal.
-- Aura Studio now appears first on Home and carries a one-time **NEW** badge until it is opened.
-- The Preparing-device spinner and progress fill now animate through rainbow colors; the Prepare engine and button behavior are unchanged.
-- App Library Neon and Battery X are not included because they did not meet Eagle's visible-verification standard.
+- **Home Icon Neon** now offers both a diffuse glow and a precise neon outline around visible icons on the current Home page.
+- **App Name Color** applies a solid custom color to the app names on the current page and keeps its overlays owned by that page to prevent migration when swiping.
+- Aura Studio and App Name Color carry temporary one-time **NEW** badges. The Aura Studio Home card now presents Dynamic Island clearly while Dock remains available inside.
+- A one-time welcome screen explains the current device status, supported iOS ranges, important exclusions and this beta's changes before use.
+- Prepare progress, blocking-operation spinners and the Eagle icon use a restrained moving rainbow accent. Prepare engine behavior is unchanged.
+- Production now blocks Prepare on iPhone 16 (`iPhone17,3`) with iOS 18.5 after field reports of full device restarts.
+- App Library Neon and Battery X remain excluded because they did not meet Eagle's visible-verification standard.
 
 ### Aura Studio safety model
 
@@ -94,6 +97,8 @@ Looking for an older build? Browse [all Eagle releases](https://github.com/leona
 - **Prepare support:** iOS 16.x is experimental (16.7.2 has limited testing);
   iOS 17.0–18.7.1 and 26.0–26.0.1 are accepted.
 - iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ and current MIE devices are blocked.
+- Prepare is additionally blocked on iPhone 16 (`iPhone17,3`) running iOS 18.5
+  because that hardware/release combination produced repeated field restarts.
 - Aura Studio live changes remain limited to verified iOS 17/18 SpringBoard routes.
 - If Island Aura reports **Safe Compact Halo**, it will not expand with music,
   screen recording or timers. Only **Adaptive Aura** follows those layouts.
