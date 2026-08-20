@@ -689,8 +689,8 @@ struct LaraHomeView: View {
                 Text(LaraL10n.text(en: "You stay in control", es: "Tú mantienes el control"))
                     .font(.subheadline.weight(.semibold))
                 Text(LaraL10n.text(
-                    en: "Preparation starts only when you press Prepare iPhone. If the device restarts, reopen Eagle and try again; a report can be created only when you request it.",
-                    es: "La preparación comienza solo cuando pulsas Preparar iPhone. Si el dispositivo se reinicia, vuelve a abrir Eagle e inténtalo otra vez; el reporte se crea solo cuando tú lo solicitas."
+                    en: "Preparation starts only when you press Prepare iPhone. If the device restarts, do not retry; reopen Eagle and create the report manually.",
+                    es: "La preparación comienza solo cuando pulsas Preparar iPhone. Si el dispositivo se reinicia, no lo intentes otra vez; vuelve a abrir Eagle y crea el reporte manualmente."
                 ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)

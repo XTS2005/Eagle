@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Combine
+import Darwin
 
 /// Passive, user-triggered diagnostics for Prepare.
 ///
@@ -66,7 +67,7 @@ final class EaglePrepareDiagnostics: ObservableObject {
         let report = """
         Eagle Prepare Diagnostic
         Generated only after the user requested this report.
-        No diagnostic observer or disk write runs during Prepare.
+        Report creation never starts automatically and adds no Prepare observer.
 
         \(metadata)
 
@@ -85,20 +86,36 @@ final class EaglePrepareDiagnostics: ObservableObject {
         return destination
     }
 
-    nonisolated private static func metadata() -> String {
+    private static func metadata() -> String {
         let bundle = Bundle.main
         let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
         let os = ProcessInfo.processInfo.operatingSystemVersion
+        let machine = machineIdentifier()
+        let systemBuild = sysctlString("kern.osversion") ?? "unknown"
+        let support = eagleSupportAssessment(version: os, machine: machine)
         let locale = Locale.current.identifier
 
         return """
         App: Eagle \(version) (\(build))
-        Device: \(machineIdentifier())
-        iOS: \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)
+        Device: \(machine)
+        iOS: \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) (\(systemBuild))
+        Prepare support: \(support.status.rawValue) [\(support.reason.rawValue)]
         Locale: \(locale)
         Generated: \(ISO8601DateFormatter().string(from: Date()))
         """
+    }
+
+    nonisolated private static func sysctlString(_ name: String) -> String? {
+        var size = 0
+        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 1 else {
+            return nil
+        }
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else {
+            return nil
+        }
+        return String(cString: buffer)
     }
 
     nonisolated private static func machineIdentifier() -> String {
@@ -160,8 +177,8 @@ struct EaglePrepareCrashReportCard: View {
                         .font(.headline)
 
                     Text(LaraL10n.text(
-                        en: "If the iPhone restarted, reopen Eagle and create this report. Nothing is recorded while Prepare is running.",
-                        es: "Si el iPhone se reinició, vuelve a abrir Eagle y crea este reporte. No se registra nada mientras Preparar está en ejecución."
+                        en: "If the iPhone restarted, do not retry. Reopen Eagle and create this report; report creation starts only when you request it.",
+                        es: "Si el iPhone se reinició, no lo intentes otra vez. Vuelve a abrir Eagle y crea este reporte; el reporte comienza solo cuando tú lo solicitas."
                     ))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

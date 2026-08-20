@@ -20,14 +20,21 @@ struct EagleDynamicIslandCompatibility: Equatable {
     let availability: Availability
 
     /// Known hardware may be previewed in Simulator, but SpringBoard mutation
-    /// is intentionally limited to a physical, explicitly supported model.
+    /// is intentionally limited to a physical, explicitly supported model and
+    /// an access-engine combination that has not been field-blocked.
     var canAttemptLiveIslandAura: Bool {
-        availability == .supported && !isSimulator
+        availability == .supported &&
+            !isSimulator &&
+            eagleSupportAssessment(
+                version: ProcessInfo.processInfo.operatingSystemVersion,
+                machine: modelIdentifier
+            ).allowsPrepare
     }
 
     var diagnosticsToken: String {
         "runtime=\(runtimeMachine) model=\(modelIdentifier) " +
-            "simulator=\(isSimulator) island=\(availability.rawValue)"
+            "simulator=\(isSimulator) island=\(availability.rawValue) " +
+            "live=\(canAttemptLiveIslandAura ? "allowed" : "blocked")"
     }
 
     static var current: EagleDynamicIslandCompatibility {

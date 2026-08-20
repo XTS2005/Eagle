@@ -61,8 +61,8 @@ struct LaraAccessView: View {
                     Text(LaraL10n.text(en: "Prepare access", es: "Preparar acceso"))
                         .font(.headline)
                     Text(LaraL10n.text(
-                        en: "Uses Eagle's proven access engine. If the iPhone restarts, reopen Eagle and try again.",
-                        es: "Usa el motor de acceso probado de Eagle. Si el iPhone se reinicia, vuelve a abrir Eagle e inténtalo otra vez."
+                        en: "Uses Eagle's access engine only on allowed device and iOS combinations. If the iPhone restarts, do not retry; reopen Eagle and share a Prepare report.",
+                        es: "Usa el motor de acceso de Eagle solo en combinaciones permitidas de dispositivo e iOS. Si el iPhone se reinicia, no lo intentes otra vez; abre Eagle y comparte un reporte de Preparar."
                     ))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -102,9 +102,8 @@ struct LaraAccessView: View {
             .disabled(isBusy || isunsupported() || isdebugged())
 
             if isunsupported() {
-                Text(LaraL10n.text(
-                    en: "This device or iOS version is not compatible with Eagle's current engine.",
-                    es: "Este dispositivo o esta versión de iOS no es compatible con el motor actual de Eagle."
+                Text(eagleSupportAssessment().message(
+                    spanish: LaraL10n.language == .spanish
                 ))
                     .font(.footnote)
                     .foregroundStyle(.secondary)

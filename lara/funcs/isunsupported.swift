@@ -27,6 +27,7 @@ enum EagleSupportStatus: String, Equatable {
 /// Stable diagnostic identifiers. These are deliberately not localized so a
 /// shared Prepare report can be searched and compared across languages.
 enum EagleSupportReason: String, Equatable {
+    case iphone16IOS185FieldRestart = "iphone17,3-ios18.5.field-restart"
     case ios16Experimental = "ios16.experimental"
     case ios1672LimitedTesting = "ios16.7.2.tested-limited"
     case ios17Through1871 = "ios17.0-ios18.7.1.supported"
@@ -51,6 +52,10 @@ struct EagleSupportAssessment: Equatable {
     /// diagnostic export. The app UI can continue selecting its own language.
     func message(spanish: Bool) -> String {
         switch reason {
+        case .iphone16IOS185FieldRestart:
+            return spanish
+                ? "Preparar puede reiniciar el iPhone 16 con iOS 18.5. Eagle bloqueó esta combinación antes de ejecutar el motor de acceso."
+                : "Prepare can restart iPhone 16 on iOS 18.5. Eagle blocked this combination before running the access engine."
         case .ios16Experimental:
             return spanish
                 ? "iOS 16.x es experimental. Puede funcionar, pero necesita más pruebas."
@@ -121,6 +126,19 @@ func eagleSupportAssessment(
     version: OperatingSystemVersion,
     machine: String
 ) -> EagleSupportAssessment {
+    // A public field report reproduced a full device restart on this exact
+    // hardware/software pair (iPhone 16, iOS 18.5 / 22F76). Fail closed before
+    // the access engine runs. The proven iPhone17,1 / iOS 18.6.2 path and all
+    // other existing classifications remain unchanged.
+    if machine == "iPhone17,3",
+       version.majorVersion == 18,
+       version.minorVersion == 5 {
+        return EagleSupportAssessment(
+            status: .unsupported,
+            reason: .iphone16IOS185FieldRestart
+        )
+    }
+
     if hasmie(machine: machine) {
         return EagleSupportAssessment(
             status: .unsupported,
