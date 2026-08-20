@@ -149,6 +149,20 @@ struct LaraHomeView: View {
                                     )
                                 }
 
+                                Divider().padding(.leading, 62)
+
+                                NavigationLink(destination: HomeLabelColorView()) {
+                                    LaraToolRow(
+                                        title: LaraL10n.text(en: "App Name Color", es: "Color de nombres"),
+                                        subtitle: LaraL10n.text(
+                                            en: "Solid Home Screen text colors · Beta",
+                                            es: "Colores sólidos para los textos de Inicio · Beta"
+                                        ),
+                                        systemImage: "textformat",
+                                        accent: Color(red: 0.36, green: 0.30, blue: 0.88)
+                                    )
+                                }
+
                                 if interfaceMode == .advanced {
                                     Divider().padding(.leading, 62)
 
@@ -473,6 +487,8 @@ struct LaraHomeView: View {
                 return allows(.wallpapers)
             case .auraStudio:
                 return allows(.islandGlow) || allows(.dockGlow)
+            case .homeLabelColor:
+                return true
             case .eagleSystem, .cards, .passcode, .icons, .dock:
                 return interfaceMode == .advanced
             case .advancedSettings:
@@ -635,6 +651,8 @@ struct LaraHomeView: View {
             EagleSystemView()
         case .wallpapers:
             AnimatedWallpapersView()
+        case .homeLabelColor:
+            HomeLabelColorView()
         case .cards:
             CardView()
         case .passcode:
@@ -688,6 +706,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case completeStyles
     case eagleSystem
     case wallpapers
+    case homeLabelColor
     case cards
     case passcode
     case icons
@@ -701,6 +720,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .completeStyles: return LaraL10n.text(en: "Styles", es: "Estilos")
         case .eagleSystem: return "Eagle System"
         case .wallpapers: return LaraL10n.text(en: "Wallpapers", es: "Fondos")
+        case .homeLabelColor:
+            return LaraL10n.text(en: "App Name Color", es: "Color de nombres")
         case .cards: return LaraL10n.text(en: "Cards", es: "Tarjetas")
         case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
         case .icons: return LaraL10n.text(en: "Icons", es: "Iconos")
@@ -719,6 +740,11 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
             return LaraL10n.text(en: "Guardian and recovery", es: "Guardian y recuperación")
         case .wallpapers:
             return LaraL10n.text(en: "Explore or create", es: "Explora o crea")
+        case .homeLabelColor:
+            return LaraL10n.text(
+                en: "Solid Home Screen text colors · Beta",
+                es: "Colores sólidos para los textos de Inicio · Beta"
+            )
         case .cards:
             return LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet")
         case .passcode:
@@ -739,6 +765,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .completeStyles: return "sparkles"
         case .eagleSystem: return "checkmark.shield.fill"
         case .wallpapers: return "photo.on.rectangle.angled"
+        case .homeLabelColor: return "textformat"
         case .cards: return "creditcard.fill"
         case .passcode: return "circle.grid.3x3.fill"
         case .icons: return "square.grid.2x2.fill"
@@ -753,6 +780,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .completeStyles: return Color(red: 0.33, green: 0.25, blue: 0.82)
         case .eagleSystem: return .indigo
         case .wallpapers: return Color(red: 0.34, green: 0.31, blue: 0.88)
+        case .homeLabelColor: return Color(red: 0.36, green: 0.30, blue: 0.88)
         case .cards: return Color(red: 0.08, green: 0.48, blue: 0.52)
         case .passcode: return Color(red: 0.56, green: 0.28, blue: 0.72)
         case .icons: return Color(red: 0.18, green: 0.60, blue: 0.42)
@@ -767,6 +795,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .completeStyles: return "style styles estilo estilos complete completo visual"
         case .eagleSystem: return "system sistema guardian recovery recuperación"
         case .wallpapers: return "wallpaper wallpapers fondo fondos creator creador gallery galería"
+        case .homeLabelColor:
+            return "text color label labels name names texto color nombre nombres home inicio solid sólido"
         case .cards: return "card cards tarjeta tarjetas wallet"
         case .passcode: return "passcode code código unlock desbloqueo key keys números"
         case .icons: return "icon icons icono iconos theme themes tema temas android shape formas"
