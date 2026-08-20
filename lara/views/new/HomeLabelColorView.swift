@@ -635,7 +635,7 @@ struct HomeLabelColorView: View {
         case -5:
             return LaraL10n.text(en: "This device/build is outside the verified allowlist.", es: "Este dispositivo o versión no está en la lista verificada.")
         case -6:
-            return LaraL10n.text(en: "SpringBoard did not expose the verified label-image renderer.", es: "SpringBoard no expuso el renderizador verificado de imágenes de nombres.")
+            return LaraL10n.text(en: "SpringBoard did not expose the complete label-image renderer.", es: "SpringBoard no expuso el renderizador completo de imágenes de nombres.")
         case -8:
             return LaraL10n.text(en: "The current page hierarchy exceeded the safe limit.", es: "La jerarquía de la página superó el límite seguro.")
         case -9:
@@ -647,6 +647,11 @@ struct HomeLabelColorView: View {
             )
         case -13:
             return LaraL10n.text(en: "The page exceeded the safe call budget before changing text.", es: "La página superó el presupuesto seguro antes de cambiar el texto.")
+        case -14:
+            return LaraL10n.text(
+                en: "iOS did not preserve the selected color in every copied label parameter. Nothing was attached or marked active.",
+                es: "iOS no conservó el color elegido en todos los parámetros copiados. No se adjuntó ni marcó nada como activo."
+            )
         default:
             return LaraL10n.text(
                 en: "App Name Color returned result \(result). \(restoring ? "Restore was not confirmed." : "No active state was recorded.")",
