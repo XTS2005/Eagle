@@ -15,13 +15,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.8/Eagle.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_8-06B6D4?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 8 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.9/Eagle.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_9-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 9 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.8)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.9)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -34,10 +34,10 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 0.3.0 Public Beta 8 · build 35 |
+| **Current release** | Eagle 0.3.0 Public Beta 9 · build 50 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
-| **Verified Aura surfaces** | Dynamic Island and Dock · isolated apply and verification |
+| **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow · isolated apply and verification |
 | **Project status** | Public beta · test one change at a time |
 
 > [!WARNING]
@@ -55,16 +55,16 @@
 | 🔢 **Passcode** | Browses, imports, previews, applies and restores compatible key themes. |
 | 🧩 **Icon Studio · Beta** | Imports icon themes and offers alternate icon shapes. |
 | 📱 **Dock · Beta** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
-| ✨ **Aura Studio · Experimental** | Applies independently colored Dynamic Island and Dock lighting with Glow, Pulse, Island Rainbow, guarded Tint and per-surface verification. |
+| ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting, plus Beta Home Icon Neon on its verified device/build. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Beta 8
+### New in Beta 9
 
-- Faster navigation with local tool search and clearer Home organization.
-- Favorites for wallpapers and passcode themes, plus remembered wallpaper choices.
-- Search and responsive layouts for Font Library and Icon Studio, including safe removal of Eagle's local imported-font copies.
-- Truthful OTA and Screen Time configuration readback, a live log viewer and a shareable support snapshot.
-- Better layouts for Display Zoom, Dynamic Type and VoiceOver without changing the restored Dock or Dynamic Island Aura engine.
+- **Home Icon Neon** adds a verified diffuse glow behind visible app icons on the current Home page without outlining or replacing the icons.
+- Six quick neon presets and a full color picker provide any custom glow color, with three intensity levels and independent removal.
+- Aura Studio now appears first on Home and carries a one-time **NEW** badge until it is opened.
+- The Preparing-device spinner and progress fill now animate through rainbow colors; the Prepare engine and button behavior are unchanged.
+- App Library Neon and Battery X are not included because they did not meet Eagle's visible-verification standard.
 
 ### Aura Studio safety model
 
@@ -72,6 +72,8 @@
   active merely because the other succeeded.
 - Rainbow is available for Dynamic Island. Dock Rainbow remains disabled because
   it has not been proven reliable on a physical device.
+- Home Icon Neon is initially allowlisted for iPhone 16 Pro (`iPhone17,1`) on
+  iOS 18.6.2 (`22G100`) and applies a one-time snapshot page by page.
 - A failed verification keeps the safety lock closed and does not trigger an
   automatic respring.
 - Aura overlays may disappear after a SpringBoard respring or device reboot and

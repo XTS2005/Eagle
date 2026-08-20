@@ -68,9 +68,9 @@ enum EagleProductFeature: String, CaseIterable, Identifiable {
         switch self {
         case .prepare, .wallpapers, .completeStyles, .islandGlow, .dockGlow:
             return .stable
-        case .scenes, .auraPulse, .auraRainbow:
+        case .scenes, .auraPulse, .auraRainbow, .homeIconNeon:
             return .beta
-        case .islandTint, .homeIconNeon, .advancedSystemTools:
+        case .islandTint, .advancedSystemTools:
             return .experimental
         }
     }

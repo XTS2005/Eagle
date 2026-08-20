@@ -1327,7 +1327,7 @@ struct AuraStudioView: View {
                     }
 
                     Spacer(minLength: 6)
-                    Text(LaraL10n.text(en: "EXPERIMENTAL", es: "EXPERIMENTAL"))
+                    Text("BETA")
                         .font(.caption2.bold())
                         .foregroundStyle(.cyan)
                         .padding(.horizontal, 7)
@@ -1380,8 +1380,8 @@ struct AuraStudioView: View {
             es: "Neón de iconos. Brillo detrás de las apps de la página actual."
         ))
         .accessibilityHint(LaraL10n.text(
-            en: "Opens independent experimental controls.",
-            es: "Abre controles experimentales independientes."
+            en: "Opens independent Beta controls.",
+            es: "Abre controles Beta independientes."
         ))
     }
 

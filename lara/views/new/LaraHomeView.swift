@@ -7,6 +7,8 @@ struct LaraHomeView: View {
     @AppStorage(EagleInterfaceMode.storageKey) private var interfaceMode = EagleInterfaceMode.simple
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @AppStorage("eagle.home.auraStudio.beta9Seen")
+    private var hasSeenAuraStudioBeta9 = false
     @State private var showingAdvancedSystemTools = false
     @State private var toolSearchQuery = ""
     @FocusState private var isToolSearchFocused: Bool
@@ -53,6 +55,23 @@ struct LaraHomeView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 20) {
+                        NavigationLink(destination: auraStudioDestination) {
+                            LaraFeatureCard(
+                                title: "Aura Studio",
+                                subtitle: LaraL10n.text(
+                                    en: "Dynamic Island, Dock, and Home icon neon.",
+                                    es: "Neón para Dynamic Island, Dock e iconos de Inicio."
+                                ),
+                                systemImage: "sparkles",
+                                accent: Color(red: 0.46, green: 0.24, blue: 1.00),
+                                artwork: .aura,
+                                badge: hasSeenAuraStudioBeta9
+                                    ? nil
+                                    : LaraL10n.text(en: "NEW", es: "NUEVO")
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         NavigationLink(destination: CompleteStylesView()) {
                             LaraFeatureCard(
                                 title: LaraL10n.text(en: "Styles", es: "Estilos"),
@@ -201,19 +220,6 @@ struct LaraHomeView: View {
                                     }
                                 }
 
-                                Divider().padding(.leading, 62)
-
-                                NavigationLink(destination: AuraStudioView()) {
-                                    LaraToolRow(
-                                        title: "Aura Studio",
-                                        subtitle: LaraL10n.text(
-                                            en: "Every system neon in one place",
-                                            es: "Todos los neones en un solo lugar"
-                                        ),
-                                        systemImage: "sparkles",
-                                        accent: Color(red: 0.10, green: 0.78, blue: 1.00)
-                                    )
-                                }
                             }
                             .buttonStyle(.plain)
                             .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -640,8 +646,15 @@ struct LaraHomeView: View {
         case .advancedSettings:
             EmptyView()
         case .auraStudio:
-            AuraStudioView()
+            auraStudioDestination
         }
+    }
+
+    private var auraStudioDestination: some View {
+        AuraStudioView()
+            .onAppear {
+                hasSeenAuraStudioBeta9 = true
+            }
     }
 
     private var homeAccessCard: some View {
@@ -671,6 +684,7 @@ struct LaraHomeView: View {
 }
 
 private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
+    case auraStudio
     case completeStyles
     case eagleSystem
     case wallpapers
@@ -679,7 +693,6 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case icons
     case dock
     case advancedSettings
-    case auraStudio
 
     var id: String { rawValue }
 
@@ -766,6 +779,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
 
 private struct LaraFeatureCard: View {
     enum Artwork {
+        case aura
         case styles
         case wallpaper
         case card
@@ -777,6 +791,23 @@ private struct LaraFeatureCard: View {
     let systemImage: String
     let accent: Color
     let artwork: Artwork
+    let badge: String?
+
+    init(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        accent: Color,
+        artwork: Artwork,
+        badge: String? = nil
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.accent = accent
+        self.artwork = artwork
+        self.badge = badge
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -784,6 +815,8 @@ private struct LaraFeatureCard: View {
                 accent.opacity(0.12)
 
                 switch artwork {
+                case .aura:
+                    auraArtwork
                 case .styles:
                     stylesArtwork
                 case .wallpaper:
@@ -829,10 +862,92 @@ private struct LaraFeatureCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.primary.opacity(0.055), lineWidth: 1)
         }
+        .overlay(alignment: .topTrailing) {
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 25)
+                    .background(
+                        LinearGradient(
+                            colors: [.pink, .purple, .blue],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: Capsule()
+                    )
+                    .padding(12)
+                    .accessibilityLabel(LaraL10n.text(en: "New", es: "Nuevo"))
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(subtitle)
+    }
+
+    private var auraArtwork: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.black, Color(red: 0.11, green: 0.05, blue: 0.24), Color.black],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Capsule(style: .continuous)
+                .fill(Color.black)
+                .frame(width: 116, height: 36)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
+                                center: .center
+                            ),
+                            lineWidth: 3
+                        )
+                }
+                .shadow(color: .cyan.opacity(0.55), radius: 10)
+                .offset(y: -35)
+
+            HStack(spacing: 12) {
+                ForEach(0..<4, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hue: Double(index) / 5.0, saturation: 0.72, brightness: 0.98),
+                                    Color(hue: Double(index + 1) / 5.0, saturation: 0.80, brightness: 0.58),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 38, height: 38)
+                        .shadow(
+                            color: Color(hue: Double(index) / 5.0, saturation: 0.9, brightness: 1).opacity(0.62),
+                            radius: 10
+                        )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.pink, .purple, .cyan],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 2
+                    )
+            }
+            .shadow(color: .purple.opacity(0.38), radius: 14, y: 4)
+            .offset(y: 30)
+        }
     }
 
     private var stylesArtwork: some View {

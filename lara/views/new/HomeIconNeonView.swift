@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Darwin
 
 private struct HomeIconNeonNotice: Identifiable {
@@ -13,6 +14,7 @@ private enum HomeIconNeonPalette: Int, CaseIterable, Identifiable {
     case acidGreen = 4
     case ultraviolet = 5
     case amber = 6
+    case custom = 7
 
     var id: Int { rawValue }
 
@@ -24,6 +26,7 @@ private enum HomeIconNeonPalette: Int, CaseIterable, Identifiable {
         case .acidGreen: return LaraL10n.text(en: "Acid green", es: "Verde ácido")
         case .ultraviolet: return LaraL10n.text(en: "Ultraviolet", es: "Ultravioleta")
         case .amber: return LaraL10n.text(en: "Amber", es: "Ámbar")
+        case .custom: return LaraL10n.text(en: "Custom", es: "Personalizado")
         }
     }
 
@@ -35,6 +38,7 @@ private enum HomeIconNeonPalette: Int, CaseIterable, Identifiable {
         case .acidGreen: return .green
         case .ultraviolet: return .purple
         case .amber: return .orange
+        case .custom: return .white
         }
     }
 }
@@ -93,7 +97,6 @@ private enum HomeIconNeonApplyGate {
 struct HomeIconNeonView: View {
     @ObservedObject private var mgr = laramgr.shared
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
@@ -101,6 +104,12 @@ struct HomeIconNeonView: View {
     private var selectedPaletteRaw = HomeIconNeonPalette.electric.rawValue
     @AppStorage("eagle.homeIconNeon.intensity")
     private var selectedIntensityRaw = HomeIconNeonIntensity.vivid.rawValue
+    @AppStorage("eagle.homeIconNeon.customRed")
+    private var customRed = 0.12
+    @AppStorage("eagle.homeIconNeon.customGreen")
+    private var customGreen = 0.78
+    @AppStorage("eagle.homeIconNeon.customBlue")
+    private var customBlue = 1.0
     @AppStorage("eagle.homeIconNeon.activePalette")
     private var activePaletteRaw = 0
     @AppStorage("eagle.homeIconNeon.activeIntensity")
@@ -127,6 +136,51 @@ struct HomeIconNeonView: View {
         nonmutating set { selectedIntensityRaw = newValue.rawValue }
     }
 
+    private var customColor: Color {
+        Color(red: customRed, green: customGreen, blue: customBlue)
+    }
+
+    private var selectedDisplayColor: Color {
+        selectedPalette == .custom ? customColor : selectedPalette.color
+    }
+
+    private var customColorBinding: Binding<Color> {
+        Binding(
+            get: { customColor },
+            set: { newValue in
+                let resolved = UIColor(newValue).resolvedColor(with: .current)
+                var red: CGFloat = 0
+                var green: CGFloat = 0
+                var blue: CGFloat = 0
+                var alpha: CGFloat = 0
+                if resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                    customRed = Double(red)
+                    customGreen = Double(green)
+                    customBlue = Double(blue)
+                    selectedPalette = .custom
+                }
+            }
+        )
+    }
+
+    private var selectedRGB: (red: Int32, green: Int32, blue: Int32) {
+        let color = selectedPalette == .custom
+            ? UIColor(customColor).resolvedColor(with: .current)
+            : UIColor(selectedPalette.color).resolvedColor(with: .current)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return (0, 199, 255)
+        }
+        return (
+            Int32((red * 255).rounded()),
+            Int32((green * 255).rounded()),
+            Int32((blue * 255).rounded())
+        )
+    }
+
     private var releaseChannel: EagleReleaseChannel {
         EagleFeaturePolicy.channel(from: releaseChannelRaw)
     }
@@ -149,12 +203,6 @@ struct HomeIconNeonView: View {
 
     private var hasRecordedEffect: Bool {
         recordedPageCount > 0 || cleanupRequired
-    }
-
-    private var paletteColumns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible())]
-            : [GridItem(.flexible()), GridItem(.flexible())]
     }
 
     var body: some View {
@@ -210,13 +258,13 @@ struct HomeIconNeonView: View {
     }
 
     private var previewCard: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text(LaraL10n.text(
                     en: "Light up the current page",
                     es: "Ilumina la página actual"
                 ))
-                .font(.title2.bold())
+                .font(.headline)
                 Text(LaraL10n.text(
                     en: "A separate glow sits behind each visible app icon.",
                     es: "Un brillo independiente queda detrás de cada icono visible."
@@ -226,8 +274,8 @@ struct HomeIconNeonView: View {
                 .multilineTextAlignment(.center)
             }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(52)), count: 4), spacing: 15) {
-                ForEach(0..<8, id: \.self) { index in
+            HStack(spacing: 18) {
+                ForEach(0..<4, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(
                             LinearGradient(
@@ -239,14 +287,14 @@ struct HomeIconNeonView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 48, height: 48)
+                        .frame(width: 46, height: 46)
                         .overlay {
                             Image(systemName: index.isMultiple(of: 2) ? "sparkles" : "app.fill")
                                 .foregroundStyle(.white.opacity(0.92))
                         }
                         .shadow(
-                            color: selectedPalette.color.opacity(0.92),
-                            radius: selectedIntensity.radius
+                            color: selectedDisplayColor.opacity(0.68),
+                            radius: max(4, selectedIntensity.radius - 1)
                         )
                 }
             }
@@ -275,10 +323,10 @@ struct HomeIconNeonView: View {
             .foregroundStyle(cleanupRequired ? .orange : (activePaletteRaw != 0 ? .green : .secondary))
         }
         .frame(maxWidth: .infinity)
-        .padding(20)
+        .padding(18)
         .background(
             LinearGradient(
-                colors: [Color.black.opacity(0.96), selectedPalette.color.opacity(0.14)],
+                colors: [Color.black.opacity(0.96), selectedDisplayColor.opacity(0.12)],
                 startPoint: .top,
                 endPoint: .bottomTrailing
             ),
@@ -289,43 +337,38 @@ struct HomeIconNeonView: View {
 
     private var paletteCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(LaraL10n.text(en: "Neon color", es: "Color neón"))
-                .font(.headline)
+            HStack {
+                Text(LaraL10n.text(en: "Neon color", es: "Color neón"))
+                    .font(.headline)
+                Spacer()
+                Text(selectedPalette.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
 
-            LazyVGrid(columns: paletteColumns, spacing: 12) {
-                ForEach(HomeIconNeonPalette.allCases) { palette in
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 44, maximum: 52), spacing: 12)],
+                spacing: 12
+            ) {
+                ForEach(HomeIconNeonPalette.allCases.filter { $0 != .custom }) { palette in
                     Button {
                         selectedPalette = palette
                     } label: {
-                        HStack(spacing: 10) {
+                        ZStack {
                             Circle()
                                 .fill(palette.color)
-                                .frame(width: 28, height: 28)
-                                .shadow(color: palette.color, radius: 5)
-                            Text(palette.title)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.primary)
-                            Spacer(minLength: 0)
+                                .frame(width: 34, height: 34)
+                                .shadow(color: palette.color.opacity(0.48), radius: 5)
                             if selectedPalette == palette {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(palette.color)
+                                Circle()
+                                    .strokeBorder(.primary, lineWidth: 2.5)
+                                    .frame(width: 42, height: 42)
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
                             }
                         }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(
-                            selectedPalette == palette
-                                ? palette.color.opacity(0.13)
-                                : Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(
-                                    selectedPalette == palette ? palette.color.opacity(0.7) : .clear,
-                                    lineWidth: 1.5
-                                )
-                        }
+                        .frame(width: 48, height: 48)
                     }
                     .buttonStyle(.plain)
                     .disabled(isApplying)
@@ -333,6 +376,21 @@ struct HomeIconNeonView: View {
                     .accessibilityAddTraits(selectedPalette == palette ? .isSelected : [])
                 }
             }
+
+            Divider()
+
+            ColorPicker(
+                LaraL10n.text(en: "Choose any color", es: "Elegir cualquier color"),
+                selection: customColorBinding,
+                supportsOpacity: false
+            )
+            .font(.subheadline.weight(.medium))
+            .frame(minHeight: 44)
+            .disabled(isApplying)
+            .accessibilityHint(LaraL10n.text(
+                en: "Selects Custom and uses this exact color for the icon glow.",
+                es: "Selecciona Personalizado y usa este color exacto para el brillo."
+            ))
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -409,7 +467,7 @@ struct HomeIconNeonView: View {
             .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(.borderedProminent)
-        .tint(selectedPalette.color)
+        .tint(selectedDisplayColor)
         .disabled(
             isApplying || !mgr.dsready || mgr.rcSafetyLocked ||
             !supportedDevice || !policyAllowsApply
@@ -458,8 +516,8 @@ struct HomeIconNeonView: View {
 
             if !policyAllowsApply {
                 Text(LaraL10n.text(
-                    en: "Switch the feature channel to Experimental to apply. Remove remains available for recovery.",
-                    es: "Cambia el canal de funciones a Experimental para aplicar. Quitar sigue disponible para recuperación."
+                    en: "Switch the feature channel to Beta to apply. Remove remains available for recovery.",
+                    es: "Cambia el canal de funciones a Beta para aplicar. Quitar sigue disponible para recuperación."
                 ))
                 .font(.caption)
                 .foregroundStyle(.orange)
@@ -508,9 +566,12 @@ struct HomeIconNeonView: View {
 
     private func run(intensity: Int) {
         let removing = intensity == 0
+        let operationPalette = selectedPalette
+        let operationRGB = selectedRGB
         HomeIconNeonDiagnostics.log(
             "request",
-            "action=\(removing ? "remove" : "apply") palette=\(selectedPalette.rawValue) " +
+            "action=\(removing ? "remove" : "apply") palette=\(operationPalette.rawValue) " +
+            "rgb=\(operationRGB.red),\(operationRGB.green),\(operationRGB.blue) " +
             "intensity=\(intensity) device=\(devicemachine()) channel=\(releaseChannel.rawValue)"
         )
 
@@ -530,8 +591,8 @@ struct HomeIconNeonView: View {
 
         guard removing || policyAllowsApply else {
             finishBeforeCall(LaraL10n.text(
-                en: "Select the Experimental feature channel before applying this field test.",
-                es: "Selecciona el canal Experimental antes de aplicar esta prueba."
+                en: "Select the Beta feature channel before applying this field test.",
+                es: "Selecciona el canal Beta antes de aplicar esta prueba."
             ))
             return
         }
@@ -621,8 +682,11 @@ struct HomeIconNeonView: View {
                 let result = autoreleasepool {
                     eagle_set_home_icon_neon(
                         process,
-                        Int32(removing ? 0 : selectedPalette.rawValue),
-                        Int32(intensity)
+                        Int32(removing ? 0 : operationPalette.rawValue),
+                        Int32(intensity),
+                        operationRGB.red,
+                        operationRGB.green,
+                        operationRGB.blue
                     )
                 }
                 let healthy = process.isHealthy
@@ -689,7 +753,7 @@ struct HomeIconNeonView: View {
 
                     if result > 0 {
                         activePageCount = min(32, recordedPageCount + 1)
-                        activePaletteRaw = selectedPalette.rawValue
+                        activePaletteRaw = operationPalette.rawValue
                         activeIntensityRaw = intensity
                         activeSpringBoardPID = Int(targetPID)
                         notice = HomeIconNeonNotice(message: LaraL10n.text(
