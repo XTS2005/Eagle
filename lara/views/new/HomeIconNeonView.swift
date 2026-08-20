@@ -7,6 +7,35 @@ private struct HomeIconNeonNotice: Identifiable {
     let message: String
 }
 
+private enum HomeIconNeonStyle: Int, CaseIterable, Identifiable {
+    case glow = 1
+    case outline = 2
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .glow: return LaraL10n.text(en: "Glow", es: "Sombra")
+        case .outline: return LaraL10n.text(en: "Outline", es: "Contorno")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .glow:
+            return LaraL10n.text(
+                en: "A soft neon light spreads beneath each icon.",
+                es: "Una luz neón suave se difumina debajo de cada icono."
+            )
+        case .outline:
+            return LaraL10n.text(
+                en: "A precise neon line follows the icon's real size.",
+                es: "Una línea neón precisa sigue el tamaño real del icono."
+            )
+        }
+    }
+}
+
 private enum HomeIconNeonPalette: Int, CaseIterable, Identifiable {
     case electric = 1
     case signalRed = 2
@@ -102,6 +131,8 @@ struct HomeIconNeonView: View {
         EagleReleaseChannel.stable.rawValue
     @AppStorage("eagle.homeIconNeon.palette")
     private var selectedPaletteRaw = HomeIconNeonPalette.electric.rawValue
+    @AppStorage("eagle.homeIconNeon.style")
+    private var selectedStyleRaw = HomeIconNeonStyle.glow.rawValue
     @AppStorage("eagle.homeIconNeon.intensity")
     private var selectedIntensityRaw = HomeIconNeonIntensity.vivid.rawValue
     @AppStorage("eagle.homeIconNeon.customRed")
@@ -129,6 +160,11 @@ struct HomeIconNeonView: View {
     private var selectedPalette: HomeIconNeonPalette {
         get { HomeIconNeonPalette(rawValue: selectedPaletteRaw) ?? .electric }
         nonmutating set { selectedPaletteRaw = newValue.rawValue }
+    }
+
+    private var selectedStyle: HomeIconNeonStyle {
+        get { HomeIconNeonStyle(rawValue: selectedStyleRaw) ?? .glow }
+        nonmutating set { selectedStyleRaw = newValue.rawValue }
     }
 
     private var selectedIntensity: HomeIconNeonIntensity {
@@ -209,6 +245,7 @@ struct HomeIconNeonView: View {
         ScrollView {
             VStack(spacing: 18) {
                 previewCard
+                styleCard
                 paletteCard
                 intensityCard
                 scopeCard
@@ -265,10 +302,7 @@ struct HomeIconNeonView: View {
                     es: "Ilumina la página actual"
                 ))
                 .font(.headline)
-                Text(LaraL10n.text(
-                    en: "A separate glow sits behind each visible app icon.",
-                    es: "Un brillo independiente queda detrás de cada icono visible."
-                ))
+                Text(selectedStyle.detail)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -293,9 +327,25 @@ struct HomeIconNeonView: View {
                                 .foregroundStyle(.white.opacity(0.92))
                         }
                         .shadow(
-                            color: selectedDisplayColor.opacity(0.68),
-                            radius: max(4, selectedIntensity.radius - 1)
+                            color: selectedDisplayColor.opacity(
+                                selectedStyle == .glow ? 0.68 : 0.46
+                            ),
+                            radius: selectedStyle == .glow
+                                ? max(4, selectedIntensity.radius - 1)
+                                : max(3, selectedIntensity.radius - 4)
                         )
+                        .overlay {
+                            if selectedStyle == .outline {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(
+                                        selectedDisplayColor,
+                                        lineWidth: selectedIntensity == .subtle
+                                            ? 1.25
+                                            : (selectedIntensity == .vivid ? 1.85 : 2.45)
+                                    )
+                                    .padding(-2)
+                            }
+                        }
                 }
             }
             .padding(.vertical, 5)
@@ -333,6 +383,30 @@ struct HomeIconNeonView: View {
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
         .foregroundStyle(.white)
+    }
+
+    private var styleCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(LaraL10n.text(en: "Effect", es: "Efecto"))
+                .font(.headline)
+            Picker(
+                LaraL10n.text(en: "Icon neon effect", es: "Efecto neón del icono"),
+                selection: $selectedStyleRaw
+            ) {
+                ForEach(HomeIconNeonStyle.allCases) { style in
+                    Text(style.title).tag(style.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(isApplying)
+
+            Text(selectedStyle.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var paletteCard: some View {
@@ -566,11 +640,13 @@ struct HomeIconNeonView: View {
 
     private func run(intensity: Int) {
         let removing = intensity == 0
+        let operationStyle = selectedStyle
         let operationPalette = selectedPalette
         let operationRGB = selectedRGB
         HomeIconNeonDiagnostics.log(
             "request",
-            "action=\(removing ? "remove" : "apply") palette=\(operationPalette.rawValue) " +
+            "action=\(removing ? "remove" : "apply") style=\(operationStyle.rawValue) " +
+            "palette=\(operationPalette.rawValue) " +
             "rgb=\(operationRGB.red),\(operationRGB.green),\(operationRGB.blue) " +
             "intensity=\(intensity) device=\(devicemachine()) channel=\(releaseChannel.rawValue)"
         )
@@ -661,7 +737,9 @@ struct HomeIconNeonView: View {
 
             operationStage = removing
                 ? LaraL10n.text(en: "Removing only tagged icon glows…", es: "Quitando solo brillos etiquetados…")
-                : LaraL10n.text(en: "Staging and verifying icon glows…", es: "Preparando y verificando los brillos…")
+                : operationStyle == .outline
+                    ? LaraL10n.text(en: "Staging and verifying icon outlines…", es: "Preparando y verificando los contornos…")
+                    : LaraL10n.text(en: "Staging and verifying icon glows…", es: "Preparando y verificando los brillos…")
 
             var nativeFinished = false
             var deadlineExceeded = false
@@ -682,6 +760,7 @@ struct HomeIconNeonView: View {
                 let result = autoreleasepool {
                     eagle_set_home_icon_neon(
                         process,
+                        Int32(operationStyle.rawValue),
                         Int32(removing ? 0 : operationPalette.rawValue),
                         Int32(intensity),
                         operationRGB.red,
@@ -752,13 +831,16 @@ struct HomeIconNeonView: View {
                     }
 
                     if result > 0 {
+                        let effectName = operationStyle == .outline
+                            ? LaraL10n.text(en: "neon outline", es: "contorno neón")
+                            : LaraL10n.text(en: "diffuse glow", es: "resplandor difuminado")
                         activePageCount = min(32, recordedPageCount + 1)
                         activePaletteRaw = operationPalette.rawValue
                         activeIntensityRaw = intensity
                         activeSpringBoardPID = Int(targetPID)
                         notice = HomeIconNeonNotice(message: LaraL10n.text(
-                            en: "Applied and verified diffuse glow behind \(result) app icon\(result == 1 ? "" : "s") on this Home page. \(activePageCount) page\(activePageCount == 1 ? " is" : "s are") now recorded. Dock, folders, App Library, Island, and Prepare were not changed.",
-                            es: "Se aplicó y verificó resplandor difuminado detrás de \(result) icono\(result == 1 ? "" : "s") de esta página. Ahora hay \(activePageCount) página\(activePageCount == 1 ? "" : "s") registrada\(activePageCount == 1 ? "" : "s"). Dock, carpetas, Biblioteca, Isla y Preparar no cambiaron."
+                            en: "Applied and verified \(effectName) on \(result) app icon\(result == 1 ? "" : "s") on this Home page. \(activePageCount) page\(activePageCount == 1 ? " is" : "s are") now recorded. Dock, folders, App Library, Island, and Prepare were not changed.",
+                            es: "Se aplicó y verificó \(effectName) en \(result) icono\(result == 1 ? "" : "s") de esta página. Ahora hay \(activePageCount) página\(activePageCount == 1 ? "" : "s") registrada\(activePageCount == 1 ? "" : "s"). Dock, carpetas, Biblioteca, Isla y Preparar no cambiaron."
                         ))
                     } else {
                         if result == -9 { cleanupRequired = true }
@@ -777,7 +859,7 @@ struct HomeIconNeonView: View {
                 es: "SpringBoard no expuso una página raíz actual con iconos. Visita la página deseada, vuelve a abrir Eagle e inténtalo otra vez."
             )
         case -3:
-            return LaraL10n.text(en: "The selected color or intensity is invalid.", es: "El color o la intensidad no son válidos.")
+            return LaraL10n.text(en: "The selected effect, color, or intensity is invalid.", es: "El efecto, color o intensidad no son válidos.")
         case -4:
             return LaraL10n.text(en: "The isolated protected thread was unavailable.", es: "El hilo protegido aislado no estaba disponible.")
         case -5:
