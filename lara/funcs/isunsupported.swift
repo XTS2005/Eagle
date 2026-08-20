@@ -9,7 +9,7 @@ import Foundation
 import Darwin
 
 /// The product support levels shown to users. Keep every iOS range in
-/// `eagleSupportAssessment(version:machine:)`; native callers must not invent a
+/// `eagleSupportAssessment(version:machine:systemBuild:)`; native callers must not invent a
 /// second, broader range.
 enum EagleSupportStatus: String, Equatable {
     /// The engine has a path for this release, but it is not considered stable.
@@ -28,6 +28,7 @@ enum EagleSupportStatus: String, Equatable {
 /// shared Prepare report can be searched and compared across languages.
 enum EagleSupportReason: String, Equatable {
     case iphone16IOS185FieldRestart = "iphone17,3-ios18.5.field-restart"
+    case iphone16IOS185KernelStageLab = "iphone17,3-ios18.5.kernel-stage-lab"
     case ios16Experimental = "ios16.experimental"
     case ios1672LimitedTesting = "ios16.7.2.tested-limited"
     case ios17Through1871 = "ios17.0-ios18.7.1.supported"
@@ -56,6 +57,10 @@ struct EagleSupportAssessment: Equatable {
             return spanish
                 ? "Preparar puede reiniciar el iPhone 16 con iOS 18.5. Eagle bloqueó esta combinación antes de ejecutar el motor de acceso."
                 : "Prepare can restart iPhone 16 on iOS 18.5. Eagle blocked this combination before running the access engine."
+        case .iphone16IOS185KernelStageLab:
+            return spanish
+                ? "Esta compilación privada prueba solamente la etapa del kernel en iPhone 16 con iOS 18.5; no abre el sandbox ni habilita el flujo completo."
+                : "This private build probes only the kernel stage on iPhone 16 with iOS 18.5; it does not open the sandbox or enable the full flow."
         case .ios16Experimental:
             return spanish
                 ? "iOS 16.x es experimental. Puede funcionar, pero necesita más pruebas."
@@ -100,6 +105,16 @@ struct EagleSupportAssessment: Equatable {
     }
 }
 
+enum EaglePrepareExecutionRoute: String, Equatable {
+    case stableLegacy = "stable-legacy"
+    case blockedFieldRestart = "blocked-field-restart"
+    case a18KernelStageLab = "a18-kernel-stage-lab"
+
+    var allowsPrepare: Bool {
+        self != .blockedFieldRestart
+    }
+}
+
 func devicemachine() -> String {
     var sysinfo = utsname()
     uname(&sysinfo)
@@ -119,23 +134,79 @@ func hasmie() -> Bool {
     hasmie(machine: devicemachine())
 }
 
+/// Darwin build identifier for the running OS (for example, `22G100`).
+/// Compatibility exceptions must use this value instead of treating every
+/// release with the same marketing version as identical.
+func eagleSystemBuild() -> String? {
+    var size = 0
+    guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0,
+          size > 1 else {
+        return nil
+    }
+
+    var buffer = [CChar](repeating: 0, count: size)
+    guard sysctlbyname("kern.osversion", &buffer, &size, nil, 0) == 0 else {
+        return nil
+    }
+    return String(cString: buffer)
+}
+
+/// Pure dispatch for the access engine. Public builds never select the lab
+/// route; enabling it requires the explicit EAGLE_A18_PREPARE_LAB compilation
+/// condition and an exact model/build match.
+func eaglePrepareExecutionRoute(
+    version: OperatingSystemVersion,
+    machine: String,
+    systemBuild: String?
+) -> EaglePrepareExecutionRoute {
+    guard machine == "iPhone17,3",
+          version.majorVersion == 18,
+          version.minorVersion == 5 else {
+        return .stableLegacy
+    }
+
+#if EAGLE_A18_PREPARE_LAB
+    let trimmedBuild = systemBuild?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+    )
+    let normalizedBuild = (trimmedBuild?.isEmpty == false &&
+        trimmedBuild != "unknown") ? trimmedBuild : nil
+    if normalizedBuild == "22F76" {
+        return .a18KernelStageLab
+    }
+#else
+    _ = systemBuild
+#endif
+    return .blockedFieldRestart
+}
+
 /// Pure compatibility resolver. Accepting the version and machine explicitly
 /// makes every boundary testable without pretending a simulator has kernel
 /// access.
 func eagleSupportAssessment(
     version: OperatingSystemVersion,
-    machine: String
+    machine: String,
+    systemBuild: String? = nil
 ) -> EagleSupportAssessment {
-    // A public field report reproduced a full device restart on this exact
-    // hardware/software pair (iPhone 16, iOS 18.5 / 22F76). Fail closed before
-    // the access engine runs. The proven iPhone17,1 / iOS 18.6.2 path and all
-    // other existing classifications remain unchanged.
-    if machine == "iPhone17,3",
-       version.majorVersion == 18,
-       version.minorVersion == 5 {
+    // Repeated reports from one field device reproduced a full restart on this
+    // hardware/release. Production remains fail-closed for the whole 18.5
+    // family until individual builds are physically verified; systemBuild is
+    // still accepted so private research routing can distinguish exact OTAs.
+    let prepareRoute = eaglePrepareExecutionRoute(
+        version: version,
+        machine: machine,
+        systemBuild: systemBuild
+    )
+    if prepareRoute == .blockedFieldRestart {
         return EagleSupportAssessment(
             status: .unsupported,
             reason: .iphone16IOS185FieldRestart
+        )
+    }
+    if prepareRoute == .a18KernelStageLab {
+        return EagleSupportAssessment(
+            status: .possible,
+            reason: .iphone16IOS185KernelStageLab
         )
     }
 
@@ -184,9 +255,14 @@ func eagleSupportAssessment(
 }
 
 func eagleSupportAssessment() -> EagleSupportAssessment {
-    eagleSupportAssessment(
-        version: ProcessInfo.processInfo.operatingSystemVersion,
-        machine: devicemachine()
+    let version = ProcessInfo.processInfo.operatingSystemVersion
+    let machine = devicemachine()
+    let needsBuildForFieldRouting = machine == "iPhone17,3" &&
+        version.majorVersion == 18 && version.minorVersion == 5
+    return eagleSupportAssessment(
+        version: version,
+        machine: machine,
+        systemBuild: needsBuildForFieldRouting ? eagleSystemBuild() : nil
     )
 }
 

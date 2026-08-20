@@ -5,9 +5,9 @@ import Darwin
 
 /// Passive, user-triggered diagnostics for Prepare.
 ///
-/// This type deliberately does not observe `dsrunning`, persist markers, or write
-/// anything before the kernel engine starts. A report is assembled only after the
-/// user asks for one, so diagnostics cannot change the exploit's timing.
+/// A report is assembled only after the user asks for one. The public stable
+/// route adds no checkpoint I/O. Private staged research builds may update one
+/// tiny file between broad phases, never while DarkSword's race is executing.
 @MainActor
 final class EaglePrepareDiagnostics: ObservableObject {
     static let shared = EaglePrepareDiagnostics()
@@ -25,9 +25,13 @@ final class EaglePrepareDiagnostics: ObservableObject {
         reportError = nil
 
         let metadata = Self.metadata()
+        let attemptCheckpoint = EaglePrepareAttemptJournal.diagnosticText()
         DispatchQueue.global(qos: .utility).async {
             do {
-                let url = try Self.writeReport(metadata: metadata)
+                let url = try Self.writeReport(
+                    metadata: metadata,
+                    attemptCheckpoint: attemptCheckpoint
+                )
                 DispatchQueue.main.async {
                     self.reportURL = url
                     self.isCreatingReport = false
@@ -41,7 +45,10 @@ final class EaglePrepareDiagnostics: ObservableObject {
         }
     }
 
-    nonisolated private static func writeReport(metadata: String) throws -> URL {
+    nonisolated private static func writeReport(
+        metadata: String,
+        attemptCheckpoint: String
+    ) throws -> URL {
         let manager = FileManager.default
         let documents = try manager.url(
             for: .documentDirectory,
@@ -50,6 +57,8 @@ final class EaglePrepareDiagnostics: ObservableObject {
             create: true
         )
         let source = documents.appendingPathComponent("lara.log")
+        let previousSource = documents.appendingPathComponent("lara.previous.log")
+        let olderSource = documents.appendingPathComponent("lara.previous.2.log")
         let destinationFolder = documents.appendingPathComponent(
             "EaglePrepareReports",
             isDirectory: true
@@ -61,18 +70,30 @@ final class EaglePrepareDiagnostics: ObservableObject {
             attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
         )
 
-        let rawLog = (try? Data(contentsOf: source)) ?? Data()
-        let tail = rawLog.suffix(256 * 1024)
-        let logText = String(data: tail, encoding: .utf8) ?? "<lara.log is not valid UTF-8>"
+        let logText = readTail(source, maximumBytes: 256 * 1024)
+        let previousLogText = readTail(previousSource, maximumBytes: 256 * 1024)
+        let olderLogText = readTail(olderSource, maximumBytes: 256 * 1024)
         let report = """
         Eagle Prepare Diagnostic
         Generated only after the user requested this report.
-        Report creation never starts automatically and adds no Prepare observer.
+        Report creation never starts automatically and adds no live Prepare observer.
+        Public stable Prepare adds no checkpoint I/O. Private staged research
+        builds may update one small checkpoint only outside DarkSword's race.
 
         \(metadata)
 
-        Recent lara.log (last 256 KB, addresses redacted)
-        --------------------------------------------------
+        \(attemptCheckpoint)
+
+        Older app session (may be unrelated; last 256 KB, addresses redacted)
+        ----------------------------------------------------------------------
+        \(redact(olderLogText))
+
+        Previous app session (may be unrelated; last 256 KB, addresses redacted)
+        -------------------------------------------------------------------------
+        \(redact(previousLogText))
+
+        Current app session (last 256 KB, addresses redacted)
+        -----------------------------------------------------
         \(redact(logText))
         """
 
@@ -86,6 +107,30 @@ final class EaglePrepareDiagnostics: ObservableObject {
         return destination
     }
 
+    nonisolated private static func readTail(
+        _ url: URL,
+        maximumBytes: Int
+    ) -> String {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return "<not available>"
+        }
+        defer { try? handle.close() }
+
+        do {
+            let end = try handle.seekToEnd()
+            let limit = UInt64(max(1, maximumBytes))
+            if end > limit {
+                try handle.seek(toOffset: end - limit)
+            } else {
+                try handle.seek(toOffset: 0)
+            }
+            let data = try handle.readToEnd() ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        } catch {
+            return "<could not read: \(error.localizedDescription)>"
+        }
+    }
+
     private static func metadata() -> String {
         let bundle = Bundle.main
         let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
@@ -93,7 +138,11 @@ final class EaglePrepareDiagnostics: ObservableObject {
         let os = ProcessInfo.processInfo.operatingSystemVersion
         let machine = machineIdentifier()
         let systemBuild = sysctlString("kern.osversion") ?? "unknown"
-        let support = eagleSupportAssessment(version: os, machine: machine)
+        let support = eagleSupportAssessment(
+            version: os,
+            machine: machine,
+            systemBuild: systemBuild == "unknown" ? nil : systemBuild
+        )
         let locale = Locale.current.identifier
 
         return """

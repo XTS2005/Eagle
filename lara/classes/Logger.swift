@@ -296,15 +296,29 @@ class Logger: ObservableObject {
     private func setuplogfile() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let url = docs.appendingPathComponent("lara.log")
+        let previousURL = docs.appendingPathComponent("lara.previous.log")
+        let olderURL = docs.appendingPathComponent("lara.previous.2.log")
         logfileurl = url
-        
-        if FileManager.default.fileExists(atPath: url.path) {
+
+        // Preserve the end of the previous session before opening a new log.
+        // This runs once during Logger initialization, before stdout capture or
+        // Prepare; it never writes while ds_run is executing. If preservation
+        // fails, keep the existing file and append instead of destroying evidence.
+        let rotated = preservePreviousLog(
+            currentURL: url,
+            previousURL: previousURL,
+            olderURL: olderURL,
+            maximumBytes: 512 * 1024
+        )
+        if rotated, FileManager.default.fileExists(atPath: url.path) {
             try? FileManager.default.removeItem(at: url)
         }
-        
-        FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [
-            FileAttributeKey.protectionKey: FileProtectionType.none
-        ])
+
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [
+                FileAttributeKey.protectionKey: FileProtectionType.none
+            ])
+        }
         
         logfilehandle = try? FileHandle(forWritingTo: url)
         _ = try? logfilehandle?.seekToEnd()
@@ -319,6 +333,60 @@ class Logger: ObservableObject {
             try? logfilehandle?.write(contentsOf: data)
             try? logfilehandle?.synchronize()
         }
+    }
+
+    private func preservePreviousLog(
+        currentURL: URL,
+        previousURL: URL,
+        olderURL: URL,
+        maximumBytes: Int
+    ) -> Bool {
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: currentURL.path) else { return true }
+
+        do {
+            if manager.fileExists(atPath: previousURL.path) {
+                let olderData = try tailData(
+                    from: previousURL,
+                    maximumBytes: maximumBytes
+                )
+                if !olderData.isEmpty {
+                    try olderData.write(to: olderURL, options: .atomic)
+                }
+            }
+
+            let data = try tailData(
+                from: currentURL,
+                maximumBytes: maximumBytes
+            )
+            guard !data.isEmpty else { return true }
+            try data.write(to: previousURL, options: .atomic)
+            for preservedURL in [previousURL, olderURL]
+            where manager.fileExists(atPath: preservedURL.path) {
+                try? manager.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: preservedURL.path
+                )
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func tailData(from url: URL, maximumBytes: Int) throws -> Data {
+        let manager = FileManager.default
+        let attributes = try manager.attributesOfItem(atPath: url.path)
+        let byteCount = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        guard byteCount > 0 else { return Data() }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let limit = UInt64(max(1, maximumBytes))
+        if byteCount > limit {
+            try handle.seek(toOffset: byteCount - limit)
+        }
+        return try handle.readToEnd() ?? Data()
     }
 
     private func reopenlogfileondemand() {

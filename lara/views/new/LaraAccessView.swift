@@ -3,6 +3,9 @@ import SwiftUI
 enum LaraAccessState: Equatable {
     case idle
     case preparing(String, Double?)
+#if EAGLE_A18_PREPARE_LAB
+    case kernelStageReady(String)
+#endif
     case ready
     case failed(String)
 }
@@ -10,6 +13,9 @@ enum LaraAccessState: Equatable {
 struct LaraAccessView: View {
     @ObservedObject private var mgr = laramgr.shared
     @State private var state: LaraAccessState = .idle
+#if EAGLE_A18_PREPARE_LAB
+    @State private var labAttemptLocked = false
+#endif
 
     let compact: Bool
     let onReady: (() -> Void)?
@@ -35,6 +41,9 @@ struct LaraAccessView: View {
                 ), progress)
             }
         }
+#if EAGLE_A18_PREPARE_LAB
+        .onAppear(perform: refreshA18LabAttemptLock)
+#endif
     }
 
     private var readyView: some View {
@@ -89,6 +98,13 @@ struct LaraAccessView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
 
+#if EAGLE_A18_PREPARE_LAB
+            case .kernelStageReady(let message):
+                Label(message, systemImage: "checkmark.shield.fill")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.green)
+#endif
+
             default:
                 EmptyView()
             }
@@ -99,7 +115,11 @@ struct LaraAccessView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+#if EAGLE_A18_PREPARE_LAB
+            .disabled(isBusy || isKernelStageReady || labAttemptLocked || isunsupported() || isdebugged())
+#else
             .disabled(isBusy || isunsupported() || isdebugged())
+#endif
 
             if isunsupported() {
                 Text(eagleSupportAssessment().message(
@@ -119,6 +139,25 @@ struct LaraAccessView: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.orange)
             }
+#if EAGLE_A18_PREPARE_LAB
+            if !isunsupported(), !isdebugged(), isA18KernelStageLabRuntime {
+                Label {
+                    Text(labAttemptLocked
+                        ? LaraL10n.text(
+                            en: "A kernel-stage attempt is already recorded for this iPhone and build. This private lab will not run it again.",
+                            es: "Ya existe un intento de la etapa del kernel para este iPhone y esta compilación. Este laboratorio privado no lo ejecutará otra vez."
+                        )
+                        : LaraL10n.text(
+                            en: "Private one-shot lab: it tests only the kernel stage and does not continue to compatibility data, sandbox access, or Aura.",
+                            es: "Laboratorio privado de un solo intento: prueba solo la etapa del kernel y no continúa con datos de compatibilidad, acceso al sandbox ni Aura."
+                        ))
+                } icon: {
+                    Image(systemName: "exclamationmark.shield.fill")
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.orange)
+            }
+#endif
         }
         .padding(compact ? 16 : 20)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -129,15 +168,67 @@ struct LaraAccessView: View {
         return mgr.dsrunning || mgr.sbxrunning
     }
 
+#if EAGLE_A18_PREPARE_LAB
+    private var isKernelStageReady: Bool {
+        if case .kernelStageReady = state { return true }
+        return false
+    }
+#endif
+
     private var buttonTitle: String {
         if isBusy { return LaraL10n.text(en: "Preparing…", es: "Preparando…") }
         if isdebugged() { return LaraL10n.text(en: "Disconnect Xcode", es: "Desconecta Xcode") }
+#if EAGLE_A18_PREPARE_LAB
+        if isA18KernelStageLabRuntime {
+            if labAttemptLocked {
+                return LaraL10n.text(en: "Lab attempt recorded", es: "Intento de laboratorio registrado")
+            }
+            return LaraL10n.text(en: "Test kernel stage once", es: "Probar etapa del kernel una vez")
+        }
+        if isKernelStageReady {
+            return LaraL10n.text(en: "Kernel stage verified", es: "Etapa del kernel verificada")
+        }
+#endif
         if case .failed = state { return LaraL10n.text(en: "Try again", es: "Intentar otra vez") }
         return LaraL10n.text(en: "Prepare iPhone", es: "Preparar iPhone")
     }
 
     private func prepare() {
         guard !isBusy, !isunsupported(), !isdebugged() else { return }
+#if EAGLE_A18_PREPARE_LAB
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let machine = devicemachine()
+        let systemBuild = eagleSystemBuild()?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let route = eaglePrepareExecutionRoute(
+            version: version,
+            machine: machine,
+            systemBuild: systemBuild
+        )
+        if route == .a18KernelStageLab {
+            guard let systemBuild else {
+                state = .failed(LaraL10n.text(
+                    en: "The verified system build could not be read, so the private lab did not run.",
+                    es: "No se pudo leer la compilación verificada del sistema, por lo que el laboratorio privado no se ejecutó."
+                ))
+                return
+            }
+            prepareA18KernelStageLab(
+                route: route,
+                machine: machine,
+                systemBuild: systemBuild
+            )
+            return
+        }
+        if route == .blockedFieldRestart {
+            state = .failed(EagleSupportAssessment(
+                status: .unsupported,
+                reason: .iphone16IOS185FieldRestart
+            ).message(spanish: LaraL10n.language == .spanish))
+            return
+        }
+#endif
         state = .preparing(LaraL10n.text(
             en: "Checking compatibility",
             es: "Comprobando compatibilidad"
@@ -160,6 +251,156 @@ struct LaraAccessView: View {
             resolveOffsetsAndOpenSandbox()
         }
     }
+
+#if EAGLE_A18_PREPARE_LAB
+    private func prepareA18KernelStageLab(
+        route: EaglePrepareExecutionRoute,
+        machine: String,
+        systemBuild: String
+    ) {
+        guard !labAttemptLocked else {
+            state = .failed(LaraL10n.text(
+                en: "This private lab already recorded an attempt for this iPhone and build.",
+                es: "Este laboratorio privado ya registró un intento para este iPhone y esta compilación."
+            ))
+            return
+        }
+        guard !UserDefaults.standard.bool(forKey: "stashKRW") else {
+            state = .failed(LaraL10n.text(
+                en: "Turn off Stash KRW primitives in Settings and restart Eagle before this isolated test. Nothing was run.",
+                es: "Desactiva Guardar primitivas KRW en Ajustes y reinicia Eagle antes de esta prueba aislada. No se ejecutó nada."
+            ))
+            return
+        }
+        let beginResult = EaglePrepareAttemptJournal.begin(
+            route: route.rawValue,
+            machine: machine,
+            systemBuild: systemBuild
+        )
+        let attemptID: String
+        switch beginResult {
+        case .started(let identifier):
+            attemptID = identifier
+        case .alreadyRecorded:
+            labAttemptLocked = true
+            state = .failed(LaraL10n.text(
+                en: "This private lab already recorded an attempt for this iPhone and build.",
+                es: "Este laboratorio privado ya registró un intento para este iPhone y esta compilación."
+            ))
+            return
+        case .unavailable:
+            state = .failed(LaraL10n.text(
+                en: "Eagle could not create the durable test record, so the kernel stage was not started.",
+                es: "Eagle no pudo crear el registro duradero de la prueba, por lo que no inició la etapa del kernel."
+            ))
+            return
+        }
+        labAttemptLocked = true
+        state = .preparing(LaraL10n.text(
+            en: "Testing the isolated kernel stage",
+            es: "Probando la etapa aislada del kernel"
+        ), nil)
+        offsets_init()
+        EaglePrepareAttemptJournal.mark(attemptID, stage: .offsetsInitialized)
+
+        if mgr.dsready {
+            guard hasVerifiedA18LabPrimitive else {
+                EaglePrepareAttemptJournal.finish(
+                    attemptID,
+                    succeeded: false,
+                    detail: "ready flag was set without complete proc/task/kernel-base references"
+                )
+                state = .failed(LaraL10n.text(
+                    en: "The kernel stage was incomplete. Do not retry; share a Prepare report.",
+                    es: "La etapa del kernel quedó incompleta. No lo repitas; comparte un reporte de Preparar."
+                ))
+                mgr.quarantineRemoteCall(
+                    reason: "A18 lab rejected incomplete kernel primitive references"
+                )
+                return
+            }
+            EaglePrepareAttemptJournal.finish(
+                attemptID,
+                succeeded: true,
+                detail: "reused verified primitive; sandbox was not started"
+            )
+            state = .kernelStageReady(LaraL10n.text(
+                en: "Kernel access was already ready. Sandbox was not started in this lab.",
+                es: "El acceso al kernel ya estaba listo. El laboratorio no abrió el sandbox."
+            ))
+            mgr.quarantineRemoteCall(
+                reason: "A18 kernel-stage lab stops before RemoteCall and sandbox"
+            )
+            return
+        }
+
+        EaglePrepareAttemptJournal.mark(attemptID, stage: .darkSwordRunning)
+        mgr.run { success in
+            guard success, hasVerifiedA18LabPrimitive else {
+                EaglePrepareAttemptJournal.finish(
+                    attemptID,
+                    succeeded: false,
+                    detail: success
+                        ? "DarkSword ready flag lacked complete proc/task/kernel-base references"
+                        : "DarkSword returned without a verified primitive"
+                )
+                state = .failed(LaraL10n.text(
+                    en: "The isolated kernel stage failed. Do not retry; share a Prepare report.",
+                    es: "Falló la etapa aislada del kernel. No lo repitas; comparte un reporte de Preparar."
+                ))
+                if success {
+                    mgr.quarantineRemoteCall(
+                        reason: "A18 lab rejected incomplete kernel primitive references"
+                    )
+                }
+                return
+            }
+
+            EaglePrepareAttemptJournal.finish(
+                attemptID,
+                succeeded: true,
+                detail: "kernel primitive verified; compatibility data and sandbox were intentionally skipped"
+            )
+            state = .kernelStageReady(LaraL10n.text(
+                en: "Kernel stage verified. This lab intentionally skipped compatibility data and sandbox access.",
+                es: "Etapa del kernel verificada. Este laboratorio omitió intencionalmente los datos de compatibilidad y el acceso al sandbox."
+            ))
+            mgr.quarantineRemoteCall(
+                reason: "A18 kernel-stage lab stops before RemoteCall and sandbox"
+            )
+        }
+    }
+
+    private var hasVerifiedA18LabPrimitive: Bool {
+        ds_get_our_proc() != 0 &&
+            ds_get_our_task() != 0 &&
+            ds_get_kernel_base() != 0
+    }
+
+    private var isA18KernelStageLabRuntime: Bool {
+        eaglePrepareExecutionRoute(
+            version: ProcessInfo.processInfo.operatingSystemVersion,
+            machine: devicemachine(),
+            systemBuild: eagleSystemBuild()
+        ) == .a18KernelStageLab
+    }
+
+    private func refreshA18LabAttemptLock() {
+        guard isA18KernelStageLabRuntime,
+              let build = eagleSystemBuild()?.trimmingCharacters(
+                  in: .whitespacesAndNewlines
+              ),
+              !build.isEmpty else {
+            labAttemptLocked = false
+            return
+        }
+        labAttemptLocked = EaglePrepareAttemptJournal.hasRecordedAttempt(
+            route: EaglePrepareExecutionRoute.a18KernelStageLab.rawValue,
+            machine: devicemachine(),
+            systemBuild: build
+        )
+    }
+#endif
 
     private func resolveOffsetsAndOpenSandbox() {
         if mgr.hasOffsets {
