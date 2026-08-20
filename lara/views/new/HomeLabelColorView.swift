@@ -307,8 +307,8 @@ struct HomeLabelColorView: View {
             .foregroundStyle(.secondary)
 
             Text(LaraL10n.text(
-                en: "SpringBoard may rebuild labels after changing pages, rotating, or respringing. Restore recalculates the original automatic system color.",
-                es: "SpringBoard puede reconstruir los nombres al cambiar de página, rotar o hacer respring. Restaurar vuelve a calcular el color automático original del sistema."
+                en: "SpringBoard may rebuild labels after changing pages, rotating, or respringing. Restore removes only Eagle's colored copy; the original system label is not modified.",
+                es: "SpringBoard puede reconstruir los nombres al cambiar de página, rotar o hacer respring. Restaurar elimina solo la copia coloreada de Eagle; el nombre original del sistema no se modifica."
             ))
             .font(.caption)
             .foregroundStyle(.orange)
@@ -635,9 +635,11 @@ struct HomeLabelColorView: View {
         case -5:
             return LaraL10n.text(en: "This device/build is outside the verified allowlist.", es: "Este dispositivo o versión no está en la lista verificada.")
         case -6:
-            return LaraL10n.text(en: "SpringBoard could not prepare the label color filter.", es: "SpringBoard no pudo preparar el filtro de color de los nombres.")
+            return LaraL10n.text(en: "SpringBoard did not expose the verified label-image renderer.", es: "SpringBoard no expuso el renderizador verificado de imágenes de nombres.")
         case -8:
             return LaraL10n.text(en: "The current page hierarchy exceeded the safe limit.", es: "La jerarquía de la página superó el límite seguro.")
+        case -9:
+            return LaraL10n.text(en: "This page already has Eagle-colored app names. Use Restore before applying another color.", es: "Esta página ya tiene nombres coloreados por Eagle. Usa Restaurar antes de aplicar otro color.")
         case -10:
             return LaraL10n.text(
                 en: "The color did not verify and the original system labels were restored.",
