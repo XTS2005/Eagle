@@ -11,3 +11,20 @@ DerivedData/
 *.pem
 *.key
 *.xcarchive
+
+# Ollama and Model Configuration
+models/**/.env
+models/**/node_modules/
+models/**/__pycache__/
+models/**/*.log
+.ollama/
+ollama_data/
+*.model
+*.bin
+*.safetensors
+
+# Development
+.env.local
+*.local
+*.tmp
+*.cache

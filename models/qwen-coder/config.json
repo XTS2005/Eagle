@@ -1,0 +1,78 @@
+{
+  "model": {
+    "name": "qwen2.5-coder:7b-abliterated",
+    "display_name": "Qwen 2.5 Coder 7B (Abliterated)",
+    "version": "7b",
+    "variant": "abliterated-uncensored",
+    "provider": "Alibaba Cloud",
+    "size_gb": 4,
+    "type": "code-generation",
+    "context_size": 4096
+  },
+  "api": {
+    "endpoint": "http://localhost:11434",
+    "timeout_seconds": 300,
+    "max_retries": 3,
+    "retry_delay_ms": 1000
+  },
+  "generation": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 40,
+    "repeat_penalty": 1.1,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0,
+    "num_predict": 2048,
+    "num_keep": 0
+  },
+  "performance": {
+    "use_gpu": true,
+    "gpu_layers": "auto",
+    "threads": "auto",
+    "batch_size": 32
+  },
+  "features": {
+    "has_content_filters": false,
+    "uncensored": true,
+    "code_focused": true,
+    "supports_streaming": true,
+    "supports_system_prompt": true,
+    "supports_function_calls": false
+  },
+  "capabilities": [
+    "code-generation",
+    "code-completion",
+    "bug-fixing",
+    "code-review",
+    "documentation",
+    "explanation",
+    "optimization",
+    "refactoring"
+  ],
+  "supported_languages": [
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "cpp",
+    "csharp",
+    "go",
+    "rust",
+    "swift",
+    "kotlin",
+    "php",
+    "ruby",
+    "sql",
+    "html",
+    "css",
+    "bash",
+    "shell"
+  ],
+  "development": {
+    "ollama_version": "latest",
+    "installed": false,
+    "install_date": null,
+    "last_updated": "2026-08-22",
+    "status": "ready-for-installation"
+  }
+}
