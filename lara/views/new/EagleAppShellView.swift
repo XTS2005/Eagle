@@ -170,6 +170,8 @@ private struct EagleBeta10AccessView: View {
                         }
                     }
 
+                    telegramCard
+
                     VStack(alignment: .leading, spacing: 10) {
                         Text(LaraL10n.text(en: "Prepare report", es: "Reporte de Preparar"))
                             .font(.headline)
@@ -290,6 +292,49 @@ private struct EagleBeta10AccessView: View {
         .padding(14)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var telegramCard: some View {
+        Link(destination: URL(string: "https://t.me/LEONARDOPHL")!) {
+            HStack(spacing: 13) {
+                Image(systemName: "paperplane.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Color(red: 0.15, green: 0.62, blue: 0.87),
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Telegram")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("@LEONARDOPHL")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Telegram, @LEONARDOPHL")
+        .accessibilityAddTraits(.isLink)
     }
 
     private var trustNote: some View {
