@@ -24,14 +24,14 @@ enum EagleSpectrumStyle {
     static var wordmarkGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.88, green: 0.93, blue: 0.98),
-                Color(red: 0.50, green: 0.76, blue: 0.82),
-                Color(red: 0.35, green: 0.52, blue: 0.78),
-                Color(red: 0.50, green: 0.42, blue: 0.70),
-                Color(red: 0.72, green: 0.48, blue: 0.61),
-                Color(red: 0.78, green: 0.64, blue: 0.42),
-                Color(red: 0.48, green: 0.66, blue: 0.58),
-                Color(red: 0.86, green: 0.91, blue: 0.96),
+                Color(red: 0.13, green: 0.72, blue: 0.90),
+                Color(red: 0.19, green: 0.55, blue: 0.96),
+                Color(red: 0.33, green: 0.42, blue: 0.94),
+                Color(red: 0.52, green: 0.34, blue: 0.91),
+                Color(red: 0.74, green: 0.30, blue: 0.85),
+                Color(red: 0.93, green: 0.33, blue: 0.63),
+                Color(red: 0.98, green: 0.44, blue: 0.42),
+                Color(red: 0.99, green: 0.62, blue: 0.30),
             ],
             startPoint: .leading,
             endPoint: .trailing
