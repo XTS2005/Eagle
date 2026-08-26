@@ -330,7 +330,7 @@ struct HomeLabelColorView: View {
             .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(.borderedProminent)
-        .tint(selectedColor)
+        .tint(.accentColor)
         .disabled(
             isApplying || !mgr.dsready || mgr.rcSafetyLocked ||
             !supportedDevice || !policyAllowsApply

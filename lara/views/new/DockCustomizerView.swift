@@ -84,25 +84,20 @@ struct DockCustomizerView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 78)
             .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(.white.opacity(0.25), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.10), lineWidth: 1)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.10, green: 0.40, blue: 0.84).opacity(0.20),
-                    Color(red: 0.35, green: 0.25, blue: 0.82).opacity(0.13),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var capacityCard: some View {
@@ -135,12 +130,16 @@ struct DockCustomizerView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var explanationCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "hand.draw.fill")
-                .foregroundStyle(.blue)
+                .foregroundStyle(.secondary)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
                 Text(LaraL10n.text(en: "Add apps after applying", es: "Añade apps después de aplicar"))
@@ -158,6 +157,10 @@ struct DockCustomizerView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var applyButton: some View {

@@ -802,7 +802,7 @@ struct AuraStudioView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.cyan.opacity(0.20), lineWidth: 1)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
         }
     }
 

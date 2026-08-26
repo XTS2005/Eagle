@@ -691,7 +691,7 @@ struct HomeIconNeonView: View {
             .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(.borderedProminent)
-        .tint(selectedDisplayColor)
+        .tint(.accentColor)
         .disabled(
             isApplying || !mgr.dsready || mgr.rcSafetyLocked ||
             !supportedDevice || !policyAllowsApply
