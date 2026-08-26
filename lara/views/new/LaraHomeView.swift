@@ -172,11 +172,15 @@ struct LaraHomeView: View {
     }
 
     private var eagleTitle: some View {
-        Text("Eagle")
-            .font(.system(size: 38, weight: .bold, design: .rounded))
-            .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
-            .minimumScaleFactor(0.82)
-            .accessibilityAddTraits(.isHeader)
+        HStack(spacing: 10) {
+            Text("Eagle")
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
+                .minimumScaleFactor(0.82)
+                .accessibilityAddTraits(.isHeader)
+
+            EagleSmileyFlower(size: 40)
+        }
     }
 
     private var headerBadges: some View {

@@ -111,6 +111,140 @@ private struct TelegramSafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }
 
+struct EagleSmileyFlower: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var size: CGFloat = 40
+    var revolutionSeconds: Double = 22
+
+    private let petalColors: [Color] = [
+        Color(red: 0.95, green: 0.25, blue: 0.62),
+        Color(red: 0.93, green: 0.22, blue: 0.26),
+        Color(red: 0.98, green: 0.56, blue: 0.15),
+        Color(red: 0.99, green: 0.78, blue: 0.16),
+        Color(red: 0.55, green: 0.80, blue: 0.22),
+        Color(red: 0.18, green: 0.76, blue: 0.55),
+        Color(red: 0.20, green: 0.68, blue: 0.92),
+        Color(red: 0.28, green: 0.46, blue: 0.92),
+        Color(red: 0.55, green: 0.35, blue: 0.86),
+        Color(red: 0.76, green: 0.30, blue: 0.82),
+    ]
+
+    private let outline = Color(red: 0.09, green: 0.08, blue: 0.11)
+
+    var body: some View {
+        ZStack {
+            petalRing
+            face
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private var petalRing: some View {
+        let count = petalColors.count
+        let petalW = size * 0.30
+        let petalH = size * 0.42
+        let radius = size * 0.28
+        return TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            let angle = reduceMotion
+                ? 0
+                : (seconds.truncatingRemainder(dividingBy: revolutionSeconds) / revolutionSeconds) * 360.0
+            ZStack {
+                ForEach(0..<count, id: \.self) { index in
+                    Capsule(style: .continuous)
+                        .fill(petalColors[index])
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .strokeBorder(outline, lineWidth: max(1, size * 0.028))
+                        }
+                        .frame(width: petalW, height: petalH)
+                        .offset(y: -radius)
+                        .rotationEffect(.degrees(Double(index) / Double(count) * 360.0))
+                }
+            }
+            .rotationEffect(.degrees(angle))
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var face: some View {
+        let faceD = size * 0.54
+        return ZStack {
+            Circle()
+                .fill(Color(red: 0.99, green: 0.82, blue: 0.10))
+                .overlay { Circle().strokeBorder(outline, lineWidth: max(1, size * 0.032)) }
+                .frame(width: faceD, height: faceD)
+
+            HStack(spacing: faceD * 0.48) {
+                cheek(faceD)
+                cheek(faceD)
+            }
+            .offset(y: faceD * 0.13)
+
+            HStack(spacing: faceD * 0.26) {
+                eye(faceD)
+                eye(faceD)
+            }
+            .offset(y: -faceD * 0.08)
+
+            mouth(faceD)
+                .offset(y: faceD * 0.19)
+        }
+    }
+
+    private func eye(_ faceD: CGFloat) -> some View {
+        Capsule()
+            .fill(outline)
+            .frame(width: faceD * 0.12, height: faceD * 0.22)
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill(.white)
+                    .frame(width: faceD * 0.05, height: faceD * 0.05)
+                    .offset(x: faceD * 0.02, y: faceD * 0.02)
+            }
+    }
+
+    private func cheek(_ faceD: CGFloat) -> some View {
+        Circle()
+            .fill(Color(red: 0.98, green: 0.55, blue: 0.25).opacity(0.5))
+            .frame(width: faceD * 0.13, height: faceD * 0.13)
+    }
+
+    private func mouth(_ faceD: CGFloat) -> some View {
+        let mouthW = faceD * 0.46
+        let mouthH = faceD * 0.27
+        return EagleSmileMouth()
+            .fill(outline)
+            .frame(width: mouthW, height: mouthH)
+            .overlay(alignment: .bottom) {
+                Circle()
+                    .fill(Color(red: 0.95, green: 0.22, blue: 0.34))
+                    .frame(width: mouthW * 0.42, height: mouthW * 0.42)
+                    .offset(y: mouthH * 0.16)
+            }
+            .clipShape(EagleSmileMouth())
+    }
+}
+
+struct EagleSmileMouth: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control: CGPoint(x: rect.maxX, y: rect.maxY)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: rect.minY),
+            control: CGPoint(x: rect.minX, y: rect.maxY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
 private struct EagleBeta10AccessView: View {
     @ObservedObject private var mgr = laramgr.shared
     @ObservedObject private var sceneManager = EagleSceneManager.shared
@@ -217,6 +351,8 @@ private struct EagleBeta10AccessView: View {
                     .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
                     .minimumScaleFactor(0.82)
                     .accessibilityAddTraits(.isHeader)
+
+                EagleSmileyFlower(size: 40)
 
                 Spacer(minLength: 8)
 
