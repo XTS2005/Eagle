@@ -20,15 +20,12 @@ struct LaraHomeView: View {
                     if normalizedToolQuery.isEmpty {
                         VStack(alignment: .leading, spacing: 20) {
                             NavigationLink(destination: auraStudioDestination) {
-                                LaraFeatureCard(
+                                AuraStudioHeroCard(
                                     title: "Aura Studio",
                                     subtitle: LaraL10n.text(
                                         en: "Dynamic Island neon, rainbow, and glow.",
                                         es: "Neón, arcoíris y brillo para Dynamic Island."
                                     ),
-                                    systemImage: "capsule.fill",
-                                    accent: Color(red: 0.46, green: 0.24, blue: 1.00),
-                                    artwork: .aura,
                                     badge: hasSeenAuraStudioBeta10
                                         ? nil
                                         : LaraL10n.text(en: "NEW", es: "NUEVO")
@@ -826,6 +823,108 @@ private struct LaraFeatureCard: View {
         .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .rotationEffect(.degrees(2))
         .shadow(color: accent.opacity(0.22), radius: 18, y: 10)
+    }
+}
+
+private struct AuraStudioHeroCard: View {
+    let title: String
+    let subtitle: String
+    var badge: String? = nil
+
+    var body: some View {
+        HStack(spacing: 16) {
+            neonCapsule
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 6)
+
+            Image(systemName: "chevron.right")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(auraBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 25)
+                    .background(Color.white.opacity(0.18), in: Capsule())
+                    .padding(12)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
+    }
+
+    private var auraBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.17, green: 0.11, blue: 0.32),
+                    Color(red: 0.09, green: 0.05, blue: 0.19),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [
+                    Color(red: 0.42, green: 0.24, blue: 0.86).opacity(0.45),
+                    .clear,
+                ],
+                center: UnitPoint(x: 0.28, y: 0.5),
+                startRadius: 4,
+                endRadius: 210
+            )
+        }
+    }
+
+    private var neonCapsule: some View {
+        ZStack {
+            Capsule(style: .continuous)
+                .stroke(Color.purple.opacity(0.30), lineWidth: 15)
+                .frame(width: 128, height: 48)
+                .blur(radius: 14)
+
+            Capsule(style: .continuous)
+                .fill(Color.black)
+                .frame(width: 122, height: 44)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
+                                center: .center
+                            ),
+                            lineWidth: 3
+                        )
+                }
+                .shadow(color: .cyan.opacity(0.5), radius: 10)
+                .shadow(color: .pink.opacity(0.36), radius: 16)
+        }
+        .frame(width: 138, height: 96)
+        .accessibilityHidden(true)
     }
 }
 
