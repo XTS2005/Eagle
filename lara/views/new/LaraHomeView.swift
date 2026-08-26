@@ -118,7 +118,7 @@ struct LaraHomeView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                                        .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
                                 }
                             }
 
@@ -287,7 +287,7 @@ struct LaraHomeView: View {
     private var toolSearchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
             TextField(
@@ -316,7 +316,7 @@ struct LaraHomeView: View {
                     toolSearchQuery = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -612,12 +612,27 @@ private struct LaraFeatureCard: View {
             .clipped()
             .accessibilityHidden(true)
 
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(height: 1)
+
             HStack(alignment: .center, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 38, height: 38)
-                    .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .frame(width: 40, height: 40)
+                    .background(
+                        LinearGradient(
+                            colors: [accent.opacity(0.30), accent.opacity(0.12)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(accent.opacity(0.38), lineWidth: 1)
+                    }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -632,16 +647,17 @@ private struct LaraFeatureCard: View {
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.tertiary)
             }
             .padding(18)
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: accent.opacity(0.14), radius: 18, x: 0, y: 8)
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
             if let badge {
@@ -838,7 +854,18 @@ private struct LaraToolRow: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 38, height: 38)
-                .background(accent.opacity(0.11), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(
+                    LinearGradient(
+                        colors: [accent.opacity(0.26), accent.opacity(0.11)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(accent.opacity(0.30), lineWidth: 1)
+                }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -868,10 +895,10 @@ private struct LaraToolRow: View {
             }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
