@@ -49,7 +49,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: AnimatedWallpapersView()) {
                                     LaraToolRow(
@@ -60,7 +60,7 @@ struct LaraHomeView: View {
                                     )
                                 }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: PasscodeView(mgr: mgr)) {
                                         LaraToolRow(
@@ -71,7 +71,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: CardView()) {
                                         LaraToolRow(
@@ -82,7 +82,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: DockCustomizerView()) {
                                         LaraToolRow(
@@ -93,7 +93,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: homeLabelColorDestination) {
                                         LaraToolRow(
@@ -330,10 +330,10 @@ struct LaraHomeView: View {
         .padding(.leading, 14)
         .padding(.trailing, toolSearchQuery.isEmpty ? 14 : 4)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
         }
     }
 
@@ -343,7 +343,7 @@ struct LaraHomeView: View {
             VStack(spacing: 9) {
                 Image(systemName: "magnifyingglass")
                     .font(.title2)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 Text(LaraL10n.text(
                     en: "No matching tools",
@@ -363,14 +363,14 @@ struct LaraHomeView: View {
             .padding(.vertical, 34)
             .padding(.horizontal, 18)
             .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .accessibilityElement(children: .combine)
         } else {
             VStack(spacing: 0) {
                 ForEach(filteredToolRoutes) { route in
                     searchResult(for: route)
                     if route != filteredToolRoutes.last {
-                        Divider().padding(.leading, 62)
+                        Divider().padding(.leading, 65)
                     }
                 }
             }
@@ -379,7 +379,7 @@ struct LaraHomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                    .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
             }
         }
     }
@@ -620,9 +620,9 @@ private struct LaraFeatureCard: View {
             HStack(alignment: .center, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(accent)
                     .frame(width: 40, height: 40)
-                    .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -646,7 +646,7 @@ private struct LaraFeatureCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
             if let badge {
@@ -956,7 +956,7 @@ private struct LaraToolRow: View {
         HStack(spacing: 13) {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(accent)
                 .frame(width: 38, height: 38)
                 .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 

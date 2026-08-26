@@ -61,7 +61,6 @@ struct EagleAppShellView: View {
         .overlay(alignment: .top) {
             Divider().opacity(0.35)
         }
-        .background(.ultraThinMaterial)
         .ignoresSafeArea(edges: .bottom)
     }
 
@@ -81,7 +80,7 @@ struct EagleAppShellView: View {
                             .foregroundStyle(EagleSpectrumStyle.gradient)
                     } else {
                         Image(systemName: systemImage)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .font(.system(size: 25, weight: .semibold))
@@ -295,7 +294,7 @@ private struct EagleBeta10AccessView: View {
                                 )
                             }
 
-                            Divider().padding(.leading, 62)
+                            Divider().padding(.leading, 65)
 
                             NavigationLink(destination: EagleSystemView()) {
                                 accessRow(
@@ -418,11 +417,11 @@ private struct EagleBeta10AccessView: View {
         HStack(spacing: 13) {
             Image(systemName: systemImage)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 42, height: 42)
+                .foregroundStyle(accent)
+                .frame(width: 38, height: 38)
                 .background(
-                    accent.opacity(0.11),
-                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    accent.opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
                 )
 
             VStack(alignment: .leading, spacing: 3) {
@@ -432,14 +431,14 @@ private struct EagleBeta10AccessView: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 4)
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.primary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
         .padding(14)
         .contentShape(Rectangle())
