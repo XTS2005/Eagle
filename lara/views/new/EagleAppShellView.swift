@@ -346,13 +346,15 @@ private struct EagleBeta10AccessView: View {
     private var accessHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Text("Eagle")
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
-                    .minimumScaleFactor(0.82)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(spacing: 10) {
+                    Text("Eagle")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
+                        .minimumScaleFactor(0.82)
+                        .accessibilityAddTraits(.isHeader)
 
-                EagleSmileyFlower(size: 40)
+                    EagleSmileyFlower(size: 40)
+                }
 
                 Spacer(minLength: 8)
 
