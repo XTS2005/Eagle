@@ -1,4 +1,5 @@
 import SwiftUI
+import SafariServices
 
 private enum EagleAppSection {
     case access
@@ -98,10 +99,23 @@ struct EagleAppShellView: View {
     }
 }
 
+private struct TelegramSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.preferredControlTintColor = UIColor(red: 0.15, green: 0.62, blue: 0.87, alpha: 1)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
 private struct EagleBeta10AccessView: View {
     @ObservedObject private var mgr = laramgr.shared
     @ObservedObject private var sceneManager = EagleSceneManager.shared
     @State private var showingSettings = false
+    @State private var showingTelegram = false
 
     var body: some View {
         NavigationStack {
@@ -295,34 +309,59 @@ private struct EagleBeta10AccessView: View {
     }
 
     private var telegramCard: some View {
-        Link(destination: URL(string: "https://t.me/LEONARDOPHL")!) {
-            HStack(spacing: 13) {
-                Image(systemName: "paperplane.fill")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        Color(red: 0.15, green: 0.62, blue: 0.87),
-                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    )
+        Button {
+            showingTelegram = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.24, green: 0.70, blue: 0.90),
+                                    Color(red: 0.11, green: 0.52, blue: 0.79),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 23, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .offset(x: -1, y: 1)
+                }
+                .frame(width: 54, height: 54)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Telegram")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.headline)
                         .foregroundStyle(.primary)
                     Text("@LEONARDOPHL")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                Text(LaraL10n.text(en: "Open", es: "Abrir"))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(height: 32)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.24, green: 0.70, blue: 0.90),
+                                    Color(red: 0.11, green: 0.52, blue: 0.79),
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -330,11 +369,15 @@ private struct EagleBeta10AccessView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
+        .sheet(isPresented: $showingTelegram) {
+            TelegramSafariView(url: URL(string: "https://t.me/LEONARDOPHL")!)
+                .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Telegram, @LEONARDOPHL")
-        .accessibilityAddTraits(.isLink)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var trustNote: some View {
