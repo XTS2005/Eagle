@@ -332,34 +332,15 @@ private struct EagleBeta10AccessView: View {
                 }
                 .frame(width: 54, height: 54)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Telegram")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text("@LEONARDOPHL")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Contact me")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(EagleSpectrumStyle.gradient)
 
                 Spacer(minLength: 8)
 
-                Text(LaraL10n.text(en: "Open", es: "Abrir"))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .frame(height: 32)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.24, green: 0.70, blue: 0.90),
-                                    Color(red: 0.11, green: 0.52, blue: 0.79),
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    )
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
             .padding(14)
             .contentShape(Rectangle())
@@ -376,7 +357,7 @@ private struct EagleBeta10AccessView: View {
                 .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Telegram, @LEONARDOPHL")
+        .accessibilityLabel("Contact me")
         .accessibilityAddTraits(.isButton)
     }
 
