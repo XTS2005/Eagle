@@ -61,9 +61,6 @@ enum EagleSupportSnapshot {
         let island = EagleDynamicIslandCompatibility.current
         let support = eagleSupportAssessment()
         let channel = EagleFeaturePolicy.persistedChannel(defaults: defaults)
-        let interfaceMode = EagleInterfaceMode(
-            rawValue: defaults.string(forKey: EagleInterfaceMode.storageKey) ?? ""
-        ) ?? .simple
         let language = LaraLanguage(
             rawValue: defaults.string(forKey: LaraLanguage.storageKey) ?? ""
         ) ?? .english
@@ -79,7 +76,6 @@ enum EagleSupportSnapshot {
             "Prepare support: \(prepareSupport)",
             "Dynamic Island hardware: \(island.availability.rawValue)",
             "Feature channel: \(channel.rawValue)",
-            "Interface mode: \(interfaceMode.rawValue)",
             "Interface language: \(language.rawValue)",
             "Generated: \(timestampFormatter.string(from: date))",
         ].joined(separator: "\n")

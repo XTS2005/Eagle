@@ -124,6 +124,8 @@ private enum HomeIconNeonApplyGate {
 }
 
 struct HomeIconNeonView: View {
+    var embedded = false
+
     @ObservedObject private var mgr = laramgr.shared
     @Environment(\.scenePhase) private var scenePhase
 
@@ -242,28 +244,13 @@ struct HomeIconNeonView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                previewCard
-                styleCard
-                paletteCard
-                intensityCard
-                scopeCard
-
-                if !mgr.dsready {
-                    LaraAccessView(compact: true)
-                }
-
-                applyButton
-                removeButton
-                diagnosticsCard
+        Group {
+            if embedded {
+                compactEditor
+            } else {
+                standaloneEditor
             }
-            .padding(20)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos"))
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isApplying)
         .alert(item: $notice) { notice in
             Alert(
                 title: Text(LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos")),
@@ -292,6 +279,169 @@ struct HomeIconNeonView: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { reconcileState() }
         }
+    }
+
+    private var standaloneEditor: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                previewCard
+                styleCard
+                paletteCard
+                intensityCard
+                scopeCard
+
+                if !mgr.dsready {
+                    LaraAccessView(compact: true)
+                }
+
+                applyButton
+                removeButton
+                diagnosticsCard
+            }
+            .padding(20)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos"))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isApplying)
+    }
+
+    private var compactEditor: some View {
+        VStack(spacing: 12) {
+            compactPreview
+            compactControls
+        }
+    }
+
+    private var compactPreview: some View {
+        VStack(spacing: 11) {
+            HStack(spacing: 8) {
+                Image(systemName: "app.fill")
+                    .foregroundStyle(selectedDisplayColor)
+                Text(LaraL10n.text(en: "Home Icon", es: "Icono de inicio"))
+                    .font(.headline)
+                Spacer()
+                Text(selectedStyle.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(selectedDisplayColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(selectedDisplayColor.opacity(0.12), in: Capsule())
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [
+                            Color(red: 0.035, green: 0.04, blue: 0.065),
+                            Color(red: 0.012, green: 0.014, blue: 0.025),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+
+                RoundedRectangle(cornerRadius: 21, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color.white.opacity(0.88), Color.white.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 82, height: 82)
+                    .overlay {
+                        Image(systemName: "app.fill")
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundStyle(Color.black.opacity(0.72))
+                    }
+                    .overlay {
+                        if selectedStyle == .outline {
+                            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                .stroke(selectedDisplayColor, lineWidth: selectedIntensity == .subtle ? 2 : 3.5)
+                                .padding(-3)
+                        }
+                    }
+                    .shadow(
+                        color: selectedDisplayColor.opacity(selectedStyle == .glow ? 0.95 : 0.62),
+                        radius: selectedStyle == .glow ? selectedIntensity.radius * 1.7 : selectedIntensity.radius
+                    )
+            }
+            .frame(height: 145)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(LaraL10n.text(
+                en: "Home icon preview, \(selectedStyle.title), \(selectedPalette.title)",
+                es: "Vista previa del icono, \(selectedStyle.title), \(selectedPalette.title)"
+            ))
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var compactControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker(
+                LaraL10n.text(en: "Icon neon effect", es: "Efecto neón del icono"),
+                selection: $selectedStyleRaw
+            ) {
+                ForEach(HomeIconNeonStyle.allCases) { style in
+                    Text(style.title).tag(style.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker(
+                LaraL10n.text(en: "Neon intensity", es: "Intensidad del neón"),
+                selection: $selectedIntensityRaw
+            ) {
+                ForEach(HomeIconNeonIntensity.allCases) { intensity in
+                    Text(intensity.title).tag(intensity.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Divider()
+
+            HStack {
+                Text(LaraL10n.text(en: "Color", es: "Color"))
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                ColorPicker(
+                    LaraL10n.text(en: "Custom color", es: "Color personalizado"),
+                    selection: customColorBinding,
+                    supportsOpacity: false
+                )
+                .labelsHidden()
+            }
+
+            HStack(spacing: 9) {
+                ForEach(HomeIconNeonPalette.allCases.filter { $0 != .custom }) { palette in
+                    Button {
+                        selectedPalette = palette
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(palette.color)
+                                .frame(width: 34, height: 34)
+                                .shadow(color: palette.color.opacity(0.55), radius: 5)
+                            if selectedPalette == palette {
+                                Image(systemName: "checkmark")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+
+            applyButton
+            removeButton
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .disabled(isApplying)
     }
 
     private var previewCard: some View {
@@ -563,7 +713,7 @@ struct HomeIconNeonView: View {
             .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(.bordered)
-        .disabled(isApplying || !hasRecordedEffect || !mgr.dsready || mgr.rcSafetyLocked)
+        .disabled(isApplying || !mgr.dsready || mgr.rcSafetyLocked)
     }
 
     private var diagnosticsCard: some View {

@@ -23,6 +23,7 @@ struct LaraCustomApp: App {
     
     init() {
         EaglePreferenceMigration.runIfNeeded()
+        EagleSpectrumStyle.configureGlobalNavigationAppearance()
 
         #if DEBUG
         weonadebugbuild_pjbweouttahereexclamationmark = true
@@ -42,7 +43,7 @@ struct LaraCustomApp: App {
     
     var body: some Scene {
         WindowGroup {
-            LaraHomeView()
+            EagleAppShellView()
             .environmentObject(mgr)
             .environment(\.locale, language.locale)
             .overlay {

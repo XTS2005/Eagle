@@ -315,8 +315,10 @@ struct SettingsView: View {
             .navigationTitle(LaraL10n.text(en: "Advanced Settings", es: "Ajustes avanzados"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(LaraL10n.text(en: "Close", es: "Cerrar")) {
+                    Button {
                         dismiss()
+                    } label: {
+                        EagleSpectrumText(text: LaraL10n.text(en: "Close", es: "Cerrar"))
                     }
                 }
             }

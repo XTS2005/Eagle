@@ -152,10 +152,18 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
             )
         case .rainbow:
             return LaraL10n.text(
-                en: "A vivid spectrum moves continuously through this surface only.",
-                es: "Un espectro intenso recorre continuamente solo esta superficie."
+                en: "A vivid spectrum moves through the background, bright edge, and outer light.",
+                es: "Un espectro intenso recorre el fondo, el borde brillante y la luz exterior."
             )
         }
+    }
+
+    var usesFixedPalette: Bool {
+        self == .rainbow
+    }
+
+    var fillsIslandBackground: Bool {
+        self == .tint || usesFixedPalette
     }
 }
 
@@ -172,22 +180,6 @@ private enum AuraStudioTarget: Int, CaseIterable, Identifiable {
         }
     }
 
-}
-
-private enum AuraStudioPreviewIslandState: Int, CaseIterable, Identifiable {
-    case compact
-    case liveActivity
-
-    var id: Int { rawValue }
-
-    var title: String {
-        switch self {
-        case .compact:
-            return LaraL10n.text(en: "Compact", es: "Compacta")
-        case .liveActivity:
-            return LaraL10n.text(en: "Live Activity", es: "Actividad en vivo")
-        }
-    }
 }
 
 private struct AuraStudioOperationStep {
@@ -363,6 +355,7 @@ struct AuraStudioView: View {
     @AppStorage("eagle.dockAura.blue") private var dockBlue = 1.0
     @AppStorage("eagle.auraStudio.dock.mode") private var dockModeRaw = AuraStudioMode.glow.rawValue
     @AppStorage("eagle.auraStudio.editingTarget") private var selectedTargetRaw = AuraStudioTarget.island.rawValue
+    @AppStorage("eagle.auraStudio.editingIcons") private var editingIcons = false
     @AppStorage("eagle.auraStudio.mode") private var legacySelectedModeRaw = AuraStudioMode.glow.rawValue
     @AppStorage("eagle.auraStudio.independentProfilesMigrated") private var independentProfilesMigrated = false
     @AppStorage("eagle.auraStudio.activeFlags") private var activeFlagsRaw = 0
@@ -378,15 +371,9 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
-    @AppStorage("eagle.homeIconNeon.activePalette")
-    private var homeIconNeonActivePaletteRaw = 0
-    @AppStorage("eagle.homeIconNeon.cleanupRequired")
-    private var homeIconNeonCleanupRequired = false
-
     @State private var isApplying = false
     @State private var previewPulse = false
     @State private var previewRainbowHue = 0.0
-    @State private var previewIslandState = AuraStudioPreviewIslandState.compact
     @State private var notice: AuraStudioNotice?
     @State private var applyStage = ""
     @State private var applySafetyBlocked = false
@@ -395,8 +382,14 @@ struct AuraStudioView: View {
     @State private var operationStepIndex = 0
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
+    @State private var systemIslandSuppressed = false
+    @State private var isReadingSystemIslandSetting = false
 
-    private let auraEngineBuild = "2026.08.17-r32-island-visible-restore"
+    private let springBoardPreferencesPath =
+        "/var/Managed Preferences/mobile/com.apple.springboard.plist"
+    private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
+
+    private let auraEngineBuild = "2026.08.25-r33-island-rainbow-fill"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -460,9 +453,8 @@ struct AuraStudioView: View {
         case .pulse:
             return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
         case .rainbow:
-            // Rainbow was device-proven on Dynamic Island and was only hidden
-            // later by release-channel policy. It was never a working Dock
-            // renderer, so keep the two capabilities deliberately separate.
+            // Rainbow is Island-only. Dock keeps its independently verified
+            // static renderer and cannot receive this mode.
             return target == .island
         case .tint:
             return target == .island &&
@@ -598,13 +590,44 @@ struct AuraStudioView: View {
     }
 
     private func previewRingStyle(for target: AuraStudioTarget) -> AnyShapeStyle {
-        if mode(for: target) == .rainbow {
-            return AnyShapeStyle(AngularGradient(
+        let mode = mode(for: target)
+        if mode == .rainbow {
+            return AnyShapeStyle(LinearGradient(
                 colors: [.pink, .orange, .yellow, .green, .cyan, .blue, .purple, .pink],
-                center: .center
+                startPoint: .leading,
+                endPoint: .trailing
             ))
         }
         return AnyShapeStyle(color(for: target))
+    }
+
+    private func islandPreviewFillStyle(for mode: AuraStudioMode) -> AnyShapeStyle {
+        switch mode {
+        case .tint:
+            return AnyShapeStyle(previewTintFillColor)
+        case .rainbow:
+            return AnyShapeStyle(LinearGradient(
+                colors: [
+                    Color.pink,
+                    Color.orange,
+                    Color.cyan,
+                    Color.purple,
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            ))
+        case .glow, .pulse:
+            return AnyShapeStyle(Color.black)
+        }
+    }
+
+    private func previewSpectrumHue(for mode: AuraStudioMode) -> Double {
+        switch mode {
+        case .rainbow:
+            return previewRainbowHue
+        case .glow, .pulse, .tint:
+            return 0
+        }
     }
 
     private var selectedFlags: UInt32 {
@@ -615,6 +638,9 @@ struct AuraStudioView: View {
         Binding(
             get: { auraColor },
             set: { color in
+                if selectedMode.usesFixedPalette {
+                    selectedMode = .glow
+                }
                 let resolved = UIColor(color)
                 var nextRed: CGFloat = 0
                 var nextGreen: CGFloat = 0
@@ -637,21 +663,26 @@ struct AuraStudioView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
-                previewCard
+            VStack(spacing: 12) {
+                systemIslandCard
                 surfaceProfilesCard
-                appearanceCard
-                adaptiveNote
+                if editingIcons {
+                    HomeIconNeonView(embedded: true)
+                } else {
+                    previewCard
+                    appearanceCard
+                }
 
                 if !mgr.dsready {
                     LaraAccessView(compact: true)
                 }
 
-                applyButton
-                restoreButton
-                diagnosticsCard
+                if applySafetyBlocked || mgr.rcSafetyLocked {
+                    diagnosticsCard
+                }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Aura Studio")
@@ -706,6 +737,9 @@ struct AuraStudioView: View {
                 selectedTargetRaw = AuraStudioTarget.dock.rawValue
             }
             reconcilePersistedActiveState()
+            if mgr.sbxready {
+                readSystemIslandSetting()
+            }
             if mgr.rcSafetyLocked { applySafetyBlocked = true }
 #if DEBUG
             if !AuraStudioNativeContract.invariantsHold {
@@ -728,267 +762,230 @@ struct AuraStudioView: View {
             guard !isApplying else { return }
             normalizeDraftModesForPolicy()
         }
+        .onChange(of: mgr.sbxready) { ready in
+            if ready { readSystemIslandSetting() }
+        }
+    }
+
+    private var systemIslandCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "eye.slash.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.cyan)
+                .frame(width: 36, height: 36)
+                .background(Color.cyan.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LaraL10n.text(
+                    en: "Hide system Island",
+                    es: "Ocultar Island del sistema"
+                ))
+                .font(.subheadline.weight(.semibold))
+                Text(mgr.sbxready
+                     ? LaraL10n.text(en: "Requires respring", es: "Requiere respring")
+                     : LaraL10n.text(en: "Prepare access first", es: "Prepara el acceso primero"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            Toggle("", isOn: Binding(
+                get: { systemIslandSuppressed },
+                set: updateSystemIslandSuppression
+            ))
+            .labelsHidden()
+            .disabled(!mgr.sbxready || isReadingSystemIslandSetting || isApplying)
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.cyan.opacity(0.20), lineWidth: 1)
+        }
+    }
+
+    private func readSystemIslandSetting() {
+        guard mgr.sbxready else {
+            systemIslandSuppressed = false
+            return
+        }
+        isReadingSystemIslandSetting = true
+        defer { isReadingSystemIslandSetting = false }
+        let result = mgr.getplistvalue(
+            path: springBoardPreferencesPath,
+            key: suppressSystemIslandKey
+        )
+        guard result.ok else {
+            systemIslandSuppressed = false
+            if !result.message.hasPrefix("key ") {
+                notice = AuraStudioNotice(message: result.message)
+            }
+            return
+        }
+        guard let value = plistBoolean(result.value) else {
+            systemIslandSuppressed = false
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Could not read \(suppressSystemIslandKey) as a Boolean value.",
+                es: "No se pudo leer \(suppressSystemIslandKey) como un valor booleano."
+            ))
+            return
+        }
+        systemIslandSuppressed = value
+    }
+
+    private func updateSystemIslandSuppression(_ enabled: Bool) {
+        let previousValue = systemIslandSuppressed
+        systemIslandSuppressed = enabled
+        let result = mgr.setplistvalue(
+            path: springBoardPreferencesPath,
+            key: (suppressSystemIslandKey, enabled ? true : nil),
+            force: true
+        )
+        guard result.ok else {
+            systemIslandSuppressed = previousValue
+            notice = AuraStudioNotice(message: result.message)
+            return
+        }
+
+        let verification = mgr.getplistvalue(
+            path: springBoardPreferencesPath,
+            key: suppressSystemIslandKey
+        )
+        let verified: Bool
+        if verification.ok, let storedValue = plistBoolean(verification.value) {
+            verified = storedValue == enabled
+        } else {
+            verified = !enabled &&
+                verification.value == nil &&
+                verification.message.hasPrefix("key ")
+        }
+        guard verified else {
+            systemIslandSuppressed = previousValue
+            notice = AuraStudioNotice(message: verification.ok
+                ? LaraL10n.text(
+                    en: "The system value did not match the requested setting.",
+                    es: "El valor del sistema no coincidió con el ajuste solicitado."
+                )
+                : verification.message)
+            return
+        }
+
+        notice = AuraStudioNotice(message: LaraL10n.text(
+            en: enabled
+                ? "The system Island will be hidden after a respring. Your Aura profile is unchanged."
+                : "The system Island will return after a respring. Your Aura profile is unchanged.",
+            es: enabled
+                ? "La Island del sistema se ocultará después de un respring. Tu perfil Aura no cambió."
+                : "La Island del sistema volverá después de un respring. Tu perfil Aura no cambió."
+        ))
+    }
+
+    private func plistBoolean(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        return nil
     }
 
     private var previewCard: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 5) {
-                Text(LaraL10n.text(
-                    en: "Two surfaces. Two identities.",
-                    es: "Dos superficies. Dos identidades."
-                ))
-                    .font(.title2.bold())
-                Text(LaraL10n.text(
-                    en: "Preview Island and Dock together, then apply each profile without changing the other.",
-                    es: "Previsualiza Island y Dock juntos y aplica cada perfil sin cambiar el otro."
-                ))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(spacing: 11) {
+            HStack(spacing: 8) {
+                Image(systemName: selectedTarget == .island ? "capsule.fill" : "dock.rectangle")
+                    .foregroundStyle(previewLightColor)
+                Text(selectedTarget.title)
+                    .font(.headline)
+                Spacer()
+                Text(selectedMode.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(previewLightColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(previewLightColor.opacity(0.12), in: Capsule())
             }
 
             ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.025, green: 0.035, blue: 0.07),
-                        previewLightColor.opacity(0.22),
-                        Color(red: 0.018, green: 0.02, blue: 0.04),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [
+                            Color(red: 0.035, green: 0.04, blue: 0.065),
+                            Color(red: 0.012, green: 0.014, blue: 0.025),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
 
-                VStack {
-                    HStack {
-                        Text("9:41")
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Image(systemName: "cellularbars")
-                            Image(systemName: "wifi")
-                            Image(systemName: "battery.75percent")
+                if selectedTarget == .island {
+                    let islandMode = mode(for: .island)
+                    ZStack {
+                        Capsule()
+                            .stroke(previewRingStyle(for: .island), lineWidth: 12)
+                            .blur(radius: 10)
+                            .opacity(0.48)
+                        Capsule()
+                            .fill(islandPreviewFillStyle(for: islandMode))
+                        Capsule()
+                            .stroke(previewRingStyle(for: .island), lineWidth: 4)
+                        if islandMode.fillsIslandBackground {
+                            HStack(spacing: 6) {
+                                Capsule()
+                                    .fill(.black)
+                                    .frame(width: 58, height: 17)
+                                Circle()
+                                    .fill(.black)
+                                    .frame(width: 17, height: 17)
+                            }
+                            .offset(x: 4)
                         }
                     }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-
-                    Spacer()
-
-                    Group {
-                        let dockPreviewColor = previewLightColor(for: .dock)
-                        let dockPreviewMode = mode(for: .dock)
-                        HStack(spacing: 9) {
+                    .frame(width: 190, height: 55)
+                    .shadow(
+                        color: islandMode == .rainbow ? .clear : previewLightColor,
+                        radius: 14
+                    )
+                    .hueRotation(.degrees(previewSpectrumHue(for: islandMode) * 360))
+                    .opacity(islandMode == .pulse ? (previewPulse ? 1 : 0.58) : 1)
+                } else {
+                    let dockMode = mode(for: .dock)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 21, style: .continuous)
+                            .fill(Color.white.opacity(0.075))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                    .fill(previewLightColor.opacity(0.09))
+                            }
+                        HStack(spacing: 13) {
                             ForEach(0..<4, id: \.self) { index in
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill([Color.blue, .green, .purple, .orange][index].gradient)
-                                    .frame(width: 31, height: 31)
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.white.opacity(0.82 - Double(index) * 0.08))
+                                    .frame(width: 40, height: 40)
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(dockPreviewColor.opacity(0.18))
-                                }
-                                .shadow(color: dockPreviewColor.opacity(0.95), radius: 14)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(previewRingStyle(for: .dock), lineWidth: 2.2)
-                        }
-                        .shadow(color: dockPreviewColor, radius: 11)
-                        .hueRotation(.degrees(dockPreviewMode == .rainbow
-                                              ? previewRainbowHue * 360
-                                              : 0))
-                        .opacity(dockPreviewMode == .pulse
-                                 ? (previewPulse ? 1 : 0.55)
-                                 : 1)
                     }
-                }
-                .padding(14)
-
-                if islandProfileAvailable {
-                    Group {
-                        let islandPreviewColor = previewLightColor(for: .island)
-                        let islandPreviewMode = mode(for: .island)
-                        let compactSize = compactIslandPreviewSize
-                        let isExpanded = previewIslandState == .liveActivity
-                        let islandWidth = isExpanded
-                            ? min(205, compactSize.width * 1.72)
-                            : compactSize.width
-                        let islandHeight = isExpanded
-                            ? max(44, compactSize.height * 1.22)
-                            : compactSize.height
-                        ZStack {
-                            Capsule()
-                                .stroke(previewRingStyle(for: .island), lineWidth: 14)
-                                .blur(radius: 9)
-                                .opacity(0.88)
-                            Capsule()
-                                .fill(islandPreviewMode == .tint
-                                      ? previewTintFillColor
-                                      : .black)
-                            Capsule()
-                                .stroke(previewRingStyle(for: .island), lineWidth: 6)
-                            if isExpanded {
-                                HStack(spacing: 8) {
-                                    Circle()
-                                        .fill(islandPreviewColor.gradient)
-                                        .frame(width: 19, height: 19)
-                                        .overlay {
-                                            Image(systemName: "waveform")
-                                                .font(.system(size: 8, weight: .bold))
-                                                .foregroundStyle(.white)
-                                        }
-                                    Spacer(minLength: 5)
-                                    HStack(spacing: 2) {
-                                        ForEach(0..<7, id: \.self) { index in
-                                            Capsule()
-                                                .fill(.white.opacity(0.86))
-                                                .frame(
-                                                    width: 2,
-                                                    height: CGFloat(5 + (index % 3) * 3)
-                                                )
-                                        }
-                                    }
-                                    Text("0:42")
-                                        .font(.system(size: 8, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white.opacity(0.88))
-                                }
-                                .padding(.horizontal, 13)
-                            } else if islandPreviewMode == .tint {
-                                HStack(spacing: 5) {
-                                    Capsule()
-                                        .fill(.black)
-                                        .frame(width: 42, height: 13)
-                                    Circle()
-                                        .fill(.black)
-                                        .frame(width: 13, height: 13)
-                                }
-                                .offset(x: 3)
-                            }
-                        }
-                        .frame(width: islandWidth, height: islandHeight)
-                        .shadow(color: islandPreviewColor, radius: 22)
-                        .hueRotation(.degrees(islandPreviewMode == .rainbow
-                                              ? previewRainbowHue * 360
-                                              : 0))
-                        .opacity(islandPreviewMode == .pulse
-                                 ? (previewPulse ? 1 : 0.55)
-                                 : 1)
-                        .animation(
-                            reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82),
-                            value: previewIslandState
-                        )
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 11)
+                    .frame(width: 286, height: 78)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 21, style: .continuous)
+                            .stroke(previewRingStyle(for: .dock), lineWidth: 3)
                     }
+                    .shadow(color: previewLightColor.opacity(0.85), radius: 13)
+                    .hueRotation(.degrees(previewSpectrumHue(for: dockMode) * 360))
+                    .opacity(dockMode == .pulse ? (previewPulse ? 1 : 0.58) : 1)
                 }
             }
-            .frame(height: 238)
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .frame(height: 145)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(LaraL10n.text(
-                en: "Preview. Dynamic Island: \(mode(for: .island).title), \(previewIslandState.title). Dock: \(mode(for: .dock).title).",
-                es: "Vista previa. Dynamic Island: \(mode(for: .island).title), \(previewIslandState.title). Dock: \(mode(for: .dock).title)."
+                en: "\(selectedTarget.title) preview, \(selectedMode.title)",
+                es: "Vista previa de \(selectedTarget.title), \(selectedMode.title)"
             ))
-
-            if islandProfileAvailable {
-                Picker(
-                    LaraL10n.text(
-                        en: "Island preview state",
-                        es: "Estado de vista previa de Island"
-                    ),
-                    selection: $previewIslandState
-                ) {
-                    ForEach(AuraStudioPreviewIslandState.allCases) { state in
-                        Text(state.title).tag(state)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                Text(LaraL10n.text(
-                    en: "Preview only · music, calls, timers and recording control the real expanded shape.",
-                    es: "Solo vista previa · música, llamadas, temporizadores y grabación controlan la forma expandida real."
-                ))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            }
-
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(activeModuleCount == 0 ? Color.secondary.opacity(0.5) : Color.green)
-                    .frame(width: 8, height: 8)
-                Text(activeModuleCount == 0
-                     ? LaraL10n.text(
-                        en: "No verified aura active in this SpringBoard session",
-                        es: "No hay un aura verificada activa en esta sesión de SpringBoard"
-                     )
-                     : verifiedSurfaceSummary)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            if islandProfileAvailable {
-                Text(LaraL10n.text(
-                    en: "Hardware profile \(islandCompatibility.modelIdentifier) · \(previewIslandState.title) Island preview",
-                    es: "Perfil de hardware \(islandCompatibility.modelIdentifier) · vista Island \(previewIslandState.title)"
-                ))
-                .font(.caption2.monospaced())
-                .foregroundStyle(.tertiary)
-            }
-
-            HStack(spacing: 7) {
-                Image(systemName: displayGeometry.isDisplayZoomed
-                      ? "arrow.down.right.and.arrow.up.left"
-                      : "viewfinder.circle.fill")
-                    .foregroundStyle(previewLightColor)
-                Text(displayGeometry.isDisplayZoomed
-                     ? LaraL10n.text(
-                        en: "Display Zoom detected · preview scaled for this canvas",
-                        es: "Zoom de pantalla detectado · vista previa escalada para este lienzo"
-                     )
-                     : LaraL10n.text(
-                        en: "Standard display · native geometry",
-                        es: "Pantalla estándar · geometría nativa"
-                     ))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
         }
-        .padding(20)
+        .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var appearanceCard: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(LaraL10n.text(en: "Independent Profile", es: "Perfil independiente"))
-                        .font(.headline)
-                    Text(LaraL10n.text(
-                        en: "Editing \(selectedTarget.title) only",
-                        es: "Editando solo \(selectedTarget.title)"
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Circle()
-                    .fill(previewLightColor)
-                    .frame(width: 12, height: 12)
-                    .shadow(color: previewLightColor, radius: 6)
-            }
-
-            Text(LaraL10n.text(en: "Light Style", es: "Estilo de luz"))
-                .font(.headline)
-
+        VStack(alignment: .leading, spacing: 12) {
             if availableModes.count > 1 {
                 Picker(
                     LaraL10n.text(en: "Light Style", es: "Estilo de luz"),
@@ -1012,61 +1009,26 @@ struct AuraStudioView: View {
                     )
             }
 
-            Text(selectedMode.summary)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Label(
-                LaraL10n.text(
-                    en: "\(releaseChannel.title) channel · \(availableModes.count) verified \(availableModes.count == 1 ? "style" : "styles") for this surface",
-                    es: "Canal \(releaseChannel.title) · \(availableModes.count) \(availableModes.count == 1 ? "estilo verificado" : "estilos verificados") para esta superficie"
-                ),
-                systemImage: releaseChannel == .stable
-                    ? "checkmark.shield.fill"
-                    : (releaseChannel == .beta ? "testtube.2" : "flask.fill")
-            )
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-
-            Label {
-                if selectedTarget == .dock {
-                    Text(LaraL10n.text(
-                        en: "Native Dock material stays intact · neon remains behind every icon",
-                        es: "El material nativo del Dock se conserva · el neón queda detrás de cada icono"
-                    ))
-                } else if selectedMode == .tint {
-                    Text(LaraL10n.text(
-                        en: "Software black: off · native iOS 18 Island only",
-                        es: "Negro por software: desactivado · solo Island nativa de iOS 18"
-                    ))
-                } else {
-                    Text(LaraL10n.text(
-                        en: "Software black: on · restored by Glow, Pulse and Rainbow",
-                        es: "Negro por software: activado · restaurado por Brillo, Pulso y Arcoíris"
-                    ))
-                }
-            } icon: {
-                Image(systemName: selectedTarget == .dock
-                      ? "dock.rectangle"
-                      : (selectedMode == .tint ? "camera.aperture" : "capsule.fill"))
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(selectedMode == .tint ? previewLightColor : .secondary)
-
             Divider()
 
-            ColorPicker(
-                LaraL10n.text(en: "Aura color", es: "Color del aura"),
-                selection: auraColorBinding,
-                supportsOpacity: false
-            )
-            .font(.subheadline.weight(.semibold))
-            .disabled(selectedMode == .rainbow)
-            .opacity(selectedMode == .rainbow ? 0.45 : 1)
+            HStack {
+                Text(LaraL10n.text(en: "Color", es: "Color"))
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                ColorPicker(
+                    LaraL10n.text(en: "Custom color", es: "Color personalizado"),
+                    selection: auraColorBinding,
+                    supportsOpacity: false
+                )
+                .labelsHidden()
+            }
 
-            HStack(spacing: 11) {
+            HStack(spacing: 9) {
                 ForEach(presets, id: \.name) { preset in
                     Button {
+                        if selectedMode.usesFixedPalette {
+                            selectedMode = .glow
+                        }
                         setSelectedRGB(
                             red: preset.red,
                             green: preset.green,
@@ -1076,10 +1038,10 @@ struct AuraStudioView: View {
                         ZStack {
                             Circle()
                                 .fill(Color(red: preset.red, green: preset.green, blue: preset.blue))
-                                .frame(width: 32, height: 32)
+                                .frame(width: 34, height: 34)
                                 .overlay {
                                     Circle().strokeBorder(.white.opacity(0.55), lineWidth: 1)
-                                    if presetIsSelected(preset) && selectedMode != .rainbow {
+                                    if presetIsSelected(preset) && !selectedMode.usesFixedPalette {
                                         Image(systemName: "checkmark")
                                             .font(.caption.bold())
                                             .foregroundStyle(.white)
@@ -1091,14 +1053,12 @@ struct AuraStudioView: View {
                                     radius: 6
                                 )
                         }
-                        .frame(width: 44, height: 44)
+                        .frame(width: 42, height: 42)
                     }
                     .buttonStyle(.plain)
-                    .disabled(selectedMode == .rainbow)
-                    .opacity(selectedMode == .rainbow ? 0.42 : 1)
                     .accessibilityLabel(preset.name)
                     .accessibilityValue(
-                        presetIsSelected(preset) && selectedMode != .rainbow
+                        presetIsSelected(preset) && !selectedMode.usesFixedPalette
                             ? LaraL10n.text(en: "Selected", es: "Seleccionado")
                             : ""
                     )
@@ -1119,7 +1079,7 @@ struct AuraStudioView: View {
                                         center: .center
                                     )
                                 )
-                                .frame(width: 34, height: 34)
+                                .frame(width: 36, height: 36)
                                 .overlay {
                                     Circle().strokeBorder(.white.opacity(0.72), lineWidth: 1.2)
                                     if selectedMode == .rainbow {
@@ -1131,7 +1091,7 @@ struct AuraStudioView: View {
                                 }
                                 .shadow(color: previewLightColor.opacity(0.9), radius: 8)
                         }
-                        .frame(width: 44, height: 44)
+                        .frame(width: 42, height: 42)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
@@ -1143,133 +1103,58 @@ struct AuraStudioView: View {
                             : ""
                     )
                 }
+
                 Spacer()
             }
 
-            if selectedMode == .rainbow {
-                Label(
-                    LaraL10n.text(
-                        en: "Rainbow moves continuously through the bright edge and its outer light.",
-                        es: "Arcoíris recorre continuamente el borde brillante y su luz exterior."
-                    ),
-                    systemImage: "wand.and.stars"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Label(
-                LaraL10n.text(
-                    en: "Apply changes only to \(selectedTarget.title). The other surface keeps its current verified color and style.",
-                    es: "Aplicar cambia solo \(selectedTarget.title). La otra superficie conserva su color y estilo verificados."
-                ),
-                systemImage: "arrow.left.and.right.circle.fill"
-            )
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            applyButton
+            restoreButton
         }
-        .padding(18)
+        .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .disabled(isApplying)
     }
 
     private var surfaceProfilesCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(LaraL10n.text(en: "Choose What to Edit", es: "Elige qué editar"))
-                    .font(.headline)
-                Text(LaraL10n.text(
-                    en: "Each surface keeps its own color and animation.",
-                    es: "Cada superficie conserva su propio color y animación."
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
+        HStack(spacing: 8) {
             ForEach(AuraStudioTarget.allCases) { target in
                 profileButton(for: target)
             }
-
-            homeIconNeonProfileLink
+            homeIconCompactLink
         }
-        .padding(18)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func profileButton(for target: AuraStudioTarget) -> some View {
-        let isSelected = selectedTarget == target
+        let isSelected = !editingIcons && selectedTarget == target
         let isHardwareAvailable = target != .island || islandProfileAvailable
-        let targetFlag = flag(for: target)
-        let isActive = isTargetActive(target)
-        let hasPendingChanges = isActive && !draftMatchesActive(target)
         let profileColor = previewLightColor(for: target)
 
         return Button {
+            editingIcons = false
             selectedTarget = target
         } label: {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 11) {
-                    Image(systemName: target == .island ? "capsule.fill" : "dock.rectangle")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(profileColor)
-                        .frame(width: 34, height: 34)
-                        .background(profileColor.opacity(0.14))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            HStack(spacing: 7) {
+                Image(systemName: target == .island ? "capsule.fill" : "dock.rectangle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(profileColor)
+                    .frame(width: 28, height: 28)
+                    .background(profileColor.opacity(0.13), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(target.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(LaraL10n.text(
-                            en: "Selected profile: \(mode(for: target).title)",
-                            es: "Perfil seleccionado: \(mode(for: target).title)"
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 6)
-
-                    if !isHardwareAvailable {
-                        Text(LaraL10n.text(en: "UNAVAILABLE", es: "NO DISPONIBLE"))
-                            .font(.caption2.bold())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-                    } else if isSelected {
-                        Text(LaraL10n.text(en: "EDITING", es: "EDITANDO"))
-                            .font(.caption2.bold())
-                            .foregroundStyle(profileColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(profileColor.opacity(0.12), in: Capsule())
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.bold())
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(isActive ? activeColor(for: targetFlag) : Color.secondary.opacity(0.45))
-                        .frame(width: 7, height: 7)
-                    Text(profileStatusText(for: target))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(hasPendingChanges ? .orange : (isActive ? .green : .secondary))
-                    Spacer(minLength: 0)
-                }
+                Text(target == .island ? "Island" : target.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
-            .padding(13)
+            .padding(.horizontal, 8)
+            .frame(height: 52)
+            .frame(maxWidth: .infinity)
             .background(
                 isSelected ? profileColor.opacity(0.10) : Color(uiColor: .tertiarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .strokeBorder(isSelected ? profileColor.opacity(0.65) : .clear, lineWidth: 1.5)
             }
             .contentShape(Rectangle())
@@ -1278,10 +1163,7 @@ struct AuraStudioView: View {
         .disabled(isApplying || !isHardwareAvailable)
         .opacity(isHardwareAvailable ? 1 : 0.64)
         .accessibilityLabel(target.title)
-        .accessibilityValue(LaraL10n.text(
-            en: "Selected profile: \(mode(for: target).title). \(profileStatusText(for: target)).",
-            es: "Perfil seleccionado: \(mode(for: target).title). \(profileStatusText(for: target))."
-        ))
+        .accessibilityValue(mode(for: target).title)
         .accessibilityHint(LaraL10n.text(
             en: isHardwareAvailable
                 ? "Edits only this surface."
@@ -1292,97 +1174,39 @@ struct AuraStudioView: View {
         ))
     }
 
-    private var homeIconNeonProfileLink: some View {
-        NavigationLink {
-            HomeIconNeonView()
+    private var homeIconCompactLink: some View {
+        Button {
+            editingIcons = true
         } label: {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 11) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(.cyan.opacity(0.32))
-                            .frame(width: 25, height: 25)
-                            .shadow(color: .cyan, radius: 7)
-                        Image(systemName: "app.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 34, height: 34)
-                    .background(Color.cyan.opacity(0.14))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LaraL10n.text(
-                            en: "Home Icon Neon",
-                            es: "Neón de iconos"
-                        ))
-                        .font(.subheadline.weight(.semibold))
-                        Text(LaraL10n.text(
-                            en: "Glow behind apps on the current Home page",
-                            es: "Brillo detrás de las apps de la página actual"
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 6)
-                    Text("BETA")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.cyan)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Color.cyan.opacity(0.12), in: Capsule())
-                }
-
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(
-                            homeIconNeonCleanupRequired
-                                ? Color.orange
-                                : (homeIconNeonActivePaletteRaw != 0
-                                   ? Color.green
-                                   : Color.secondary.opacity(0.45))
-                        )
-                        .frame(width: 7, height: 7)
-                        .accessibilityHidden(true)
-                    Text(
-                        homeIconNeonCleanupRequired
-                            ? LaraL10n.text(en: "Cleanup required", es: "Requiere limpieza")
-                            : (homeIconNeonActivePaletteRaw != 0
-                               ? LaraL10n.text(en: "Page snapshot applied", es: "Aplicado a la página")
-                               : LaraL10n.text(en: "Ready to configure", es: "Listo para configurar"))
-                    )
+            HStack(spacing: 7) {
+                Image(systemName: "app.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.cyan)
+                    .frame(width: 28, height: 28)
+                    .background(Color.cyan.opacity(0.13), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                Text(LaraL10n.text(en: "Icons", es: "Iconos"))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(
-                        homeIconNeonCleanupRequired
-                            ? Color.orange
-                            : (homeIconNeonActivePaletteRaw != 0 ? .green : .secondary)
-                    )
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
-            .padding(13)
+            .padding(.horizontal, 8)
+            .frame(height: 52)
+            .frame(maxWidth: .infinity)
             .background(
-                Color(uiColor: .tertiarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                editingIcons
+                    ? Color.cyan.opacity(0.10)
+                    : Color(uiColor: .tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .strokeBorder(editingIcons ? Color.cyan.opacity(0.65) : .clear, lineWidth: 1.5)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(isApplying)
-        .accessibilityLabel(LaraL10n.text(
-            en: "Home Icon Neon. Glow behind apps on the current Home page.",
-            es: "Neón de iconos. Brillo detrás de las apps de la página actual."
-        ))
-        .accessibilityHint(LaraL10n.text(
-            en: "Opens independent Beta controls.",
-            es: "Abre controles Beta independientes."
-        ))
+        .accessibilityLabel(LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos"))
     }
 
     private var adaptiveNote: some View {
@@ -1422,15 +1246,10 @@ struct AuraStudioView: View {
         } label: {
             Label(
                 mgr.dsready
-                    ? (draftMatchesActive(selectedTarget)
-                        ? LaraL10n.text(
-                            en: "Reapply \(selectedTarget.title) Profile",
-                            es: "Volver a aplicar perfil de \(selectedTarget.title)"
-                        )
-                        : LaraL10n.text(
-                            en: "Apply \(selectedMode.title) to \(selectedTarget.title)",
-                            es: "Aplicar \(selectedMode.title) a \(selectedTarget.title)"
-                        ))
+                    ? LaraL10n.text(
+                        en: "Apply \(selectedMode.title)",
+                        es: "Aplicar \(selectedMode.title)"
+                    )
                     : LaraL10n.text(
                         en: "System Access Required",
                         es: "Se requiere acceso al sistema"
@@ -1440,7 +1259,7 @@ struct AuraStudioView: View {
             .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: 48)
             .background(previewLightColor.gradient)
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
@@ -1461,23 +1280,19 @@ struct AuraStudioView: View {
             runAuraOperation(.remove, flags: selectedFlags)
         } label: {
             Label(
-                LaraL10n.text(
-                    en: "Restore Original \(selectedTarget.title)",
-                    es: "Restaurar \(selectedTarget.title) original"
-                ),
+                LaraL10n.text(en: "Restore", es: "Restaurar"),
                 systemImage: "arrow.counterclockwise"
             )
-            .font(.subheadline.weight(.semibold))
+            .font(.caption.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            .frame(height: 36)
         }
         .buttonStyle(.bordered)
-        .controlSize(.large)
         .disabled(
-            isApplying || !mgr.dsready || !isTargetActive(selectedTarget) ||
+            isApplying || !mgr.dsready || selectedFlags == 0 ||
             applySafetyBlocked || mgr.rcSafetyLocked
         )
-        .opacity(isTargetActive(selectedTarget) ? 1 : 0.52)
+        .opacity(!mgr.dsready || applySafetyBlocked || mgr.rcSafetyLocked ? 0.52 : 1)
         .accessibilityHint(LaraL10n.text(
             en: "Restores only \(selectedTarget.title) and keeps the other aura active.",
             es: "Restaura únicamente \(selectedTarget.title) y mantiene activa la otra aura."
@@ -1579,8 +1394,13 @@ struct AuraStudioView: View {
     }
 
     private func previewLightColor(for target: AuraStudioTarget) -> Color {
-        mode(for: target) == .rainbow
-            ? Color(hue: previewRainbowHue, saturation: 0.96, brightness: 1.0)
+        let mode = mode(for: target)
+        return mode.usesFixedPalette
+            ? Color(
+                hue: previewSpectrumHue(for: mode),
+                saturation: 0.96,
+                brightness: 1.0
+            )
             : color(for: target)
     }
 
@@ -1629,7 +1449,7 @@ struct AuraStudioView: View {
         }
         // Rainbow has no single active RGB value; its verified mode is enough
         // to distinguish the applied state from the editable draft.
-        if mode(for: target) == .rainbow { return true }
+        if mode(for: target).usesFixedPalette { return true }
 
         let draftRGB: (Int, Int, Int)
         let activeRGB: (Int, Int, Int)
@@ -2656,8 +2476,8 @@ struct AuraStudioView: View {
                     es: " No disponible: \(missing.joined(separator: ", "))."
                 )
             return LaraL10n.text(
-                en: "Applied and verified: \(applied.joined(separator: ", ")). The neon cores are active, but SpringBoard did not retain every moving Rainbow phase; no valid light was removed.",
-                es: "Aplicado y verificado: \(applied.joined(separator: ", ")). Los núcleos de neón están activos, pero SpringBoard no conservó todas las fases móviles de Arcoíris; no se eliminó ninguna luz válida."
+                en: "Applied and verified: \(applied.joined(separator: ", ")). The neon cores are active, but SpringBoard did not retain every moving color phase; no valid light was removed.",
+                es: "Aplicado y verificado: \(applied.joined(separator: ", ")). Los núcleos de neón están activos, pero SpringBoard no conservó todas las fases móviles de color; no se eliminó ninguna luz válida."
             ) + unavailable
         }
         if missing.isEmpty {

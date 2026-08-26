@@ -1,5 +1,91 @@
 import SwiftUI
 
+enum EagleSpectrumStyle {
+    static let colors: [Color] = [
+        .cyan,
+        .blue,
+        .purple,
+        .pink,
+        .red,
+        .orange,
+        .yellow,
+        .green,
+        .cyan,
+    ]
+
+    static var gradient: LinearGradient {
+        LinearGradient(
+            colors: colors,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    static var wordmarkGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.88, green: 0.93, blue: 0.98),
+                Color(red: 0.50, green: 0.76, blue: 0.82),
+                Color(red: 0.35, green: 0.52, blue: 0.78),
+                Color(red: 0.50, green: 0.42, blue: 0.70),
+                Color(red: 0.72, green: 0.48, blue: 0.61),
+                Color(red: 0.78, green: 0.64, blue: 0.42),
+                Color(red: 0.48, green: 0.66, blue: 0.58),
+                Color(red: 0.86, green: 0.91, blue: 0.96),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    static let navigationTintColor: UIColor = {
+        let uiColors: [UIColor] = [
+            .cyan,
+            .systemBlue,
+            .systemPurple,
+            .systemPink,
+            .systemRed,
+            .systemOrange,
+            .systemYellow,
+            .systemGreen,
+            .cyan,
+        ]
+        let size = CGSize(width: 88, height: 44)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in
+            guard let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: uiColors.map(\.cgColor) as CFArray,
+                locations: nil
+            ) else { return }
+            renderer.cgContext.drawLinearGradient(
+                gradient,
+                start: .zero,
+                end: CGPoint(x: size.width, y: 0),
+                options: []
+            )
+        }
+        return UIColor(patternImage: image)
+    }()
+
+    static func configureGlobalNavigationAppearance() {
+        UINavigationBar.appearance().tintColor = navigationTintColor
+        UIBarButtonItem.appearance(
+            whenContainedInInstancesOf: [UINavigationBar.self]
+        ).tintColor = navigationTintColor
+    }
+}
+
+struct EagleSpectrumText: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .foregroundStyle(EagleSpectrumStyle.gradient)
+    }
+}
+
 /// Eagle's shared activity treatment. The phase comes from wall-clock time so
 /// rebuilding a parent view or receiving a new progress value cannot restart
 /// the animation. Both loops end on the same visual state in which they begin.
@@ -100,21 +186,7 @@ struct EagleRainbowProgressBar: View {
     }
 
     private var movingGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                .cyan,
-                .blue,
-                .purple,
-                .pink,
-                .red,
-                .orange,
-                .yellow,
-                .green,
-                .cyan,
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+        EagleSpectrumStyle.gradient
     }
 }
 
