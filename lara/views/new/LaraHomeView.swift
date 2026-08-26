@@ -827,6 +827,8 @@ private struct LaraFeatureCard: View {
 }
 
 private struct AuraStudioHeroCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     let subtitle: String
     var badge: String? = nil
@@ -835,15 +837,14 @@ private struct AuraStudioHeroCard: View {
         HStack(spacing: 16) {
             neonCapsule
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 25, weight: .bold))
-                    .foregroundStyle(.white)
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: -2) {
+                Text("Aura")
+                Text("Studio")
             }
+            .font(.system(size: 34, weight: .bold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
 
             Spacer(minLength: 6)
 
@@ -858,8 +859,12 @@ private struct AuraStudioHeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         }
+        .shadow(
+            color: .black.opacity(colorScheme == .dark ? 0 : 0.16),
+            radius: 14, x: 0, y: 8
+        )
         .overlay(alignment: .topTrailing) {
             if let badge {
                 Text(badge)
@@ -881,19 +886,27 @@ private struct AuraStudioHeroCard: View {
     private var auraBackground: some View {
         ZStack {
             LinearGradient(
-                colors: [
-                    Color(red: 0.17, green: 0.11, blue: 0.32),
-                    Color(red: 0.09, green: 0.05, blue: 0.19),
-                ],
+                colors: colorScheme == .dark
+                    ? [
+                        Color(red: 0.17, green: 0.11, blue: 0.32),
+                        Color(red: 0.09, green: 0.05, blue: 0.19),
+                    ]
+                    : [
+                        Color(red: 0.44, green: 0.28, blue: 0.86),
+                        Color(red: 0.27, green: 0.15, blue: 0.60),
+                    ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             RadialGradient(
                 colors: [
-                    Color(red: 0.42, green: 0.24, blue: 0.86).opacity(0.45),
+                    (colorScheme == .dark
+                        ? Color(red: 0.42, green: 0.24, blue: 0.86)
+                        : Color(red: 0.70, green: 0.52, blue: 1.0))
+                        .opacity(colorScheme == .dark ? 0.45 : 0.5),
                     .clear,
                 ],
-                center: UnitPoint(x: 0.28, y: 0.5),
+                center: UnitPoint(x: 0.26, y: 0.5),
                 startRadius: 4,
                 endRadius: 210
             )
