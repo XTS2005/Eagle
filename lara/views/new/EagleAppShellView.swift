@@ -332,7 +332,7 @@ private struct EagleBeta10AccessView: View {
                 }
                 .frame(width: 54, height: 54)
 
-                Text("Contact me")
+                Text("Text me")
                     .font(.title3.weight(.bold))
                     .foregroundStyle(EagleSpectrumStyle.gradient)
 
@@ -357,7 +357,7 @@ private struct EagleBeta10AccessView: View {
                 .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Contact me")
+        .accessibilityLabel("Text me")
         .accessibilityAddTraits(.isButton)
     }
 
