@@ -799,9 +799,9 @@ struct AuraStudioView: View {
         }
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color.cyan.opacity(0.20), lineWidth: 1)
         }
     }
@@ -915,6 +915,20 @@ struct AuraStudioView: View {
                         endPoint: .bottomTrailing
                     ))
 
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(RadialGradient(
+                        colors: [
+                            previewLightColor.opacity(0.30),
+                            previewLightColor.opacity(0.08),
+                            .clear,
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 165
+                    ))
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+
                 if selectedTarget == .island {
                     let islandMode = mode(for: .island)
                     ZStack {
@@ -981,7 +995,11 @@ struct AuraStudioView: View {
         }
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var appearanceCard: some View {
@@ -1113,6 +1131,10 @@ struct AuraStudioView: View {
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
         .disabled(isApplying)
     }
 
@@ -1237,7 +1259,11 @@ struct AuraStudioView: View {
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var applyButton: some View {
@@ -1348,6 +1374,10 @@ struct AuraStudioView: View {
         .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var presets: [(name: String, red: Double, green: Double, blue: Double)] {
