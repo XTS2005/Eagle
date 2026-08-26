@@ -621,18 +621,7 @@ private struct LaraFeatureCard: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 40, height: 40)
-                    .background(
-                        LinearGradient(
-                            colors: [accent.opacity(0.30), accent.opacity(0.12)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(accent.opacity(0.38), lineWidth: 1)
-                    }
+                    .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -654,10 +643,9 @@ private struct LaraFeatureCard: View {
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: accent.opacity(0.14), radius: 18, x: 0, y: 8)
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
             if let badge {
@@ -854,18 +842,7 @@ private struct LaraToolRow: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 38, height: 38)
-                .background(
-                    LinearGradient(
-                        colors: [accent.opacity(0.26), accent.opacity(0.11)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(accent.opacity(0.30), lineWidth: 1)
-                }
+                .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
