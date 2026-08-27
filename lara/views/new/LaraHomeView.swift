@@ -88,8 +88,8 @@ struct LaraHomeView: View {
                                         LaraToolRow(
                                             title: LaraL10n.text(en: "App Name Color", es: "Color de nombres"),
                                             subtitle: LaraL10n.text(
-                                                en: "Solid Home Screen text colors · Beta",
-                                                es: "Colores sólidos para los textos de Inicio · Beta"
+                                                en: "Solid Home Screen text colors · Advanced",
+                                                es: "Colores sólidos para los textos de Inicio · Avanzado"
                                             ),
                                             systemImage: "textformat",
                                             accent: Color(red: 0.36, green: 0.30, blue: 0.88),
@@ -514,8 +514,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
             return LaraL10n.text(en: "Explore or create", es: "Explora o crea")
         case .homeLabelColor:
             return LaraL10n.text(
-                en: "Solid Home Screen text colors · Beta",
-                es: "Colores sólidos para los textos de Inicio · Beta"
+                en: "Solid Home Screen text colors · Advanced",
+                es: "Colores sólidos para los textos de Inicio · Avanzado"
             )
         case .cards:
             return LaraL10n.text(en: "Wallet design", es: "Diseño de Wallet")

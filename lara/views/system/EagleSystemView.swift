@@ -999,8 +999,8 @@ final class EagleSceneManager: ObservableObject {
             UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingSceneKey)
             UserDefaults.standard.removeObject(forKey: EagleSceneShortcutBridge.pendingMomentKey)
             notice = EagleNotice(LaraL10n.text(
-                en: "Scenes require the Beta or Experimental feature channel. Nothing was applied.",
-                es: "Escenas requiere el canal Beta o Experimental. No se aplicó ningún cambio."
+                en: "Scenes require the Advanced or Laboratory feature channel. Nothing was applied.",
+                es: "Escenas requiere el canal Avanzado o Laboratorio. No se aplicó ningún cambio."
             ))
             return
         }
@@ -1035,8 +1035,8 @@ final class EagleSceneManager: ObservableObject {
     func apply(_ scene: EagleScene) {
         guard EagleFeaturePolicy.allows(.scenes) else {
             notice = EagleNotice(LaraL10n.text(
-                en: "Scenes are unavailable on the Stable channel. Choose Beta in Compatibility first.",
-                es: "Escenas no está disponible en el canal Estable. Elige Beta en Compatibilidad primero."
+                en: "Scenes are unavailable on the Stable channel. Choose Advanced in Compatibility first.",
+                es: "Escenas no está disponible en el canal Estable. Elige Avanzado en Compatibilidad primero."
             ))
             return
         }
@@ -1475,10 +1475,10 @@ struct EagleSystemView: View {
                 } else {
                     NavigationLink(destination: EagleCompatibilityCenterView()) {
                         systemRow(
-                            title: LaraL10n.text(en: "Scenes require Beta", es: "Escenas requiere Beta"),
+                            title: LaraL10n.text(en: "Scenes require Advanced", es: "Escenas requiere Avanzado"),
                             subtitle: LaraL10n.text(
-                                en: "Open Compatibility to choose the Beta channel",
-                                es: "Abre Compatibilidad para elegir el canal Beta"
+                                en: "Open Compatibility to choose the Advanced channel",
+                                es: "Abre Compatibilidad para elegir el canal Avanzado"
                             ),
                             symbol: "lock.shield.fill",
                             color: .secondary
@@ -1496,10 +1496,10 @@ struct EagleSystemView: View {
                     Text(LaraL10n.text(
                         en: scenesAllowed
                             ? "One engine connects all three: every Scene uses Guardian, and every Capsule can contain only a validated Scene recipe."
-                            : "Guardian remains available on Stable. Scenes and Capsules appear only when the Beta or Experimental channel is selected.",
+                            : "Guardian remains available on Stable. Scenes and Capsules appear only when the Advanced or Laboratory channel is selected.",
                         es: scenesAllowed
                             ? "Un solo motor conecta las tres: cada Escena usa Guardian y cada Capsule solo puede contener una receta validada."
-                            : "Guardian permanece disponible en Estable. Escenas y Capsules aparecen solo al elegir Beta o Experimental."
+                            : "Guardian permanece disponible en Estable. Escenas y Capsules aparecen solo al elegir Avanzado o Laboratorio."
                     ))
                         .font(.footnote)
                         .foregroundStyle(.secondary)

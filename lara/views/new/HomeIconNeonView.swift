@@ -764,8 +764,8 @@ struct HomeIconNeonView: View {
 
             if !policyAllowsApply {
                 Text(LaraL10n.text(
-                    en: "Switch the feature channel to Beta to apply. Remove remains available for recovery.",
-                    es: "Cambia el canal de funciones a Beta para aplicar. Quitar sigue disponible para recuperación."
+                    en: "Switch the feature channel to Advanced to apply. Remove remains available for recovery.",
+                    es: "Cambia el canal de funciones a Avanzado para aplicar. Quitar sigue disponible para recuperación."
                 ))
                 .font(.caption)
                 .foregroundStyle(.orange)
@@ -845,8 +845,8 @@ struct HomeIconNeonView: View {
 
         guard removing || policyAllowsApply else {
             finishBeforeCall(LaraL10n.text(
-                en: "Select the Beta feature channel before applying this field test.",
-                es: "Selecciona el canal Beta antes de aplicar esta prueba."
+                en: "Select the Advanced feature channel before applying this field test.",
+                es: "Selecciona el canal Avanzado antes de aplicar esta prueba."
             ))
             return
         }

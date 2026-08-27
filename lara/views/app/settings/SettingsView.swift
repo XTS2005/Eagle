@@ -93,8 +93,8 @@ struct SettingsView: View {
                 } footer: {
                     if !advancedToolsAllowed {
                         Text(LaraL10n.text(
-                            en: "Kernelcache and RemoteCall controls require the Experimental channel.",
-                            es: "Los controles de Kernelcache y RemoteCall requieren el canal Experimental."
+                            en: "Kernelcache and RemoteCall controls require the Laboratory channel.",
+                            es: "Los controles de Kernelcache y RemoteCall requieren el canal Laboratorio."
                         ))
                     }
                 }

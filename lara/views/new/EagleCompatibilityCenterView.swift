@@ -67,8 +67,8 @@ struct EagleCompatibilityCenterView: View {
                 .accessibilityLabel(LaraL10n.text(en: "Feature channel", es: "Canal de funciones"))
                 .accessibilityValue(channel.title)
                 .accessibilityHint(LaraL10n.text(
-                    en: "Stable keeps only verified features. Beta adds Scenes. Experimental unlocks advanced system tools.",
-                    es: "Estable mantiene solo funciones verificadas. Beta añade Escenas. Experimental desbloquea herramientas avanzadas del sistema."
+                    en: "Stable keeps only verified features. Advanced adds Scenes. Laboratory unlocks advanced system tools.",
+                    es: "Estable mantiene solo funciones verificadas. Avanzado añade Escenas. Laboratorio desbloquea herramientas avanzadas del sistema."
                 ))
 
                 Text(channel.explanation)
@@ -180,7 +180,7 @@ struct EagleCompatibilityCenterView: View {
         case .testedNeedsMoreTesting:
             return LaraL10n.text(en: "Limited testing", es: "Pruebas limitadas")
         case .possible:
-            return LaraL10n.text(en: "Experimental", es: "Experimental")
+            return LaraL10n.text(en: "Laboratory", es: "Laboratorio")
         case .unsupported:
             return LaraL10n.text(en: "Unsupported", es: "No compatible")
         }

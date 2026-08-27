@@ -385,8 +385,8 @@ struct HomeLabelColorView: View {
 
             if !policyAllowsApply {
                 Text(LaraL10n.text(
-                    en: "Switch the feature channel to Beta to apply. Restore remains available.",
-                    es: "Cambia el canal de funciones a Beta para aplicar. Restaurar sigue disponible."
+                    en: "Switch the feature channel to Advanced to apply. Restore remains available.",
+                    es: "Cambia el canal de funciones a Avanzado para aplicar. Restaurar sigue disponible."
                 ))
                 .font(.caption)
                 .foregroundStyle(.orange)
@@ -469,8 +469,8 @@ struct HomeLabelColorView: View {
 
         guard !enabled || policyAllowsApply else {
             finishBeforeCall(LaraL10n.text(
-                en: "Select the Beta feature channel before applying.",
-                es: "Selecciona el canal Beta antes de aplicar."
+                en: "Select the Advanced feature channel before applying.",
+                es: "Selecciona el canal Avanzado antes de aplicar."
             ))
             return
         }

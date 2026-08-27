@@ -22,9 +22,9 @@ enum EagleReleaseChannel: String, CaseIterable, Identifiable {
         case .stable:
             return LaraL10n.text(en: "Stable", es: "Estable")
         case .beta:
-            return "Beta"
+            return LaraL10n.text(en: "Advanced", es: "Avanzado")
         case .experimental:
-            return LaraL10n.text(en: "Experimental", es: "Experimental")
+            return LaraL10n.text(en: "Laboratory", es: "Laboratorio")
         }
     }
 

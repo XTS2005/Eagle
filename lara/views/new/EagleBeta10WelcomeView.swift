@@ -207,6 +207,16 @@ struct EagleBeta10WelcomeView: View {
                     es: "Inicio, Aura, Estilos, Tweaks, controles compartidos y Fondos ahora tienen una presentación más limpia y coherente."
                 )
             )
+
+            welcomeRow(
+                icon: "hourglass",
+                color: .indigo,
+                title: LaraL10n.text(en: "Temporary changes", es: "Cambios temporales"),
+                detail: LaraL10n.text(
+                    en: "Icon Studio is coming soon, and Aura Tint was temporarily removed. Glow, Pulse, and Rainbow stay available where compatible.",
+                    es: "Icon Studio estará disponible próximamente y Aura Tint se retiró temporalmente. Glow, Pulse y Rainbow siguen disponibles según compatibilidad."
+                )
+            )
         }
     }
 
