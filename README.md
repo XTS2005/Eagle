@@ -3,10 +3,11 @@
 
   # Eagle
 
-  **Focused iOS personalization powered by DarkSword.**
+  **Eagle is an iPhone personalization utility for compatible iOS versions.**
 
-  Customize wallpapers, passcode keys, Wallet card artwork, icons,
-  Dynamic Island and Dock lighting from one app.
+  It lets experienced sideloading users customize wallpapers, passcode keys,
+  supported Wallet cards, Home Screen elements, Dynamic Island and Dock lighting
+  from one app. Private system operations require careful compatibility checks.
 
   [![Latest release](https://img.shields.io/github/v/release/leonardob8777-bit/Eagle?sort=semver&style=for-the-badge&label=LATEST%20RELEASE&color=7C3AED)](https://github.com/leonardob8777-bit/Eagle/releases)
   [![Total IPA downloads](https://img.shields.io/github/downloads/leonardob8777-bit/Eagle/total?style=for-the-badge&logo=icloud&logoColor=white&label=IPA%20DOWNLOADS&color=0891B2)](https://github.com/leonardob8777-bit/Eagle/releases)
@@ -15,13 +16,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.0/Eagle.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.0-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.0 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.1/Eagle-1.0.1-60.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.1-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.1 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.0)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.1)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -34,7 +35,7 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 1.0.0 · build 59 |
+| **Current release** | Eagle 1.0.1 · build 60 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
 | **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow/outline · isolated apply and verification |
@@ -59,17 +60,14 @@
 | 🔤 **App Name Color · Advanced** | Applies a page-owned solid color to app names on the current Home Screen page. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Eagle 1.0.0
+### New in Eagle 1.0.1
 
-- **Home Icon Neon** now offers both a diffuse glow and a precise neon outline around visible icons on the current Home page.
-- **App Name Color** applies a solid custom color to the app names on the current page and keeps its overlays owned by that page to prevent migration when swiping.
-- Aura Studio and App Name Color carry temporary one-time **NEW** badges. The Aura Studio Home card presents Dynamic Island clearly while Dock remains available inside.
-- The **Updates** screen explains the current device status, supported iOS ranges, important exclusions and changes before use.
-- Prepare progress, blocking-operation spinners and the Eagle icon use a restrained moving rainbow accent.
-- Prepare validates device, build, cache and session state before reporting readiness, while result messages avoid false **Applied** states.
-- Icon Studio is marked **Coming soon**, and Aura Tint is temporarily unavailable while Glow, Pulse and Island Rainbow remain available where compatible.
-- Production now blocks Prepare on iPhone 16 (`iPhone17,3`) with iOS 18.5 after field reports of full device restarts.
-- App Library Neon and Battery X remain excluded because they did not meet Eagle's visible-verification standard.
+- Prepare is available again on iPhone 16 (`iPhone17,3`) with iOS 18.5 through the established stable route.
+- Aura uses model-specific Dynamic Island and Dock geometry on iPhone 14 Pro and iPhone 14 Pro Max.
+- The verified iPhone 16 Pro (`iPhone17,1`) geometry and stable application paths remain unchanged.
+- Aura Studio verifies the original Lara system-Island preference after writing it.
+- Home, Access and the Eagle brand mark have a more consistent visual presentation.
+- Icon Studio remains **Coming soon**, and Aura Tint remains temporarily unavailable while Glow, Pulse and Island Rainbow stay available where compatible.
 
 ### Aura Studio safety model
 
@@ -106,8 +104,9 @@ Looking for an older build? Browse [all Eagle releases](https://github.com/leona
   screen recording or timers. Only **Adaptive Aura** follows those layouts.
 - Screen, Battery Halo and Lock experiments are hidden while their live
   SpringBoard hosts remain unverified.
-- Dock Aura is tuned primarily from iPhone 16 Pro testing and may need adjustment
-  on other screen sizes.
+- Dock and Dynamic Island Aura include dedicated geometry for iPhone 14 Pro,
+  iPhone 14 Pro Max and the primary iPhone 16 Pro reference profile. Other
+  supported models may still require model-specific validation.
 - Icon importing, nonstandard masks and community packages remain dependent on
   device, iOS version and package structure.
 - Kernel or SpringBoard operations are intentionally blocked while the Xcode

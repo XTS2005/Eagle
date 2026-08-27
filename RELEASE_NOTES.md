@@ -1,5 +1,7 @@
 # Eagle 1.0.1 (60)
 
+Eagle is an iPhone personalization utility for compatible iOS versions that applies visual changes to the Dynamic Island, Dock, Home Screen, wallpapers, passcode keys, and supported Wallet cards. It is intended for experienced sideloading users who understand that private SpringBoard and kernel-level operations can respring or reboot an unsupported device.
+
 Eagle 1.0.1 combines the latest visual identity refinements with targeted compatibility fixes while preserving the proven Prepare, Dock, and Dynamic Island behavior on the primary iPhone 16 Pro reference device.
 
 ## What changed
@@ -22,5 +24,7 @@ Eagle 1.0.1 combines the latest visual identity refinements with targeted compat
 - The IPA is unsigned and must be signed with the user's normal installation method.
 
 ## Español
+
+Eagle es una utilidad de personalización para iPhone y versiones compatibles de iOS que permite modificar visualmente la Dynamic Island, el Dock, la pantalla de inicio, fondos, teclas del código y tarjetas de Wallet compatibles. Está dirigida a usuarios con experiencia instalando IPA que comprendan que las operaciones privadas de SpringBoard y kernel pueden provocar un respring o reinicio en dispositivos no compatibles.
 
 Eagle 1.0.1 reúne los últimos retoques visuales con correcciones específicas de compatibilidad. Preparar vuelve a estar disponible para iPhone 16 (`iPhone17,3`) con iOS 18.5 mediante la ruta estable existente. Aura ahora adapta su geometría al iPhone 14 Pro y Pro Max, mientras que el perfil verificado del iPhone 16 Pro permanece intacto. Se conserva el mecanismo original de Lara para ocultar la Dynamic Island del sistema, ahora con verificación de escritura en Aura Studio.
