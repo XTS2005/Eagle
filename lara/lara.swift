@@ -17,9 +17,9 @@ struct LaraCustomApp: App {
     @Environment(\.scenePhase) var scenephase
     @AppStorage("keepAlive") private var keepalive: Bool = false
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
-    @AppStorage("eagle.welcome.beta10.completed")
-    private var hasCompletedBeta10Welcome = false
-    @State private var showingBeta10Welcome = false
+    @AppStorage("eagle.updates.stable1.completed")
+    private var hasSeenStableUpdate = false
+    @State private var showingStableUpdate = false
     
     init() {
         EaglePreferenceMigration.runIfNeeded()
@@ -54,8 +54,8 @@ struct LaraCustomApp: App {
                 }
             }
             .onAppear {
-                if !hasCompletedBeta10Welcome {
-                    showingBeta10Welcome = true
+                if !hasSeenStableUpdate {
+                    showingStableUpdate = true
                 }
                 if !isunsupported() {
                     init_offsets()
@@ -67,10 +67,10 @@ struct LaraCustomApp: App {
                 }
             }
             .onChange(of: scenephase, perform: handleScenePhase)
-            .sheet(isPresented: $showingBeta10Welcome) {
+            .sheet(isPresented: $showingStableUpdate) {
                 EagleBeta10WelcomeView {
-                    hasCompletedBeta10Welcome = true
-                    showingBeta10Welcome = false
+                    hasSeenStableUpdate = true
+                    showingStableUpdate = false
                 }
             }
         }

@@ -26,7 +26,7 @@ struct EagleBeta10WelcomeView: View {
                 VStack(spacing: 18) {
                     hero
                     currentDeviceCard
-                    whatsNewCard
+                    updatesCard
                     compatibilityCard
                     referenceDeviceCard
                     safetyNote
@@ -36,11 +36,11 @@ struct EagleBeta10WelcomeView: View {
                 .padding(.bottom, 28)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle(LaraL10n.text(en: "Welcome", es: "Bienvenido"))
+            .navigationTitle(LaraL10n.text(en: "Updates", es: "Actualizaciones"))
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Button(action: onContinue) {
-                    Text(LaraL10n.text(en: "Continue to Eagle", es: "Continuar a Eagle"))
+                    Text(LaraL10n.text(en: "Continue", es: "Continuar"))
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 52)
@@ -77,7 +77,7 @@ struct EagleBeta10WelcomeView: View {
             .accessibilityHidden(true)
 
             VStack(spacing: 5) {
-                Text(LaraL10n.text(en: "Welcome to Eagle", es: "Bienvenido a Eagle"))
+                Text(LaraL10n.text(en: "Eagle Updates", es: "Actualizaciones de Eagle"))
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
@@ -88,7 +88,7 @@ struct EagleBeta10WelcomeView: View {
                     )
                     .multilineTextAlignment(.center)
 
-                Text(LaraL10n.text(en: "PUBLIC BETA 10", es: "BETA PÚBLICA 10"))
+                Text(LaraL10n.text(en: "STABLE UPDATE", es: "ACTUALIZACIÓN ESTABLE"))
                     .font(.caption.weight(.black))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
@@ -103,8 +103,8 @@ struct EagleBeta10WelcomeView: View {
                     )
 
                 Text(LaraL10n.text(
-                    en: "A safer, clearer beta focused on verified personalization.",
-                    es: "Una beta más segura y clara, enfocada en personalización verificada."
+                    en: "A more reliable core, clearer results, and a refined interface.",
+                    es: "Un núcleo más confiable, resultados claros y una interfaz refinada."
                 ))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -150,41 +150,61 @@ struct EagleBeta10WelcomeView: View {
         }
     }
 
-    private var whatsNewCard: some View {
+    private var updatesCard: some View {
         welcomeCard {
             welcomeSectionTitle(
-                LaraL10n.text(en: "New in Beta 10", es: "Novedades de Beta 10"),
+                LaraL10n.text(en: "What changed", es: "Qué cambió"),
                 systemImage: "sparkles",
                 color: .purple
             )
 
             welcomeRow(
-                icon: "app.badge",
-                color: .pink,
-                title: LaraL10n.text(en: "Home Icon Neon", es: "Neón de iconos"),
+                icon: "shield.checkered",
+                color: .green,
+                title: LaraL10n.text(en: "Safer Prepare", es: "Preparación más segura"),
                 detail: LaraL10n.text(
-                    en: "Choose a diffuse glow or a precise neon outline for the visible icons on the current Home page.",
-                    es: "Elige una sombra difuminada o un contorno neón preciso para los iconos visibles de la página actual."
+                    en: "Device, build, cache, and session checks now fail safely instead of continuing with stale data.",
+                    es: "Las verificaciones de dispositivo, build, caché y sesión ahora se detienen de forma segura ante datos antiguos."
                 )
             )
 
             welcomeRow(
-                icon: "textformat",
-                color: .indigo,
-                title: LaraL10n.text(en: "App Name Color", es: "Color de nombres"),
+                icon: "checkmark.circle",
+                color: .cyan,
+                title: LaraL10n.text(en: "Verified results", es: "Resultados verificados"),
                 detail: LaraL10n.text(
-                    en: "Apply a solid custom color to app names on the current Home page, with independent restore.",
-                    es: "Aplica un color sólido personalizado a los nombres de la página actual, con restauración independiente."
+                    en: "Advanced options no longer report Applied when access, a write, or a protected call actually failed.",
+                    es: "Las opciones avanzadas ya no muestran Aplicado cuando el acceso, la escritura o la llamada protegida fallaron."
                 )
             )
 
             welcomeRow(
                 icon: "capsule.fill",
-                color: .cyan,
-                title: LaraL10n.text(en: "Eagle visual identity", es: "Identidad visual de Eagle"),
+                color: .purple,
+                title: LaraL10n.text(en: "Dock and Dynamic Island", es: "Dock y Dynamic Island"),
                 detail: LaraL10n.text(
-                    en: "Rainbow loading feedback and a clearer Aura Studio presentation centered on Dynamic Island.",
-                    es: "Carga multicolor y una presentación más clara de Aura Studio centrada en Dynamic Island."
+                    en: "Their stable apply paths remain intact, with safer fresh SpringBoard sessions around protected work.",
+                    es: "Sus rutas estables permanecen intactas, con sesiones nuevas de SpringBoard para el trabajo protegido."
+                )
+            )
+
+            welcomeRow(
+                icon: "wrench.and.screwdriver.fill",
+                color: .orange,
+                title: LaraL10n.text(en: "Tools repaired", es: "Herramientas reparadas"),
+                detail: LaraL10n.text(
+                    en: "Liquid Glass restore, SpringBoard customization, VFS writes, icon sessions, and daemon work now validate completion.",
+                    es: "La restauración de Liquid Glass, SpringBoard, VFS, iconos y daemons ahora verifican que el trabajo termine."
+                )
+            )
+
+            welcomeRow(
+                icon: "paintbrush.fill",
+                color: .pink,
+                title: LaraL10n.text(en: "Interface refinement", es: "Interfaz refinada"),
+                detail: LaraL10n.text(
+                    en: "Home, Aura, Styles, Tweaks, shared controls, and Wallpapers now use a cleaner and more consistent presentation.",
+                    es: "Inicio, Aura, Estilos, Tweaks, controles compartidos y Fondos ahora tienen una presentación más limpia y coherente."
                 )
             )
         }
@@ -199,8 +219,8 @@ struct EagleBeta10WelcomeView: View {
             )
 
             compatibilityRow(
-                status: LaraL10n.text(en: "Experimental", es: "Experimental"),
-                range: "iOS 16.x",
+                status: LaraL10n.text(en: "Limited test", es: "Prueba limitada"),
+                range: "iOS 16.7.2",
                 color: .orange
             )
             compatibilityRow(
@@ -218,8 +238,8 @@ struct EagleBeta10WelcomeView: View {
 
             Label {
                 Text(LaraL10n.text(
-                    en: "Not supported: releases below iOS 16, iOS 18.7.2 and later iOS 18 releases, iOS 19–25, iOS 26.0.2+, and current MIE devices.",
-                    es: "No compatibles: versiones anteriores a iOS 16, iOS 18.7.2 y posteriores de iOS 18, iOS 19–25, iOS 26.0.2+ y dispositivos actuales con MIE."
+                    en: "Blocked for safety: unverified iOS 16 builds including 16.1–16.2, iOS 18.7.2+, iOS 19–25, iOS 26.0.2+, and current MIE devices.",
+                    es: "Bloqueados por seguridad: builds no verificados de iOS 16, incluidos 16.1–16.2, iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ y dispositivos actuales con MIE."
                 ))
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
