@@ -59,10 +59,74 @@ struct SettingsView: View {
     private var advancedToolsAllowed: Bool {
         EagleFeaturePolicy.allows(.advancedSystemTools, channel: channel)
     }
-    
+
+    private var developerCard: some View {
+        Link(destination: URL(string: "https://github.com/leonardob8777-bit")!) {
+            HStack(spacing: 14) {
+                AsyncImage(url: URL(string: "https://github.com/leonardob8777-bit.png")) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+                .overlay { Circle().strokeBorder(.primary.opacity(0.10), lineWidth: 1) }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Leonardo")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(LaraL10n.text(en: "Creator of Eagle", es: "Creador de Eagle"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.caption2.weight(.semibold))
+                        Text("@leonardob8777-bit")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 1)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LaraL10n.text(
+            en: "Leonardo, creator of Eagle. Opens GitHub profile.",
+            es: "Leonardo, creador de Eagle. Abre el perfil de GitHub."
+        ))
+        .accessibilityAddTraits(.isLink)
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    developerCard
+                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 14, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+
                 Section(header: HeaderLabel(
                     text: LaraL10n.text(en: "About", es: "Acerca de"),
                     icon: "info.circle"
