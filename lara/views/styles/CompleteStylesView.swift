@@ -2336,18 +2336,11 @@ struct CompleteStylesView: View {
                     LaraMatchView()
                 } label: {
                     HStack(spacing: 15) {
-                        ZStack {
-                            LinearGradient(
-                                colors: [.indigo, .purple, .pink],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            Image(systemName: "camera.filters")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 52, height: 52)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Image(systemName: "camera.filters")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.indigo)
+                            .frame(width: 52, height: 52)
+                            .background(Color.indigo.opacity(0.14), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Eagle Composer")
@@ -2370,7 +2363,7 @@ struct CompleteStylesView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 21, style: .continuous)
-                            .strokeBorder(Color.purple.opacity(0.12), lineWidth: 1)
+                            .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -2379,18 +2372,11 @@ struct CompleteStylesView: View {
                     EagleResonanceView()
                 } label: {
                     HStack(spacing: 15) {
-                        ZStack {
-                            LinearGradient(
-                                colors: [.purple, .pink, .orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            Image(systemName: "waveform.path.ecg.rectangle.fill")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 52, height: 52)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Image(systemName: "waveform.path.ecg.rectangle.fill")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.purple)
+                            .frame(width: 52, height: 52)
+                            .background(Color.purple.opacity(0.14), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 7) {
@@ -2421,7 +2407,7 @@ struct CompleteStylesView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 21, style: .continuous)
-                            .strokeBorder(Color.pink.opacity(0.14), lineWidth: 1)
+                            .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -2480,7 +2466,7 @@ struct CompleteStylesView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color.indigo.opacity(0.10), lineWidth: 1)
+                        .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                 }
                 .buttonStyle(.plain)
 
