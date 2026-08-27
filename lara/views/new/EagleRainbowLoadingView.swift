@@ -55,16 +55,45 @@ enum EagleVisualTheme {
 }
 
 struct EagleBrandMark: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var size: CGFloat = 42
 
     var body: some View {
+        TimelineView(.animation(
+            minimumInterval: 1.0 / 30.0,
+            paused: reduceMotion
+        )) { context in
+            let sweep = reduceMotion
+                ? nil
+                : eagleBrandSweepProgress(at: context.date)
+
+            ZStack {
+                brandGlyph
+                    .foregroundStyle(.primary.opacity(0.92))
+
+                if let sweep {
+                    EagleSpectrumStyle.gradient
+                        .frame(width: size * 0.46, height: size * 1.6)
+                        .rotationEffect(.degrees(-14))
+                        .offset(x: size * (-1.25 + (2.5 * sweep)))
+                        .opacity(0.62)
+                        .mask(brandGlyph)
+                }
+            }
+            .frame(width: size, height: size)
+        }
+        .shadow(color: EagleVisualTheme.accent.opacity(0.16), radius: size * 0.10)
+        .accessibilityHidden(true)
+    }
+
+    private var brandGlyph: some View {
         Image("EagleBrandMark")
             .resizable()
+            .renderingMode(.template)
             .interpolation(.high)
             .scaledToFit()
             .frame(width: size, height: size)
-            .shadow(color: EagleVisualTheme.accent.opacity(0.28), radius: size * 0.14)
-            .accessibilityHidden(true)
     }
 }
 
@@ -232,4 +261,17 @@ struct EagleRainbowProgressBar: View {
 private func eagleRainbowPhase(at date: Date, duration: TimeInterval) -> Double {
     let cycles = date.timeIntervalSinceReferenceDate / duration
     return cycles - floor(cycles)
+}
+
+/// A short, restrained sheen followed by a long pause. Returning `nil` keeps
+/// the overlay out of the render tree while the mark is resting.
+private func eagleBrandSweepProgress(at date: Date) -> Double? {
+    let cycleDuration = 7.2
+    let sweepDuration = 1.2
+    let elapsed = date.timeIntervalSinceReferenceDate
+        .truncatingRemainder(dividingBy: cycleDuration)
+
+    guard elapsed < sweepDuration else { return nil }
+    let progress = max(0, min(elapsed / sweepDuration, 1))
+    return progress * progress * (3 - (2 * progress))
 }
