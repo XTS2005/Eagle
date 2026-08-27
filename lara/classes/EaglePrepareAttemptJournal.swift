@@ -86,6 +86,39 @@ enum EaglePrepareAttemptJournal {
         return .started(record.attemptID)
     }
 
+    /// Starts the latest public Prepare attempt. Unlike the private one-shot
+    /// lab journal, normal Prepare replaces the preceding record so field
+    /// reports describe the operation the user just requested.
+    static func beginLatest(
+        route: String,
+        machine: String,
+        systemBuild: String
+    ) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let now = timestamp()
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let record = Record(
+            schemaVersion: 1,
+            attemptID: UUID().uuidString,
+            startedAt: now,
+            bootIdentifier: bootIdentifier(),
+            machine: machine,
+            systemVersion: "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
+            systemBuild: systemBuild,
+            appBuild: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleVersion"
+            ) as? String ?? "unknown",
+            route: route,
+            stage: .armed,
+            detail: nil,
+            updatedAt: now,
+            completedAt: nil
+        )
+        return write(record) ? record.attemptID : nil
+    }
+
     static func mark(
         _ attemptID: String?,
         stage: Stage,

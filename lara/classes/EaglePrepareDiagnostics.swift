@@ -5,9 +5,9 @@ import Darwin
 
 /// Passive, user-triggered diagnostics for Prepare.
 ///
-/// A report is assembled only after the user asks for one. The public stable
-/// route adds no checkpoint I/O. Private staged research builds may update one
-/// tiny file between broad phases, never while DarkSword's race is executing.
+/// A report is assembled only after the user asks for one. Prepare writes one
+/// tiny durable checkpoint only at broad phase boundaries, never while
+/// DarkSword's race is executing.
 @MainActor
 final class EaglePrepareDiagnostics: ObservableObject {
     static let shared = EaglePrepareDiagnostics()
@@ -77,8 +77,7 @@ final class EaglePrepareDiagnostics: ObservableObject {
         Eagle Prepare Diagnostic
         Generated only after the user requested this report.
         Report creation never starts automatically and adds no live Prepare observer.
-        Public stable Prepare adds no checkpoint I/O. Private staged research
-        builds may update one small checkpoint only outside DarkSword's race.
+        Prepare updates one small checkpoint only outside DarkSword's race.
 
         \(metadata)
 
@@ -144,12 +143,14 @@ final class EaglePrepareDiagnostics: ObservableObject {
             systemBuild: systemBuild == "unknown" ? nil : systemBuild
         )
         let locale = Locale.current.identifier
+        let launchContext = islcruntime() ? "LiveContainer" : "native app"
 
         return """
         App: Eagle \(version) (\(build))
         Device: \(machine)
         iOS: \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) (\(systemBuild))
         Prepare support: \(support.status.rawValue) [\(support.reason.rawValue)]
+        Launch context: \(launchContext)
         Locale: \(locale)
         Generated: \(ISO8601DateFormatter().string(from: Date()))
         """

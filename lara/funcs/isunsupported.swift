@@ -46,7 +46,12 @@ struct EagleSupportAssessment: Equatable {
     let reason: EagleSupportReason
 
     var allowsPrepare: Bool {
-        status.allowsPrepare
+        // "Possible" is a discovery label, not evidence that a public kernel
+        // attempt is safe. The exact A18 lab route is intentionally one-shot;
+        // unverified iOS 16 tuples remain visible but fail closed.
+        if reason == .iphone16IOS185KernelStageLab { return true }
+        if reason == .ios16Experimental { return false }
+        return status.allowsPrepare
     }
 
     /// A concise bilingual explanation suitable for a compatibility screen or
@@ -63,8 +68,8 @@ struct EagleSupportAssessment: Equatable {
                 : "This private build probes only the kernel stage on iPhone 16 with iOS 18.5; it does not open the sandbox or enable the full flow."
         case .ios16Experimental:
             return spanish
-                ? "iOS 16.x es experimental. Puede funcionar, pero necesita más pruebas."
-                : "iOS 16.x is experimental. It may work, but needs more testing."
+                ? "Esta versión de iOS 16 todavía no tiene una combinación de dispositivo y compilación validada. Preparar está bloqueado para evitar reinicios."
+                : "This iOS 16 release does not yet have a validated device/build combination. Prepare is blocked to prevent restarts."
         case .ios1672LimitedTesting:
             return spanish
                 ? "iOS 16.7.2 fue probado, pero todavía necesita pruebas en más dispositivos."

@@ -9,6 +9,13 @@ private struct MatrixCase {
     let expectedReason: EagleSupportReason
 }
 
+private struct PrepareGateCase {
+    let name: String
+    let version: OperatingSystemVersion
+    let machine: String
+    let expectedAllowsPrepare: Bool
+}
+
 @main
 private enum VerifyPrepareSupportMatrix {
     static func main() {
@@ -130,6 +137,80 @@ private enum VerifyPrepareSupportMatrix {
                 failures += 1
                 fputs(
                     "FAIL: \(test.name): got \(assessment.status.rawValue) " +
+                        "[\(assessment.reason.rawValue)]\n",
+                    stderr
+                )
+                continue
+            }
+            print("PASS: \(test.name)")
+        }
+
+        let gateCases = [
+            PrepareGateCase(
+                name: "unverified iOS 16.1 fails closed",
+                version: .init(majorVersion: 16, minorVersion: 1, patchVersion: 0),
+                machine: "iPhone15,3",
+                expectedAllowsPrepare: false
+            ),
+            PrepareGateCase(
+                name: "unverified iOS 16.1.1 fails closed",
+                version: .init(majorVersion: 16, minorVersion: 1, patchVersion: 1),
+                machine: "iPhone15,3",
+                expectedAllowsPrepare: false
+            ),
+            PrepareGateCase(
+                name: "unverified iOS 16.2 fails closed",
+                version: .init(majorVersion: 16, minorVersion: 2, patchVersion: 0),
+                machine: "iPhone15,3",
+                expectedAllowsPrepare: false
+            ),
+            PrepareGateCase(
+                name: "tested iOS 16.7.2 remains available",
+                version: .init(majorVersion: 16, minorVersion: 7, patchVersion: 2),
+                machine: "iPhone11,6",
+                expectedAllowsPrepare: true
+            ),
+            PrepareGateCase(
+                name: "iOS 18.7.1 boundary remains available",
+                version: .init(majorVersion: 18, minorVersion: 7, patchVersion: 1),
+                machine: "iPhone16,2",
+                expectedAllowsPrepare: true
+            ),
+            PrepareGateCase(
+                name: "iOS 18.7.2 boundary is blocked",
+                version: .init(majorVersion: 18, minorVersion: 7, patchVersion: 2),
+                machine: "iPhone16,2",
+                expectedAllowsPrepare: false
+            ),
+            PrepareGateCase(
+                name: "iOS 26.0.1 boundary remains available",
+                version: .init(majorVersion: 26, minorVersion: 0, patchVersion: 1),
+                machine: "iPhone17,1",
+                expectedAllowsPrepare: true
+            ),
+            PrepareGateCase(
+                name: "iOS 26.0.2 is blocked",
+                version: .init(majorVersion: 26, minorVersion: 0, patchVersion: 2),
+                machine: "iPhone17,1",
+                expectedAllowsPrepare: false
+            ),
+            PrepareGateCase(
+                name: "iOS 26.6 is blocked",
+                version: .init(majorVersion: 26, minorVersion: 6, patchVersion: 0),
+                machine: "iPhone17,1",
+                expectedAllowsPrepare: false
+            ),
+        ]
+
+        for test in gateCases {
+            let assessment = eagleSupportAssessment(
+                version: test.version,
+                machine: test.machine
+            )
+            guard assessment.allowsPrepare == test.expectedAllowsPrepare else {
+                failures += 1
+                fputs(
+                    "FAIL: \(test.name): allowsPrepare=\(assessment.allowsPrepare) " +
                         "[\(assessment.reason.rawValue)]\n",
                     stderr
                 )

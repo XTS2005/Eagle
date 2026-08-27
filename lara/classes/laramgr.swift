@@ -69,7 +69,17 @@ private final class RemoteCallPreparationState {
 
 final class laramgr: ObservableObject {
     @Published var log: String = ""
-    @Published var hasOffsets: Bool = false
+    @Published var hasOffsets: Bool = false {
+        didSet {
+            if hasOffsets {
+                EaglePrepareAttemptJournal.mark(
+                    prepareAttemptID,
+                    stage: .compatibilityDataReady,
+                    detail: "kernelcache compatibility data resolved"
+                )
+            }
+        }
+    }
     @Published var dsrunning: Bool = false
     @Published var dsready: Bool = false
     @Published var dsattempted: Bool = false
@@ -115,7 +125,11 @@ final class laramgr: ObservableObject {
     private var rcFreshSessionInFlight = false
     private var rcNativeCallInFlight = false
     private var rcNativeCallLabel: String?
-    var ytProc = RemoteCall(process: "youtube", useMigFilterBypass: false)
+    // YouTube is optional. Constructing this at manager startup used to probe
+    // for a process that often is not installed (and before Prepare was ready),
+    // producing a misleading RemoteCall failure in every diagnostic report.
+    lazy var ytProc = RemoteCall(process: "youtube", useMigFilterBypass: false)
+    private var prepareAttemptID: String?
     
     static let shared = laramgr()
     static let fontpath = "/System/Library/Fonts/Core/SFUI.ttf"
@@ -132,7 +146,42 @@ final class laramgr: ObservableObject {
     }
     
     func run(completion: ((Bool) -> Void)? = nil) {
-        guard !dsrunning else { return }
+        guard !dsrunning else {
+            completion?(false)
+            return
+        }
+        let support = eagleSupportAssessment()
+        guard support.allowsPrepare else {
+            globallogger.log("(prepare) blocked before DarkSword: \(support.reason.rawValue)")
+            completion?(false)
+            return
+        }
+
+        let systemBuild = eagleSystemBuild()?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let machine = devicemachine()
+        let route = eaglePrepareExecutionRoute(
+            version: ProcessInfo.processInfo.operatingSystemVersion,
+            machine: machine,
+            systemBuild: systemBuild
+        )
+        if route == .a18KernelStageLab {
+            // The private lab owns its deliberately one-shot journal record.
+            // Do not replace it with the rolling public-attempt record.
+            prepareAttemptID = nil
+        } else {
+            prepareAttemptID = EaglePrepareAttemptJournal.beginLatest(
+                route: route.rawValue,
+                machine: machine,
+                systemBuild: systemBuild.flatMap { $0.isEmpty ? nil : $0 } ?? "unknown"
+            )
+        }
+        EaglePrepareAttemptJournal.mark(
+            prepareAttemptID,
+            stage: .darkSwordRunning,
+            detail: "native exploit entered"
+        )
         dsrunning = true
         dsready = false
         dsfailed = false
@@ -159,7 +208,11 @@ final class laramgr: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.dsrunning = false
-                let success = result == 0 && ds_is_ready()
+                let success = result == 0 &&
+                    ds_is_ready() &&
+                    ds_get_our_proc() != 0 &&
+                    ds_get_our_task() != 0 &&
+                    ds_get_kernel_base() != 0
                 if success {
                     self.dsready = true
                     self.dsfailed = false
@@ -172,11 +225,21 @@ final class laramgr: ObservableObject {
                     globallogger.log(String(format: "(ds) kernel_base:  0x%llx", self.kernbase))
                     globallogger.log(String(format: "(ds) kernel_slide: 0x%llx", self.kernslide))
                     globallogger.divider()
+                    EaglePrepareAttemptJournal.mark(
+                        self.prepareAttemptID,
+                        stage: .darkSwordReady,
+                        detail: "kernel primitive verified"
+                    )
                 } else {
                     self.dsfailed = true
                     self.logmsg("\nexploit failed.\n")
                     globallogger.log("exploit failed.")
                     globallogger.divider()
+                    EaglePrepareAttemptJournal.finish(
+                        self.prepareAttemptID,
+                        succeeded: false,
+                        detail: "DarkSword returned without a verified primitive"
+                    )
                 }
                 self.dsprogress = 1.0
                 completion?(success)
@@ -259,7 +322,15 @@ final class laramgr: ObservableObject {
     }
     
     func sbxescape(completion: ((Bool) -> Void)? = nil) {
-        guard dsready, hasOffsets, !sbxrunning else { return }
+        guard dsready, hasOffsets, !sbxrunning else {
+            completion?(false)
+            return
+        }
+        EaglePrepareAttemptJournal.mark(
+            prepareAttemptID,
+            stage: .sandboxOpening,
+            detail: "sandbox escape entered"
+        )
         sbxattempted = true
         sbxfailed = false
         sbxrunning = true
@@ -274,9 +345,19 @@ final class laramgr: ObservableObject {
                 if self.sbxready {
                     self.sbxfailed = false
                     self.logmsg("\nsandbox escape ready!\n")
+                    EaglePrepareAttemptJournal.finish(
+                        self.prepareAttemptID,
+                        succeeded: true,
+                        detail: "kernel primitive, compatibility data, and sandbox verified"
+                    )
                 } else {
                     self.sbxfailed = true
                     self.logmsg("\nsandbox escape failed.\n")
+                    EaglePrepareAttemptJournal.finish(
+                        self.prepareAttemptID,
+                        succeeded: false,
+                        detail: "sandbox escape returned failure"
+                    )
                 }
                 self.sbxrunning = false
                 completion?(self.sbxready)
@@ -900,11 +981,13 @@ final class laramgr: ObservableObject {
             guard let self,
                   self.rcGeneration == generation,
                   !preparation.completed else { return }
+            let reason = "Fresh SpringBoard session timed out after \(Int(deadline)) seconds"
             self.rcGeneration &+= 1
-            complete(
-                nil,
-                "Fresh SpringBoard session timed out after \(Int(deadline)) seconds"
-            )
+            complete(nil, reason)
+            // A timeout does not cancel Objective-C/native work. Keep all
+            // retries locked for this process; a late candidate is discarded
+            // by the generation check and can never become the active session.
+            self.quarantineRemoteCall(reason: reason)
         }
 
         logmsg("preparing a fresh remote call session on \(process)...")
