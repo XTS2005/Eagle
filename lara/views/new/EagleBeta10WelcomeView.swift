@@ -66,7 +66,7 @@ struct EagleBeta10WelcomeView: View {
                     .foregroundStyle(EagleVisualTheme.accent)
                     .multilineTextAlignment(.center)
 
-                Text(LaraL10n.text(en: "STABLE UPDATE", es: "ACTUALIZACIÓN ESTABLE"))
+                Text(LaraL10n.text(en: "VERSION 1.0.1", es: "VERSIÓN 1.0.1"))
                     .font(.caption.weight(.black))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
@@ -136,6 +136,16 @@ struct EagleBeta10WelcomeView: View {
                 detail: LaraL10n.text(
                     en: "Device, build, cache, and session checks now fail safely instead of continuing with stale data.",
                     es: "Las verificaciones de dispositivo, build, caché y sesión ahora se detienen de forma segura ante datos antiguos."
+                )
+            )
+
+            welcomeRow(
+                icon: "iphone.and.arrow.forward",
+                color: .green,
+                title: LaraL10n.text(en: "iPhone 16 restored", es: "iPhone 16 restaurado"),
+                detail: LaraL10n.text(
+                    en: "Prepare is available again on iPhone 16 with iOS 18.5 through the established stable route.",
+                    es: "Preparar vuelve a estar disponible en iPhone 16 con iOS 18.5 mediante la ruta estable existente."
                 )
             )
 
