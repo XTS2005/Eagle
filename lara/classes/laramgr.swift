@@ -77,6 +77,14 @@ private struct RemoteCallDaemonRequest {
 
 final class laramgr: ObservableObject {
     @Published var log: String = ""
+    // DarkSword can emit bursts of native log and progress callbacks while its
+    // race is active. Sending every callback to the main queue individually
+    // can starve SwiftUI even though the exploit itself runs in the background.
+    // Coalesce those callbacks into a single UI update per display interval.
+    private let dsUICallbackLock = NSLock()
+    private var pendingDSLogLines: [String] = []
+    private var pendingDSProgress: Double?
+    private var dsUIFlushScheduled = false
     @Published var hasOffsets: Bool = false {
         didSet {
             if hasOffsets {
@@ -170,6 +178,53 @@ final class laramgr: ObservableObject {
     static let italicfontpath = "/System/Library/Fonts/Core/SFUIItalic.ttf"
     static let monofontpath = "/System/Library/Fonts/Core/SFUIMono.ttf"
     init() {}
+
+    private func enqueueDSLog(_ message: String) {
+        scheduleDSUIFlush(logLine: message, progress: nil)
+    }
+
+    private func enqueueDSProgress(_ progress: Double) {
+        scheduleDSUIFlush(logLine: nil, progress: progress)
+    }
+
+    private func scheduleDSUIFlush(logLine: String?, progress: Double?) {
+        dsUICallbackLock.lock()
+        if let logLine {
+            pendingDSLogLines.append(logLine)
+        }
+        if let progress {
+            pendingDSProgress = progress
+        }
+        let shouldSchedule = !dsUIFlushScheduled
+        if shouldSchedule {
+            dsUIFlushScheduled = true
+        }
+        dsUICallbackLock.unlock()
+
+        guard shouldSchedule else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.flushPendingDSUI()
+        }
+    }
+
+    private func flushPendingDSUI() {
+        dsUICallbackLock.lock()
+        let lines = pendingDSLogLines
+        let progress = pendingDSProgress
+        pendingDSLogLines.removeAll(keepingCapacity: true)
+        pendingDSProgress = nil
+        dsUIFlushScheduled = false
+        dsUICallbackLock.unlock()
+
+        if !lines.isEmpty {
+            let batch = lines.joined(separator: "\n")
+            log += batch + "\n"
+            globallogger.log(batch)
+        }
+        if let progress {
+            dsprogress = progress
+        }
+    }
 
     private func resetPreparedSubsystemStateForNewRun() {
         kaccessready = false
@@ -313,14 +368,10 @@ final class laramgr: ObservableObject {
         ds_set_log_callback { messageCStr in
             guard let messageCStr else { return }
             let message = String(cString: messageCStr)
-            DispatchQueue.main.async {
-                laramgr.shared.logmsg("(ds) \(message)")
-            }
+            laramgr.shared.enqueueDSLog("(ds) \(message)")
         }
         ds_set_progress_callback { progress in
-            DispatchQueue.main.async {
-                laramgr.shared.dsprogress = progress
-            }
+            laramgr.shared.enqueueDSProgress(progress)
         }
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
