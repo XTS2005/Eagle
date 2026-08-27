@@ -8,20 +8,20 @@
   Customize wallpapers, passcode keys, Wallet card artwork, icons,
   Dynamic Island and Dock lighting from one app.
 
-  [![Public beta](https://img.shields.io/github/v/release/leonardob8777-bit/Eagle?include_prereleases&sort=semver&style=for-the-badge&label=PUBLIC%20BETA&color=7C3AED)](https://github.com/leonardob8777-bit/Eagle/releases)
+  [![Latest release](https://img.shields.io/github/v/release/leonardob8777-bit/Eagle?sort=semver&style=for-the-badge&label=LATEST%20RELEASE&color=7C3AED)](https://github.com/leonardob8777-bit/Eagle/releases)
   [![Total IPA downloads](https://img.shields.io/github/downloads/leonardob8777-bit/Eagle/total?style=for-the-badge&logo=icloud&logoColor=white&label=IPA%20DOWNLOADS&color=0891B2)](https://github.com/leonardob8777-bit/Eagle/releases)
   [![GitHub stars](https://img.shields.io/github/stars/leonardob8777-bit/Eagle?style=for-the-badge&logo=github&label=STARS&color=F59E0B)](https://github.com/leonardob8777-bit/Eagle/stargazers)
   [![AGPL-3.0](https://img.shields.io/github/license/leonardob8777-bit/Eagle?style=for-the-badge&label=LICENSE&color=16A34A)](LICENSE)
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.10/Eagle.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-PUBLIC_BETA_10-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download the Eagle Public Beta 10 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.0/Eagle.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.0-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.0 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v0.3.0-beta.10)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.0)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -34,16 +34,16 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 0.3.0 Public Beta 10 · build 58 |
+| **Current release** | Eagle 1.0.0 · build 59 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
 | **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow/outline · isolated apply and verification |
-| **Project status** | Public beta · test one change at a time |
+| **Project status** | Stable release · test one change at a time |
 
 > [!WARNING]
 > Eagle uses kernel-level and private SpringBoard capabilities. An incompatible
 > operation can respring or reboot the device. Back up important data, test one
-> change at a time and do not treat this beta as a production-safe utility.
+> change at a time and do not treat this as a production-safe utility.
 
 ## What Eagle includes
 
@@ -53,19 +53,21 @@
 | 🌌 **Wallpapers** | Browses community packs, imports compatible packages and converts short videos for Pocket Poster. |
 | 💳 **Cards** | Previews, applies, backs up and restores supported Wallet card artwork. |
 | 🔢 **Passcode** | Browses, imports, previews, applies and restores compatible key themes. |
-| 🧩 **Icon Studio · Beta** | Imports icon themes and offers alternate icon shapes. |
-| 📱 **Dock · Beta** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
-| ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting, plus Beta Home Icon Neon on its verified device/build. |
-| 🔤 **App Name Color · Beta** | Applies a page-owned solid color to app names on the current Home Screen page. |
+| 🧩 **Icon Studio · Coming soon** | Temporarily unavailable while theme importing and custom shapes are validated. |
+| 📱 **Dock** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
+| ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting. Glow, Pulse and Island Rainbow remain available where compatible; Tint is temporarily unavailable. |
+| 🔤 **App Name Color · Advanced** | Applies a page-owned solid color to app names on the current Home Screen page. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Beta 10
+### New in Eagle 1.0.0
 
 - **Home Icon Neon** now offers both a diffuse glow and a precise neon outline around visible icons on the current Home page.
 - **App Name Color** applies a solid custom color to the app names on the current page and keeps its overlays owned by that page to prevent migration when swiping.
-- Aura Studio and App Name Color carry temporary one-time **NEW** badges. The Aura Studio Home card now presents Dynamic Island clearly while Dock remains available inside.
-- A one-time welcome screen explains the current device status, supported iOS ranges, important exclusions and this beta's changes before use.
-- Prepare progress, blocking-operation spinners and the Eagle icon use a restrained moving rainbow accent. Prepare engine behavior is unchanged.
+- Aura Studio and App Name Color carry temporary one-time **NEW** badges. The Aura Studio Home card presents Dynamic Island clearly while Dock remains available inside.
+- The **Updates** screen explains the current device status, supported iOS ranges, important exclusions and changes before use.
+- Prepare progress, blocking-operation spinners and the Eagle icon use a restrained moving rainbow accent.
+- Prepare validates device, build, cache and session state before reporting readiness, while result messages avoid false **Applied** states.
+- Icon Studio is marked **Coming soon**, and Aura Tint is temporarily unavailable while Glow, Pulse and Island Rainbow remain available where compatible.
 - Production now blocks Prepare on iPhone 16 (`iPhone17,3`) with iOS 18.5 after field reports of full device restarts.
 - App Library Neon and Battery X remain excluded because they did not meet Eagle's visible-verification standard.
 
@@ -82,7 +84,7 @@
 - Aura overlays may disappear after a SpringBoard respring or device reboot and
   must then be applied again.
 
-## Install the public beta
+## Install Eagle
 
 1. Use the large **Download Eagle.ipa** button at the top of this page.
 2. Sign the unsigned IPA with your preferred personal-device sideloading method.
@@ -94,7 +96,7 @@ Looking for an older build? Browse [all Eagle releases](https://github.com/leona
 
 ## Compatibility and current limits
 
-- **Prepare support:** iOS 16.x is experimental (16.7.2 has limited testing);
+- **Prepare support:** iOS 16.x has limited testing (16.7.2 is the verified limited route);
   iOS 17.0–18.7.1 and 26.0–26.0.1 are accepted.
 - iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ and current MIE devices are blocked.
 - Prepare is additionally blocked on iPhone 16 (`iPhone17,3`) running iOS 18.5

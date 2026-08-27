@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible Eagle beta problem
+about: Report a reproducible Eagle problem
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -41,7 +41,7 @@ log here
 
 ## Safety checklist
 
-- [ ] I tested on the newest beta or commit.
+- [ ] I tested on the newest release or commit.
 - [ ] I searched existing issues.
 - [ ] I did not repeatedly trigger a feature that keeps rebooting or respringing.
 - [ ] I removed tokens, certificates, provisioning profiles and personal data.
