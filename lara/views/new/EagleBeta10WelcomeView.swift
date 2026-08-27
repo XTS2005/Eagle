@@ -231,14 +231,14 @@ struct EagleBeta10WelcomeView: View {
 
             Label {
                 Text(LaraL10n.text(
-                    en: "Important: Prepare is blocked on iPhone 16 (iPhone17,3) running iOS 18.5 after field reports of full device restarts.",
-                    es: "Importante: Preparar está bloqueado en iPhone 16 (iPhone17,3) con iOS 18.5 después de reportes de reinicios completos."
+                    en: "Prepare access is available again on iPhone 16 (iPhone17,3) running iOS 18.5.",
+                    es: "El acceso de Preparar vuelve a estar disponible en iPhone 16 (iPhone17,3) con iOS 18.5."
                 ))
                 .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
             } icon: {
-                Image(systemName: "hand.raised.fill")
-                    .foregroundStyle(.red)
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundStyle(.green)
             }
         }
     }

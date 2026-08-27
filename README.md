@@ -100,8 +100,7 @@ Looking for an older build? Browse [all Eagle releases](https://github.com/leona
   iOS 17.0–18.7.1 and 26.0–26.0.1 are accepted.
 - Unverified iOS 16 builds, releases outside the supported ranges above and
   current MIE devices are blocked.
-- Prepare is additionally blocked on iPhone 16 (`iPhone17,3`) running iOS 18.5
-  because that hardware/release combination produced repeated field restarts.
+- iPhone 16 (`iPhone17,3`) running iOS 18.5 follows the supported Prepare route.
 - Aura Studio live changes remain limited to verified iOS 17/18 SpringBoard routes.
 - If Island Aura reports **Safe Compact Halo**, it will not expand with music,
   screen recording or timers. Only **Adaptive Aura** follows those layouts.

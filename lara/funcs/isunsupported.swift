@@ -156,8 +156,9 @@ func eagleSystemBuild() -> String? {
     return String(cString: buffer)
 }
 
-/// Pure dispatch for the access engine. Public builds never select the lab
-/// route; enabling it requires the explicit EAGLE_A18_PREPARE_LAB compilation
+/// Pure dispatch for the access engine. Public builds use the same stable
+/// route that supported iPhone 16 devices used before the temporary field
+/// block. Enabling the isolated lab still requires an explicit compilation
 /// condition and an exact model/build match.
 func eaglePrepareExecutionRoute(
     version: OperatingSystemVersion,
@@ -179,10 +180,11 @@ func eaglePrepareExecutionRoute(
     if normalizedBuild == "22F76" {
         return .a18KernelStageLab
     }
+    return .blockedFieldRestart
 #else
     _ = systemBuild
+    return .stableLegacy
 #endif
-    return .blockedFieldRestart
 }
 
 /// Pure compatibility resolver. Accepting the version and machine explicitly
@@ -193,10 +195,9 @@ func eagleSupportAssessment(
     machine: String,
     systemBuild: String? = nil
 ) -> EagleSupportAssessment {
-    // Repeated reports from one field device reproduced a full restart on this
-    // hardware/release. Production remains fail-closed for the whole 18.5
-    // family until individual builds are physically verified; systemBuild is
-    // still accepted so private research routing can distinguish exact OTAs.
+    // Public builds preserve the previously working stable route for iPhone 16
+    // on iOS 18.5. Private lab builds may still isolate an exact OTA while
+    // investigating device-specific reports.
     let prepareRoute = eaglePrepareExecutionRoute(
         version: version,
         machine: machine,

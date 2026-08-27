@@ -22,9 +22,13 @@ private enum VerifyPrepareSupportMatrix {
 #if EAGLE_A18_PREPARE_LAB
         let exactFieldStatus = EagleSupportStatus.possible
         let exactFieldReason = EagleSupportReason.iphone16IOS185KernelStageLab
+        let otherFieldStatus = EagleSupportStatus.unsupported
+        let otherFieldReason = EagleSupportReason.iphone16IOS185FieldRestart
 #else
-        let exactFieldStatus = EagleSupportStatus.unsupported
-        let exactFieldReason = EagleSupportReason.iphone16IOS185FieldRestart
+        let exactFieldStatus = EagleSupportStatus.supported
+        let exactFieldReason = EagleSupportReason.ios17Through1871
+        let otherFieldStatus = EagleSupportStatus.supported
+        let otherFieldReason = EagleSupportReason.ios17Through1871
 #endif
         let cases = [
             MatrixCase(
@@ -40,7 +44,7 @@ private enum VerifyPrepareSupportMatrix {
                 expectedReason: .ios17Through1871
             ),
             MatrixCase(
-                name: "field-restarting tuple follows the selected build route",
+                name: "iPhone 16 iOS 18.5 follows the selected build route",
                 version: OperatingSystemVersion(
                     majorVersion: 18,
                     minorVersion: 5,
@@ -52,7 +56,7 @@ private enum VerifyPrepareSupportMatrix {
                 expectedReason: exactFieldReason
             ),
             MatrixCase(
-                name: "pure callers fail closed when the risky build is unknown",
+                name: "iPhone 16 iOS 18.5 without a build follows the selected route",
                 version: OperatingSystemVersion(
                     majorVersion: 18,
                     minorVersion: 5,
@@ -60,11 +64,11 @@ private enum VerifyPrepareSupportMatrix {
                 ),
                 machine: "iPhone17,3",
                 build: nil,
-                expectedStatus: .unsupported,
-                expectedReason: .iphone16IOS185FieldRestart
+                expectedStatus: otherFieldStatus,
+                expectedReason: otherFieldReason
             ),
             MatrixCase(
-                name: "unverified iPhone 16 iOS 18.5 builds remain blocked",
+                name: "another iPhone 16 iOS 18.5 build follows the selected route",
                 version: OperatingSystemVersion(
                     majorVersion: 18,
                     minorVersion: 5,
@@ -72,11 +76,11 @@ private enum VerifyPrepareSupportMatrix {
                 ),
                 machine: "iPhone17,3",
                 build: "22F77",
-                expectedStatus: .unsupported,
-                expectedReason: .iphone16IOS185FieldRestart
+                expectedStatus: otherFieldStatus,
+                expectedReason: otherFieldReason
             ),
             MatrixCase(
-                name: "blank build fails closed on the risky family",
+                name: "blank iPhone 16 iOS 18.5 build follows the selected route",
                 version: OperatingSystemVersion(
                     majorVersion: 18,
                     minorVersion: 5,
@@ -84,8 +88,8 @@ private enum VerifyPrepareSupportMatrix {
                 ),
                 machine: "iPhone17,3",
                 build: "   ",
-                expectedStatus: .unsupported,
-                expectedReason: .iphone16IOS185FieldRestart
+                expectedStatus: otherFieldStatus,
+                expectedReason: otherFieldReason
             ),
             MatrixCase(
                 name: "iPhone 16 Plus is not inferred from iPhone 16 report",
