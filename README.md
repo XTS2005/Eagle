@@ -168,6 +168,11 @@ comply with that license.
 Core acknowledgements include the Lara contributors, rooootdev, opa334, ChOma,
 XPF, AlfieCG/libgrabkernel2, DarkSword contributors, AppInstaller iOS and the
 upstream projects whose notices remain in [`lara/licenses`](lara/licenses).
+Portions of Eagle's OTA implementation are adapted from
+[Cyanide](https://github.com/0xjohnnydev/cyanide) by
+[0xjohnny](https://github.com/0xjohnnydev) (formerly zeroxjf), first published
+in May 2026 under AGPL-3.0 and inherited by Eagle through Lara. See the
+[Cyanide OTA notice](lara/licenses/NOTICE_Cyanide_OTA.md) for provenance links.
 See Lara's [contributor history](https://github.com/rooootdev/lara/graphs/contributors)
 for the complete upstream record.
 
