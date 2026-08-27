@@ -27,20 +27,25 @@ struct AuraStudioDisplayGeometry {
     }
 
     var compactIslandFrame: CGRect {
-        scaleStandardFrame(CGRect(
+        let firstGenerationIsland = devicemachine() == "iPhone15,2" ||
+            devicemachine() == "iPhone15,3"
+        return scaleStandardFrame(CGRect(
             x: (standardLogicalSize.width - 134) / 2,
-            y: 13,
+            y: firstGenerationIsland ? 7 : 13,
             width: 134,
-            height: 39
+            height: firstGenerationIsland ? 45 : 39
         ))
     }
 
     var dockAuraFrame: CGRect {
-        scaleStandardFrame(CGRect(
-            x: 15,
-            y: 1,
-            width: standardLogicalSize.width - 30,
-            height: 94
+        let firstGenerationIsland = devicemachine() == "iPhone15,2" ||
+            devicemachine() == "iPhone15,3"
+        let inset: CGFloat = firstGenerationIsland ? 18 : 15
+        return scaleStandardFrame(CGRect(
+            x: inset,
+            y: firstGenerationIsland ? 3 : 1,
+            width: standardLogicalSize.width - (inset * 2),
+            height: firstGenerationIsland ? 90 : 94
         ))
     }
 
