@@ -183,11 +183,11 @@ struct LaraHomeView: View {
         HStack(spacing: 10) {
             Text("Eagle")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
-                .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
+                .foregroundStyle(EagleVisualTheme.accent)
                 .minimumScaleFactor(0.82)
                 .accessibilityAddTraits(.isHeader)
 
-            EagleSmileyFlower(size: 40)
+            EagleBrandMark(size: 42)
         }
     }
 

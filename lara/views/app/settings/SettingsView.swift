@@ -32,6 +32,8 @@ struct SettingsView: View {
     @EnvironmentObject var mgr: laramgr
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @AppStorage(EagleAppearanceMode.storageKey)
+    private var appearanceModeRaw = EagleAppearanceMode.dark.rawValue
     
     @AppStorage(EaglePreferenceKeys.accessMethod) private var selectedMethod: method = .hybrid
     @AppStorage("keepAlive") private var keepAlive: Bool = false
@@ -63,17 +65,7 @@ struct SettingsView: View {
     private var developerCard: some View {
         Link(destination: URL(string: "https://github.com/leonardob8777-bit")!) {
             HStack(spacing: 14) {
-                AsyncImage(url: URL(string: "https://github.com/leonardob8777-bit.png")) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
-                .overlay { Circle().strokeBorder(.primary.opacity(0.10), lineWidth: 1) }
+                EagleBrandMark(size: 56)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Leonardo")
@@ -125,6 +117,30 @@ struct SettingsView: View {
                         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 14, trailing: 20))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                }
+
+                Section {
+                    Picker(
+                        LaraL10n.text(en: "Appearance", es: "Apariencia"),
+                        selection: $appearanceModeRaw
+                    ) {
+                        ForEach(EagleAppearanceMode.allCases) { mode in
+                            Text(mode.title).tag(mode.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .accessibilityLabel(LaraL10n.text(en: "Appearance", es: "Apariencia"))
+                } header: {
+                    HeaderLabel(
+                        text: LaraL10n.text(en: "Appearance", es: "Apariencia"),
+                        icon: "circle.lefthalf.filled"
+                    )
+                } footer: {
+                    Text(LaraL10n.text(
+                        en: "Dark is the recommended Eagle experience. Light and System remain available.",
+                        es: "Oscuro es la experiencia recomendada de Eagle. Claro y Sistema siguen disponibles."
+                    ))
                 }
 
                 Section(header: HeaderLabel(
@@ -382,7 +398,8 @@ struct SettingsView: View {
                     Button {
                         dismiss()
                     } label: {
-                        EagleSpectrumText(text: LaraL10n.text(en: "Close", es: "Cerrar"))
+                        Text(LaraL10n.text(en: "Close", es: "Cerrar"))
+                            .foregroundStyle(EagleVisualTheme.accent)
                     }
                 }
             }

@@ -1,5 +1,78 @@
 import SwiftUI
 
+enum EagleAppearanceMode: String, CaseIterable, Identifiable {
+    case dark
+    case light
+    case system
+
+    static let storageKey = "eagle.appearance.mode"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dark: return LaraL10n.text(en: "Dark", es: "Oscuro")
+        case .light: return LaraL10n.text(en: "Light", es: "Claro")
+        case .system: return LaraL10n.text(en: "System", es: "Sistema")
+        }
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .dark: return .dark
+        case .light: return .light
+        case .system: return nil
+        }
+    }
+}
+
+enum EagleVisualTheme {
+    static let accent = Color(red: 0.34, green: 0.29, blue: 0.88)
+
+    static let accentUIColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.58, green: 0.50, blue: 1.0, alpha: 1)
+            : UIColor(red: 0.29, green: 0.24, blue: 0.78, alpha: 1)
+    }
+
+    static func secondaryText(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.74)
+            : Color.black.opacity(0.68)
+    }
+
+    static func surfaceBorder(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.09)
+            : Color.black.opacity(0.11)
+    }
+
+    static func surfaceShadow(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? Color.clear
+            : Color.black.opacity(0.06)
+    }
+}
+
+struct EagleBrandMark: View {
+    var size: CGFloat = 42
+
+    var body: some View {
+        Image("EagleBrandMark")
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
+                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            }
+            .shadow(color: EagleVisualTheme.accent.opacity(0.30), radius: size * 0.16)
+            .accessibilityHidden(true)
+    }
+}
+
 enum EagleSpectrumStyle {
     static let colors: [Color] = [
         .cyan,
@@ -38,39 +111,7 @@ enum EagleSpectrumStyle {
         )
     }
 
-    static let navigationTintColor: UIColor = {
-        let uiColors: [UIColor] = [
-            .cyan,
-            .systemBlue,
-            .systemPurple,
-            .systemPink,
-            .systemRed,
-            .systemOrange,
-            .systemYellow,
-            .systemGreen,
-            .cyan,
-        ]
-        // Narrow enough that a short label like "Back" spans a full rainbow
-        // cycle (matching EagleSpectrumText). The gradient starts and ends on
-        // cyan, so the pattern tiles seamlessly across wider items.
-        let size = CGSize(width: 44, height: 44)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in
-            guard let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: uiColors.map(\.cgColor) as CFArray,
-                locations: nil
-            ) else { return }
-            renderer.cgContext.drawLinearGradient(
-                gradient,
-                start: .zero,
-                end: CGPoint(x: size.width, y: 0),
-                options: []
-            )
-        }
-        return UIColor(patternImage: image)
-    }()
+    static let navigationTintColor = EagleVisualTheme.accentUIColor
 
     static func configureGlobalNavigationAppearance() {
         UINavigationBar.appearance().tintColor = navigationTintColor
@@ -85,7 +126,7 @@ struct EagleSpectrumText: View {
 
     var body: some View {
         Text(text)
-            .foregroundStyle(EagleSpectrumStyle.gradient)
+            .foregroundStyle(EagleVisualTheme.accent)
     }
 }
 

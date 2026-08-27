@@ -342,6 +342,7 @@ struct AuraStudioView: View {
 
     @ObservedObject private var mgr = laramgr.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     // Island and Dock intentionally own separate draft profiles. Reusing the
     // original Island RGB keys preserves existing user choices while Dock
@@ -987,6 +988,23 @@ struct AuraStudioView: View {
                 }
             }
             .frame(height: 145)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+            }
+            .padding(8)
+            .background(
+                colorScheme == .dark
+                    ? Color.black.opacity(0.28)
+                    : Color(uiColor: .tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
+            }
+            .shadow(color: EagleVisualTheme.surfaceShadow(for: colorScheme), radius: 12, y: 5)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(LaraL10n.text(
                 en: "\(selectedTarget.title) preview, \(selectedMode.title)",
@@ -1266,6 +1284,27 @@ struct AuraStudioView: View {
         }
     }
 
+    private var isApplyButtonDisabled: Bool {
+        isApplying || !mgr.dsready || selectedFlags == 0 ||
+            applySafetyBlocked || mgr.rcSafetyLocked
+    }
+
+    private var applyButtonForeground: Color {
+        isApplyButtonDisabled
+            ? (colorScheme == .dark ? Color.white.opacity(0.86) : Color.black.opacity(0.78))
+            : .white
+    }
+
+    private var applyButtonBackground: Color {
+        if !mgr.dsready {
+            return Color.red.opacity(colorScheme == .dark ? 0.24 : 0.13)
+        }
+        if isApplyButtonDisabled {
+            return Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.09)
+        }
+        return EagleVisualTheme.accent
+    }
+
     private var applyButton: some View {
         Button {
             runAuraOperation(.apply(selectedMode), flags: selectedFlags)
@@ -1283,18 +1322,25 @@ struct AuraStudioView: View {
                 systemImage: mgr.dsready ? "sparkles" : "lock.shield.fill"
             )
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(applyButtonForeground)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(previewLightColor.gradient)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .background(
+                applyButtonBackground,
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .strokeBorder(
+                        !mgr.dsready
+                            ? Color.red.opacity(colorScheme == .dark ? 0.42 : 0.30)
+                            : EagleVisualTheme.surfaceBorder(for: colorScheme),
+                        lineWidth: 1
+                    )
+            }
         }
         .buttonStyle(.plain)
-        .disabled(
-            isApplying || !mgr.dsready || selectedFlags == 0 ||
-            applySafetyBlocked || mgr.rcSafetyLocked
-        )
-        .opacity(!mgr.dsready || applySafetyBlocked || mgr.rcSafetyLocked ? 0.48 : 1)
+        .disabled(isApplyButtonDisabled)
         .accessibilityHint(LaraL10n.text(
             en: "Changes only \(selectedTarget.title).",
             es: "Cambia únicamente \(selectedTarget.title)."

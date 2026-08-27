@@ -82,7 +82,8 @@ struct LogsView: View {
                     Button {
                         dismiss()
                     } label: {
-                        EagleSpectrumText(text: LaraL10n.text(en: "Close", es: "Cerrar"))
+                        Text(LaraL10n.text(en: "Close", es: "Cerrar"))
+                            .foregroundStyle(EagleVisualTheme.accent)
                     }
                 }
 

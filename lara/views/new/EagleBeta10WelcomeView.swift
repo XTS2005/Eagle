@@ -58,34 +58,12 @@ struct EagleBeta10WelcomeView: View {
 
     private var hero: some View {
         VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(
-                        AngularGradient(
-                            colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
-                            center: .center
-                        )
-                    )
-                    .frame(width: 86, height: 86)
-                    .blur(radius: 14)
-                    .opacity(0.48)
-
-                Image(systemName: "bird.fill")
-                    .font(.system(size: 42, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
+            EagleBrandMark(size: 86)
 
             VStack(spacing: 5) {
                 Text(LaraL10n.text(en: "Eagle Updates", es: "Actualizaciones de Eagle"))
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.cyan, .blue, .purple, .pink, .orange],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .foregroundStyle(EagleVisualTheme.accent)
                     .multilineTextAlignment(.center)
 
                 Text(LaraL10n.text(en: "STABLE UPDATE", es: "ACTUALIZACIÓN ESTABLE"))
@@ -93,14 +71,7 @@ struct EagleBeta10WelcomeView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(
-                        LinearGradient(
-                            colors: [.purple, .pink],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: Capsule()
-                    )
+                    .background(EagleVisualTheme.accent, in: Capsule())
 
                 Text(LaraL10n.text(
                     en: "A more reliable core, clearer results, and a refined interface.",

@@ -17,9 +17,15 @@ struct LaraCustomApp: App {
     @Environment(\.scenePhase) var scenephase
     @AppStorage("keepAlive") private var keepalive: Bool = false
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
+    @AppStorage(EagleAppearanceMode.storageKey)
+    private var appearanceModeRaw = EagleAppearanceMode.dark.rawValue
     @AppStorage("eagle.updates.stable1.completed")
     private var hasSeenStableUpdate = false
     @State private var showingStableUpdate = false
+
+    private var preferredColorScheme: ColorScheme? {
+        (EagleAppearanceMode(rawValue: appearanceModeRaw) ?? .dark).preferredColorScheme
+    }
     
     init() {
         EaglePreferenceMigration.runIfNeeded()
@@ -46,6 +52,7 @@ struct LaraCustomApp: App {
             EagleAppShellView()
             .environmentObject(mgr)
             .environment(\.locale, language.locale)
+            .preferredColorScheme(preferredColorScheme)
             .overlay {
                 if mgr.showrespring {
                     respringview()

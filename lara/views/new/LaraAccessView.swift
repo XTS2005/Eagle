@@ -12,6 +12,7 @@ enum LaraAccessState: Equatable {
 
 struct LaraAccessView: View {
     @ObservedObject private var mgr = laramgr.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var state: LaraAccessState = .idle
 #if EAGLE_A18_PREPARE_LAB
     @State private var labAttemptLocked = false
@@ -58,8 +59,9 @@ struct LaraAccessView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
         }
+        .shadow(color: EagleVisualTheme.surfaceShadow(for: colorScheme), radius: 10, y: 4)
     }
 
     private var preparationView: some View {
@@ -78,7 +80,7 @@ struct LaraAccessView: View {
                         es: "Usa el motor de acceso de Eagle solo en combinaciones permitidas de dispositivo e iOS. Si el iPhone se reinicia, no lo intentes otra vez; abre Eagle y comparte un reporte de Preparar."
                     ))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -130,7 +132,7 @@ struct LaraAccessView: View {
                     spanish: LaraL10n.language == .spanish
                 ))
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
             } else if isdebugged() {
                 Label {
                     Text(LaraL10n.text(
@@ -167,8 +169,9 @@ struct LaraAccessView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
         }
+        .shadow(color: EagleVisualTheme.surfaceShadow(for: colorScheme), radius: 10, y: 4)
     }
 
     private var isBusy: Bool {
