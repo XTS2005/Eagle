@@ -80,7 +80,7 @@ struct JitView: View {
                                         .font(.headline)
                                     Text(proc.bundle)
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundStyle(.secondary)
                                 }
 
                                 Spacer()

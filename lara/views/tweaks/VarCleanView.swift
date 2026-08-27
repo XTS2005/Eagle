@@ -68,7 +68,9 @@ struct VarCleanView: View {
                                 groups[groupidx].items[itemidx].isselected.toggle()
                             } label: {
                                 HStack(spacing: 12) {
-                                    Text(item.issymlink ? "🔗" : (item.isdir ? "🗂️" : "📄"))
+                                    Image(systemName: item.issymlink ? "link" : (item.isdir ? "folder" : "doc"))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 22)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.name)
                                             .foregroundColor(.primary)
