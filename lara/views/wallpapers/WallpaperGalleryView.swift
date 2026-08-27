@@ -526,7 +526,7 @@ private struct CommunityWallpaperCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
         }
     }
 }

@@ -197,10 +197,14 @@ struct AnimatedWallpapersView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .tint(.blue)
+            .tint(.accentColor)
             .padding(18)
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     @ViewBuilder
