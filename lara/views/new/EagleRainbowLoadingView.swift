@@ -50,7 +50,10 @@ enum EagleSpectrumStyle {
             .systemGreen,
             .cyan,
         ]
-        let size = CGSize(width: 88, height: 44)
+        // Narrow enough that a short label like "Back" spans a full rainbow
+        // cycle (matching EagleSpectrumText). The gradient starts and ends on
+        // cyan, so the pattern tiles seamlessly across wider items.
+        let size = CGSize(width: 44, height: 44)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in

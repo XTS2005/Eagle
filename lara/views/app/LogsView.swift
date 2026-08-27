@@ -79,7 +79,11 @@ struct LogsView: View {
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(LaraL10n.text(en: "Close", es: "Cerrar")) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        EagleSpectrumText(text: LaraL10n.text(en: "Close", es: "Cerrar"))
+                    }
                 }
 
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
