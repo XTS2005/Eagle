@@ -63,12 +63,7 @@ struct EagleBrandMark: View {
             .interpolation(.high)
             .scaledToFit()
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
-                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-            }
-            .shadow(color: EagleVisualTheme.accent.opacity(0.30), radius: size * 0.16)
+            .shadow(color: EagleVisualTheme.accent.opacity(0.28), radius: size * 0.14)
             .accessibilityHidden(true)
     }
 }

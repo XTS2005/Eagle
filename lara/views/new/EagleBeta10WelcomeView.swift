@@ -160,6 +160,16 @@ struct EagleBeta10WelcomeView: View {
             )
 
             welcomeRow(
+                icon: "iphone.gen3",
+                color: .blue,
+                title: LaraL10n.text(en: "Expanded Aura fit", es: "Aura mejor adaptada"),
+                detail: LaraL10n.text(
+                    en: "Dynamic Island and Dock geometry now adapts to iPhone 14 Pro and Pro Max. The verified iPhone 16 Pro profile remains unchanged.",
+                    es: "La geometría de Dynamic Island y Dock ahora se adapta al iPhone 14 Pro y Pro Max. El perfil verificado del iPhone 16 Pro permanece intacto."
+                )
+            )
+
+            welcomeRow(
                 icon: "wrench.and.screwdriver.fill",
                 color: .orange,
                 title: LaraL10n.text(en: "Tools repaired", es: "Herramientas reparadas"),

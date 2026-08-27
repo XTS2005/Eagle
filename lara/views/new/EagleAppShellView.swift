@@ -216,11 +216,11 @@ private struct EagleBeta10AccessView: View {
                 HStack(spacing: 10) {
                     Text("Eagle")
                         .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(EagleVisualTheme.accent)
+                        .foregroundStyle(.primary)
                         .minimumScaleFactor(0.82)
                         .accessibilityAddTraits(.isHeader)
 
-                    EagleBrandMark(size: 42)
+                    EagleBrandMark(size: 48)
                 }
 
                 Spacer(minLength: 8)

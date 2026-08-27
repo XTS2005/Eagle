@@ -183,11 +183,11 @@ struct LaraHomeView: View {
         HStack(spacing: 10) {
             Text("Eagle")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
-                .foregroundStyle(EagleVisualTheme.accent)
+                .foregroundStyle(.primary)
                 .minimumScaleFactor(0.82)
                 .accessibilityAddTraits(.isHeader)
 
-            EagleBrandMark(size: 42)
+            EagleBrandMark(size: 48)
         }
     }
 
@@ -909,6 +909,9 @@ private struct AuraStudioHeroCard: View {
 
     private var auraBackground: some View {
         ZStack {
+            // Deep, desaturated indigo in both modes: a deliberate "feature"
+            // surface that stays calm next to the light page's white cards and
+            // keeps the neon capsule readable on a dark backdrop.
             LinearGradient(
                 colors: colorScheme == .dark
                     ? [
@@ -916,18 +919,16 @@ private struct AuraStudioHeroCard: View {
                         Color(red: 0.09, green: 0.05, blue: 0.19),
                     ]
                     : [
-                        Color(red: 0.44, green: 0.28, blue: 0.86),
-                        Color(red: 0.27, green: 0.15, blue: 0.60),
+                        Color(red: 0.19, green: 0.14, blue: 0.34),
+                        Color(red: 0.10, green: 0.07, blue: 0.21),
                     ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             RadialGradient(
                 colors: [
-                    (colorScheme == .dark
-                        ? Color(red: 0.42, green: 0.24, blue: 0.86)
-                        : Color(red: 0.70, green: 0.52, blue: 1.0))
-                        .opacity(colorScheme == .dark ? 0.45 : 0.5),
+                    Color(red: 0.44, green: 0.27, blue: 0.88)
+                        .opacity(colorScheme == .dark ? 0.42 : 0.34),
                     .clear,
                 ],
                 center: UnitPoint(x: 0.26, y: 0.5),
