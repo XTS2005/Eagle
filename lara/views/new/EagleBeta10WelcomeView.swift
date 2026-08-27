@@ -248,8 +248,8 @@ struct EagleBeta10WelcomeView: View {
 
             Label {
                 Text(LaraL10n.text(
-                    en: "Blocked for safety: unverified iOS 16 builds including 16.1–16.2, iOS 18.7.2+, iOS 19–25, iOS 26.0.2+, and current MIE devices.",
-                    es: "Bloqueados por seguridad: builds no verificados de iOS 16, incluidos 16.1–16.2, iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ y dispositivos actuales con MIE."
+                    en: "Blocked for safety: unverified iOS 16 builds, releases outside the supported ranges above, and current MIE devices.",
+                    es: "Bloqueados por seguridad: builds no verificados de iOS 16, versiones fuera de los rangos compatibles indicados y dispositivos actuales con MIE."
                 ))
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)

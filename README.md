@@ -98,7 +98,8 @@ Looking for an older build? Browse [all Eagle releases](https://github.com/leona
 
 - **Prepare support:** iOS 16.x has limited testing (16.7.2 is the verified limited route);
   iOS 17.0–18.7.1 and 26.0–26.0.1 are accepted.
-- iOS 18.7.2+, iOS 19–25, iOS 26.0.2+ and current MIE devices are blocked.
+- Unverified iOS 16 builds, releases outside the supported ranges above and
+  current MIE devices are blocked.
 - Prepare is additionally blocked on iPhone 16 (`iPhone17,3`) running iOS 18.5
   because that hardware/release combination produced repeated field restarts.
 - Aura Studio live changes remain limited to verified iOS 17/18 SpringBoard routes.
