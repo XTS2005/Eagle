@@ -40,25 +40,6 @@ struct LaraHomeView: View {
                                     .accessibilityAddTraits(.isHeader)
 
                                 VStack(spacing: 0) {
-                                    LaraToolRow(
-                                        title: LaraL10n.text(en: "Icon Studio", es: "Icon Studio"),
-                                        subtitle: LaraL10n.text(
-                                            en: "Themes and custom shapes",
-                                            es: "Temas y formas personalizadas"
-                                        ),
-                                        systemImage: "square.grid.2x2.fill",
-                                        accent: Color(red: 0.18, green: 0.60, blue: 0.42),
-                                        badge: LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE"),
-                                        showsDisclosureIndicator: false
-                                    )
-                                    .opacity(0.62)
-                                    .accessibilityHint(LaraL10n.text(
-                                        en: "Icon Studio is coming soon",
-                                        es: "Icon Studio estará disponible próximamente"
-                                    ))
-
-                                    Divider().padding(.leading, 65)
-
                                     NavigationLink(destination: AnimatedWallpapersView()) {
                                     LaraToolRow(
                                         title: LaraL10n.text(en: "Wallpapers", es: "Fondos"),
@@ -117,6 +98,25 @@ struct LaraHomeView: View {
                                                 : LaraL10n.text(en: "NEW", es: "NUEVO")
                                         )
                                     }
+
+                                    Divider().padding(.leading, 65)
+
+                                    LaraToolRow(
+                                        title: LaraL10n.text(en: "Icon Studio", es: "Icon Studio"),
+                                        subtitle: LaraL10n.text(
+                                            en: "Themes and custom shapes",
+                                            es: "Temas y formas personalizadas"
+                                        ),
+                                        systemImage: "square.grid.2x2.fill",
+                                        accent: Color(red: 0.18, green: 0.60, blue: 0.42),
+                                        badge: LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE"),
+                                        showsDisclosureIndicator: false
+                                    )
+                                    .opacity(0.62)
+                                    .accessibilityHint(LaraL10n.text(
+                                        en: "Icon Studio is coming soon",
+                                        es: "Icon Studio estará disponible próximamente"
+                                    ))
                                 }
                                 .buttonStyle(.plain)
                                 .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -481,9 +481,9 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case homeLabelColor
     case cards
     case passcode
-    case icons
     case dock
     case advancedSettings
+    case icons
 
     var id: String { rawValue }
 
