@@ -65,6 +65,14 @@ private final class RemoteCallPreparationState {
         self.process = process
     }
 }
+
+private struct RemoteCallDaemonRequest {
+    let serviceName: String
+    let framework: String?
+    let process: String
+    let migbypass: Bool
+    let completion: ((RemoteCall?) -> Void)?
+}
 #endif
 
 final class laramgr: ObservableObject {
@@ -120,11 +128,37 @@ final class laramgr: ObservableObject {
     
     @Published var showLogs: Bool = false
     
-    var sbProc: RemoteCall?
+    private var storedSBProc: RemoteCall?
+    var sbProc: RemoteCall? {
+        get {
+            #if !DISABLE_REMOTECALL
+            guard Thread.isMainThread, rcready,
+                  let storedSBProc else {
+                return storedSBProc
+            }
+            if let issue = remoteCallSessionIssue(storedSBProc, process: "SpringBoard") {
+                rcLastError = issue
+                rcready = false
+                self.storedSBProc = nil
+                logmsg("discarding invalid SpringBoard session: \(issue)")
+                DispatchQueue.global(qos: .utility).async {
+                    storedSBProc.destroy()
+                }
+                return nil
+            }
+            #endif
+            return storedSBProc
+        }
+        set {
+            storedSBProc = newValue
+        }
+    }
     private var rcGeneration: UInt64 = 0
     private var rcFreshSessionInFlight = false
     private var rcNativeCallInFlight = false
     private var rcNativeCallLabel: String?
+    private var rcDaemonRunning = false
+    private var rcDaemonQueue: [RemoteCallDaemonRequest] = []
     // YouTube is optional. Constructing this at manager startup used to probe
     // for a process that often is not installed (and before Prepare was ready),
     // producing a misleading RemoteCall failure in every diagnostic report.
@@ -136,6 +170,74 @@ final class laramgr: ObservableObject {
     static let italicfontpath = "/System/Library/Fonts/Core/SFUIItalic.ttf"
     static let monofontpath = "/System/Library/Fonts/Core/SFUIMono.ttf"
     init() {}
+
+    private func resetPreparedSubsystemStateForNewRun() {
+        kaccessready = false
+        kaccesserror = nil
+        testresult = nil
+        vfsready = false
+        vfsattempted = false
+        vfsfailed = false
+        vfsrunning = false
+        vfsprogress = 0.0
+        sbxready = false
+        sbxattempted = false
+        sbxfailed = false
+        sbxrunning = false
+        kernbase = 0
+        kernslide = 0
+    }
+
+    #if !DISABLE_REMOTECALL
+    private func runningPID(for process: String) -> Int32 {
+        process.withCString { pointer in
+            Int32(find_process_pid(pointer))
+        }
+    }
+
+    private func remoteCallSessionIssue(
+        _ session: RemoteCall?,
+        process: String
+    ) -> String? {
+        guard let session else {
+            return "missing \(process) RemoteCall object"
+        }
+        guard session.isHealthy else {
+            return session.lastError?.isEmpty == false
+                ? session.lastError
+                : "\(process) RemoteCall is unhealthy"
+        }
+        guard !session.lastCallTimedOut else {
+            return "\(process) RemoteCall timed out"
+        }
+        guard session.pid > 0 else {
+            return "\(process) RemoteCall has no verified pid"
+        }
+
+        let currentPID = runningPID(for: process)
+        guard currentPID > 0 else {
+            return "\(process) is not running"
+        }
+        guard currentPID == session.pid else {
+            return "\(process) pid changed from \(session.pid) to \(currentPID)"
+        }
+
+        return nil
+    }
+
+    private func detachRemoteCallStateForPrepareStart() -> RemoteCall? {
+        rcGeneration &+= 1
+        let previousSession = sbProc
+        sbProc = nil
+        rcready = false
+        rcfailed = false
+        rcLastError = nil
+        rcFreshSessionInFlight = false
+        rcNativeCallInFlight = false
+        rcNativeCallLabel = nil
+        return previousSession
+    }
+    #endif
 
     struct AppInfo {
         let executable: String
@@ -150,12 +252,31 @@ final class laramgr: ObservableObject {
             completion?(false)
             return
         }
+        #if !DISABLE_REMOTECALL
+        guard !rcrunning, !rcFreshSessionInFlight,
+              !rcNativeCallInFlight, !rcSafetyLocked else {
+            rcLastError = rcSafetyReason ??
+                "Finish or reopen Eagle before running Prepare again"
+            completion?(false)
+            return
+        }
+        #endif
         let support = eagleSupportAssessment()
         guard support.allowsPrepare else {
             globallogger.log("(prepare) blocked before DarkSword: \(support.reason.rawValue)")
             completion?(false)
             return
         }
+
+        resetPreparedSubsystemStateForNewRun()
+        #if !DISABLE_REMOTECALL
+        let previousRemoteCallSession = detachRemoteCallStateForPrepareStart()
+        if let previousRemoteCallSession {
+            DispatchQueue.global(qos: .utility).async {
+                previousRemoteCallSession.destroy()
+            }
+        }
+        #endif
 
         let systemBuild = eagleSystemBuild()?.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -421,9 +542,20 @@ final class laramgr: ObservableObject {
     
     func vfswrite(path: String, data: Data) -> Bool {
         guard vfsready else { return false }
-        return data.withUnsafeBytes { ptr in
-            let n = vfs_write(path, ptr.baseAddress, data.count, 0)
-            return n > 0
+        var written = 0
+        return data.withUnsafeBytes { ptr -> Bool in
+            guard let base = ptr.baseAddress else { return data.isEmpty }
+            while written < data.count {
+                let n = vfs_write(
+                    path,
+                    base.advanced(by: written),
+                    data.count - written,
+                    off_t(written)
+                )
+                if n <= 0 { return false }
+                written += Int(n)
+            }
+            return true
         }
     }
     
@@ -552,12 +684,12 @@ final class laramgr: ObservableObject {
     }
     
     func vfszeropage(at path: String, dumb: Bool) -> Bool {
+        guard vfsready else {
+            self.logmsg("(vfs) zero failed (vfs not ready)")
+            return false
+        }
+
         if dumb {
-            guard vfsready else {
-                self.logmsg("(vfs) zerofile failed (vfs not ready)")
-                return false
-            }
-    
             let ok = path.withCString { vfs_zerofile($0) } == 0
 
             if !ok {
@@ -804,8 +936,42 @@ final class laramgr: ObservableObject {
             return
         }
         if rcready, sbProc != nil {
+            if let issue = remoteCallSessionIssue(sbProc, process: process) {
+                rcLastError = issue
+                logmsg("discarding stale remote call session: \(issue)")
+                rcGeneration &+= 1
+                let repairGeneration = rcGeneration
+                let staleSession = sbProc
+                sbProc = nil
+                rcready = false
+                rcrunning = true
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    staleSession?.destroy()
+                    DispatchQueue.main.async {
+                        guard let self else {
+                            completion?(false)
+                            return
+                        }
+                        guard self.rcGeneration == repairGeneration else {
+                            self.rcrunning = false
+                            completion?(false)
+                            return
+                        }
+                        self.rcrunning = false
+                        self.rcinit(
+                            process: process,
+                            migbypass: migbypass,
+                            completion: completion
+                        )
+                    }
+                }
+                return
+            }
             completion?(true)
             return
+        }
+        if rcready {
+            rcready = false
         }
         // Repair split state left by an interrupted RemoteCall lifecycle before
         // creating another session. Never overwrite a live object and leak its
@@ -848,7 +1014,7 @@ final class laramgr: ObservableObject {
         logmsg("initializing remote call on \(process)...")
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let candidate = RemoteCall(
+            let candidate: RemoteCall? = RemoteCall(
                 process: process,
                 useMigFilterBypass: migbypass
             )
@@ -861,6 +1027,20 @@ final class laramgr: ObservableObject {
                         DispatchQueue.global(qos: .utility).async {
                             candidate.destroy()
                         }
+                    }
+                    completion?(false)
+                    return
+                }
+                if let candidate,
+                   let issue = self.remoteCallSessionIssue(
+                    candidate,
+                    process: process
+                ) {
+                    self.rcLastError = issue
+                    self.logmsg("remote call verification failed on \(process): \(issue)")
+                    self.rcrunning = false
+                    DispatchQueue.global(qos: .utility).async {
+                        candidate.destroy()
                     }
                     completion?(false)
                     return
@@ -1013,7 +1193,17 @@ final class laramgr: ObservableObject {
                             }
                             return
                         }
-                        if let candidate {
+                        if let candidate,
+                           let issue = self.remoteCallSessionIssue(
+                            candidate,
+                            process: process
+                        ) {
+                            self.logmsg("fresh remote call verification failed on \(process): \(issue)")
+                            DispatchQueue.global(qos: .utility).async {
+                                candidate.destroy()
+                            }
+                            complete(nil, issue)
+                        } else if let candidate {
                             self.logmsg("fresh remote call initialized on \(process)")
                             complete(candidate, nil)
                         } else {
@@ -1057,8 +1247,15 @@ final class laramgr: ObservableObject {
 
     func beginExclusiveRemoteCall(label: String) -> Bool {
         precondition(Thread.isMainThread)
-        guard rcready, sbProc != nil, !rcrunning,
+        guard let session = sbProc,
+              rcready, !rcrunning,
               !rcNativeCallInFlight, !rcSafetyLocked else {
+            return false
+        }
+        if let issue = remoteCallSessionIssue(session, process: "SpringBoard") {
+            rcLastError = issue
+            rcready = false
+            logmsg("remote call operation rejected: \(issue)")
             return false
         }
         rcNativeCallInFlight = true
@@ -1087,37 +1284,82 @@ final class laramgr: ObservableObject {
     }
     
     func rcinitDaemon(serviceName: String, framework: String? = nil, process: String, migbypass: Bool = false, completion: ((RemoteCall?) -> Void)? = nil) {
-        guard dsready, !rcrunning, !rcSafetyLocked, let sbProc else {
+        let request = RemoteCallDaemonRequest(
+            serviceName: serviceName,
+            framework: framework,
+            process: process,
+            migbypass: migbypass,
+            completion: completion
+        )
+
+        guard dsready, !rcSafetyLocked, sbProc != nil else {
             completion?(nil)
             return
         }
-        
+
+        guard !rcFreshSessionInFlight, !rcNativeCallInFlight else {
+            rcLastError = "A serialized RemoteCall operation is still running"
+            completion?(nil)
+            return
+        }
+
+        if rcDaemonRunning {
+            rcDaemonQueue.append(request)
+            logmsg("queued remote call daemon session on \(process)")
+            return
+        }
+
+        guard !rcrunning else {
+            rcLastError = "Another RemoteCall operation is still running"
+            completion?(nil)
+            return
+        }
+
+        startRemoteCallDaemon(request)
+    }
+
+    private func startRemoteCallDaemon(_ request: RemoteCallDaemonRequest) {
+        guard dsready, !rcrunning, !rcSafetyLocked, let sbProc else {
+            request.completion?(nil)
+            return
+        }
+
+        rcDaemonRunning = true
         rcrunning = true
-        logmsg("initializing remote call on \(process)...")
+        logmsg("initializing remote call on \(request.process)...")
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            if process.withCString({ proc_find_by_name($0) == 0 }) {
-                wake_up_daemon(sbProc, serviceName, framework)
+            if request.process.withCString({ proc_find_by_name($0) == 0 }) {
+                wake_up_daemon(sbProc, request.serviceName, request.framework)
                 sleep(1) // give the daemon some time to start up
             }
             
-            let proc = RemoteCall(process: process, useMigFilterBypass: migbypass)
-            completion?(proc)
-            
-            DispatchQueue.main.async {
+            let proc = RemoteCall(
+                process: request.process,
+                useMigFilterBypass: request.migbypass
+            )
+            let initError = RemoteCall.lastInitError()
+            request.completion?(proc)
+
+            DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 let success = proc != nil
                 if success {
-                    self.logmsg("remote call initialized on \(process)")
-                    self.rcrunning = false
+                    self.logmsg("remote call initialized on \(request.process)")
                 } else {
-                    let error = RemoteCall.lastInitError()
-                    if let error, !error.isEmpty {
-                        self.logmsg("remote call init failed on \(process): \(error)")
+                    if let error = initError, !error.isEmpty {
+                        self.logmsg("remote call init failed on \(request.process): \(error)")
                     } else {
-                        self.logmsg("remote call init failed on \(process)")
+                        self.logmsg("remote call init failed on \(request.process)")
                     }
-                    self.rcrunning = false
+                }
+
+                self.rcrunning = false
+                self.rcDaemonRunning = false
+
+                if !self.rcDaemonQueue.isEmpty {
+                    let next = self.rcDaemonQueue.removeFirst()
+                    self.startRemoteCallDaemon(next)
                 }
             }
         }
@@ -1196,19 +1438,27 @@ final class laramgr: ObservableObject {
     //  - timeout: timeout in ms
     //  ret: return value from rc
     func rccall(name: String, args: [UInt64] = [], timeout: Int32 = 100) -> UInt64 {
-        guard rcready, !rcrunning, !rcSafetyLocked else { return 0 }
+        guard rcready, !rcrunning, !rcSafetyLocked,
+              let session = sbProc,
+              remoteCallSessionIssue(session, process: "SpringBoard") == nil else {
+            return 0
+        }
         let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
-        let ptr = dlsym(RTLD_DEFAULT, name)
+        guard let ptr = dlsym(RTLD_DEFAULT, name) else {
+            rcLastError = "RemoteCall symbol not found: \(name)"
+            logmsg("(rc) symbol not found: \(name)")
+            return 0
+        }
         var argsCopy = args
         return name.withCString { (cName: UnsafePointer<CChar>) -> UInt64 in
             UInt64(argsCopy.withUnsafeMutableBufferPointer { buffer in
-                sbProc?.doStable(
+                session.doStable(
                     withTimeout: timeout,
                     functionName: UnsafeMutablePointer(mutating: cName),
                     functionPointer: ptr,
                     args: buffer.baseAddress,
                     argCount: UInt(args.count)
-                ) ?? 0
+                )
             })
         }
     }

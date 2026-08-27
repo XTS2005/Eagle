@@ -65,7 +65,22 @@ struct CustomView: View {
     }
 
     private var canoverwrite: Bool {
-        mgr.vfsready && !target.isEmpty && !srcpath.isEmpty && !isoverwriting
+        mgr.vfsready &&
+            validatedTargetPath() != nil &&
+            FileManager.default.fileExists(atPath: srcpath) &&
+            !isoverwriting
+    }
+
+    private func validatedTargetPath() -> String? {
+        let trimmed = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("/") else { return nil }
+        let normalized = URL(fileURLWithPath: trimmed).standardizedFileURL.path
+        guard normalized != "/",
+              !normalized.contains("/../"),
+              !normalized.hasSuffix("/..") else {
+            return nil
+        }
+        return normalized
     }
 
     private func importsource(_ url: URL) {
@@ -87,15 +102,14 @@ struct CustomView: View {
     }
 
     private func overwrite() {
-        guard canoverwrite else { return }
+        guard canoverwrite, let targetPath = validatedTargetPath() else { return }
         isoverwriting = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let ok = mgr.vfsoverwritefromlocalpath(target: target, source: srcpath)
+            let ok = mgr.vfsoverwritefromlocalpath(target: targetPath, source: srcpath)
             DispatchQueue.main.async {
                 isoverwriting = false
-                ok ? mgr.logmsg("overwrite ok: \(target)") : mgr.logmsg("overwrite failed: \(target)")
+                ok ? mgr.logmsg("overwrite ok: \(targetPath)") : mgr.logmsg("overwrite failed: \(targetPath)")
             }
         }
     }
 }
-

@@ -926,21 +926,38 @@ final class IconThemeManager: ObservableObject {
             }
         }
 
-        let applyWithCurrentSession = {
-            guard let process = self.mgr.sbProc else {
+        let applyWithSession: (RemoteCall) -> Void = { process in
+            let targetPID = process.pid
+            let currentPID = "SpringBoard".withCString { find_process_pid($0) }
+            guard targetPID > 0,
+                  currentPID == targetPID,
+                  process.creatingExtraThread else {
+                let reason = "Live icons SpringBoard session identity failed " +
+                    "(target \(targetPID), current \(currentPID), isolated \(process.creatingExtraThread))"
+                self.mgr.quarantineRemoteCall(reason: reason)
                 finish(.failure(NSError(
                     domain: "IconThemer",
-                    code: 12,
-                    userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
-                        en: "Eagle connected to SpringBoard but did not receive a live session.",
-                        es: "Eagle se conectó a SpringBoard, pero no recibió una sesión activa."
-                    )]
+                    code: 14,
+                    userInfo: [NSLocalizedDescriptionKey: reason]
                 )))
                 return
             }
 
             let iconPaths = self.preferredLiveIconPaths()
             let shape = self.selectedIconShape.liveValue
+            let label = "Live Icons \(UUID().uuidString)"
+            guard self.mgr.beginExclusiveRemoteCall(label: label) else {
+                finish(.failure(NSError(
+                    domain: "IconThemer",
+                    code: 15,
+                    userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                        en: "Another protected SpringBoard operation is active. Wait and try again.",
+                        es: "Hay otra operación protegida de SpringBoard activa. Espera e inténtalo de nuevo."
+                    )]
+                )))
+                return
+            }
+
             DispatchQueue.main.async {
                 self.isApplying = true
                 self.applyProgress = 0.86
@@ -959,6 +976,45 @@ final class IconThemeManager: ObservableObject {
                 } else {
                     themed = Int(eagle_apply_live_icon_theme(process, iconPaths, shape))
                     shaped = Int(eagle_apply_live_icon_shape(process, shape))
+                }
+
+                let healthy = process.isHealthy
+                let timedOut = process.lastCallTimedOut
+                let error = process.lastError
+                let pidAfter = "SpringBoard".withCString { find_process_pid($0) }
+
+                DispatchQueue.main.async {
+                    self.mgr.endExclusiveRemoteCall(label: label)
+                }
+
+                guard pidAfter == targetPID else {
+                    self.mgr.quarantineRemoteCall(
+                        reason: "SpringBoard restarted during live icon apply"
+                    )
+                    finish(.failure(NSError(
+                        domain: "IconThemer",
+                        code: 16,
+                        userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                            en: "SpringBoard restarted during live icon apply. Nothing was reported as applied.",
+                            es: "SpringBoard se reinició durante la aplicación de iconos. Nada se marcó como aplicado."
+                        )]
+                    )))
+                    return
+                }
+
+                guard healthy, !timedOut, error?.isEmpty != false else {
+                    self.mgr.quarantineRemoteCall(
+                        reason: error ?? "Live icon RemoteCall transport became unhealthy"
+                    )
+                    finish(.failure(NSError(
+                        domain: "IconThemer",
+                        code: 17,
+                        userInfo: [NSLocalizedDescriptionKey: LaraL10n.text(
+                            en: "The live icon call became unhealthy. Close and reopen Eagle before another test.",
+                            es: "La llamada de iconos dejó de estar estable. Cierra y abre Eagle antes de otra prueba."
+                        )]
+                    )))
+                    return
                 }
 
                 guard shaped > 0 else {
@@ -989,11 +1045,6 @@ final class IconThemeManager: ObservableObject {
             )
         }
 
-        if mgr.rcready, mgr.sbProc != nil {
-            applyWithCurrentSession()
-            return
-        }
-
         guard mgr.dsready else {
             finish(.failure(NSError(
                 domain: "IconThemer",
@@ -1006,11 +1057,11 @@ final class IconThemeManager: ObservableObject {
             return
         }
 
-        mgr.rcinit(process: "SpringBoard") { success in
-            if success || (self.mgr.rcready && self.mgr.sbProc != nil) {
-                applyWithCurrentSession()
+        mgr.prepareFreshRemoteCall(process: "SpringBoard", timeout: 20) { process, error in
+            if let process {
+                applyWithSession(process)
             } else {
-                let detail = self.mgr.rcLastError?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let detail = error?.trimmingCharacters(in: .whitespacesAndNewlines)
                 finish(.failure(NSError(
                     domain: "IconThemer",
                     code: 12,

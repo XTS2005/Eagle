@@ -48,17 +48,37 @@ struct dirtyZeroView: View {
     }
     
     func applyTweaks() {
+        guard mgr.vfsready else {
+            Alertinator.shared.alert(title: "dirtyZero", body: "VFS is not ready.")
+            return
+        }
+
         let tweaks = tweakArray.flatMap { $0.tweaks }.filter { $0.isOn }
+        guard !tweaks.isEmpty else {
+            Alertinator.shared.alert(title: "dirtyZero", body: "No tweaks are selected.")
+            return
+        }
+
+        var successCount = 0
+        var failCount = 0
         
         for tweak in tweaks {
             for path in tweak.paths {
-                _ = mgr.vfszeropage(at: path, dumb: true)
+                if mgr.vfszeropage(at: path, dumb: true) {
+                    successCount += 1
+                } else {
+                    failCount += 1
+                }
             }
         }
-        
-        Alertinator.shared.alert(title: "Attempted to apply all tweaks!", body: "Please respring your device to see any changes. Zeroing files with DarkSword is finicky, so you may have to apply multiple times!", actionLabel: "Respring", action: {
-            mgr.respring()
-        })
+
+        if failCount == 0 {
+            Alertinator.shared.alert(title: "Tweaks applied", body: "Please respring your device to see any changes.", actionLabel: "Respring", action: {
+                mgr.respring()
+            })
+        } else {
+            Alertinator.shared.alert(title: "dirtyZero finished with errors", body: "\(successCount) write(s) succeeded and \(failCount) failed.")
+        }
     }
 }
 

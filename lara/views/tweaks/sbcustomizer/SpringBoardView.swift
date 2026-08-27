@@ -169,7 +169,7 @@ struct SpringBoardView: View {
     func apply(_ sbType: SpringboardColorManager.SpringboardType, _ color: Color, _ blur: Int, save: Bool = true) -> Bool {
         do {
             try SpringboardColorManager.createColor(forType: sbType, color: CIColor(color: UIColor(color)), blur: blur, asTemp: !save)
-            SpringboardColorManager.applyColor(forType: sbType, asTemp: !save)
+            try SpringboardColorManager.applyColor(forType: sbType, asTemp: !save)
             if !save {
                 try SpringboardColorManager.deteleColor(forType: sbType)
             }
@@ -217,6 +217,7 @@ struct SpringBoardView: View {
                         } catch {
                             print("Failed to apply tweak \"" + option.title + "\"!!!")
                             print(error.localizedDescription)
+                            failed = true
                         }
                     }
                 } else {
@@ -225,6 +226,7 @@ struct SpringBoardView: View {
                         print("Successfully applied tweak \"" + option.title + "\"")
                     } else {
                         print("Failed to apply tweak \"" + option.title + "\"!!!")
+                        failed = true
                     }
                 }
                 

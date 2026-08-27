@@ -110,24 +110,26 @@ class SpringboardColorManager {
     }
     
     static func revertFiles(forType: SpringboardType) throws {
-        if finalFiles[forType] != nil && fileFolders[forType] != nil && fileExt[forType] != nil {
-            for file in finalFiles[forType]! {
-                if let url: URL = Bundle.main.url(forResource: file, withExtension: fileExt[forType]!) {
-                    let replacementFile = try Data(contentsOf: url)
-                    
-                    let result = laramgr.shared.lara_overwritefile(target: "\(fileFolders[forType]!)\(file)\(fileExt[forType]!)", data: replacementFile)
-                    
-                    if result.ok {
-                        throw "successfully reverted files"
-                    } else {
-                        throw "failed to overwrite with replacement file!"
-                    }
-                } else {
-                    throw "No file resource was found!"
-                }
-            }
-        } else {
+        guard let files = finalFiles[forType],
+              let folder = fileFolders[forType],
+              let ext = fileExt[forType] else {
             throw "File type doesn't exist in table???"
+        }
+
+        for file in files {
+            guard let url = Bundle.main.url(forResource: file, withExtension: ext) else {
+                throw "No file resource was found!"
+            }
+            let replacementFile = try Data(contentsOf: url)
+
+            let result = laramgr.shared.lara_overwritefile(
+                target: "\(folder)\(file)\(ext)",
+                data: replacementFile
+            )
+
+            if !result.ok {
+                throw "failed to overwrite with replacement file: \(result.message)"
+            }
         }
     }
     
@@ -297,42 +299,43 @@ class SpringboardColorManager {
     
     static func deteleColor(forType: SpringboardType) throws {
         let bgDir = getBackgroundDirectory()
-        if bgDir != nil {
-            for (_, file) in finalFiles[forType]!.enumerated() {
-                let path: URL = bgDir!.appendingPathComponent(file+fileExt[forType]!)
+        guard let bgDir,
+              let files = finalFiles[forType],
+              let ext = fileExt[forType] else {
+            throw "Could not find the background files directory!"
+        }
+
+        for file in files {
+            let path = bgDir.appendingPathComponent(file + ext)
+            if FileManager.default.fileExists(atPath: path.path) {
                 try FileManager.default.removeItem(at: path)
             }
-        } else {
-            throw "Could not find the background files directory!"
         }
     }
     
-    static func applyColor(forType: SpringboardType, asTemp: Bool = false) {
+    static func applyColor(forType: SpringboardType, asTemp: Bool = false) throws {
         let bgDir = getBackgroundDirectory()
         
-        if bgDir != nil && finalFiles[forType] != nil && fileFolders[forType] != nil && fileExt[forType] != nil {
-            for (_, file) in finalFiles[forType]!.enumerated() {
-                do {
-                    var newData: Data? = nil
-                    if asTemp {
-                        newData = try Data(contentsOf: FileManager.default.temporaryDirectory.appendingPathComponent(file + fileExt[forType]!))
-                    } else {
-                        newData = try Data(contentsOf: bgDir!.appendingPathComponent(file + fileExt[forType]!))
-                    }
-                    if newData == nil {
-                        throw "No color files found!"
-                    }
-                    // overwrite file
-                    let result = laramgr.shared.lara_overwritefile(target: "\(fileFolders[forType]!)\(file)\(fileExt[forType]!)", data: newData!)
-                    
-                    if result.ok {
-                        throw "successfully reverted files"
-                    } else {
-                        throw "failed to overwrite with replacement file!"
-                    }
-                } catch {
-                    print(error.localizedDescription)
-                }
+        guard let bgDir,
+              let files = finalFiles[forType],
+              let folder = fileFolders[forType],
+              let ext = fileExt[forType] else {
+            throw "Could not find the background files directory!"
+        }
+
+        for file in files {
+            let sourceURL = asTemp
+                ? FileManager.default.temporaryDirectory.appendingPathComponent(file + ext)
+                : bgDir.appendingPathComponent(file + ext)
+            let newData = try Data(contentsOf: sourceURL)
+
+            let result = laramgr.shared.lara_overwritefile(
+                target: "\(folder)\(file)\(ext)",
+                data: newData
+            )
+
+            if !result.ok {
+                throw "failed to overwrite with replacement file: \(result.message)"
             }
         }
     }

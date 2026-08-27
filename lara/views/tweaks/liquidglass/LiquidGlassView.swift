@@ -77,6 +77,10 @@ struct LiquidGlassView: View {
     
     // MARK: applying/reloading functions
     func applyLiquidGlass() {
+        guard mgr.sbxready || mgr.vfsready else {
+            Alertinator.shared.alert(title: "Failed to enable Liquid Glass Tweaks!", body: "Eagle access is not ready.")
+            return
+        }
         do {
             let gpData = try verifyPlist(gpCurrentDict, targetPath: gpCurrentPath)
             let result = mgr.lara_overwritefile(target: gpCurrentPath, data: gpData)
@@ -92,14 +96,23 @@ struct LiquidGlassView: View {
     }
     
     func restoreLiquidGlass() {
+        guard mgr.sbxready || mgr.vfsready else {
+            Alertinator.shared.alert(title: "Failed to restore Liquid Glass!", body: "Eagle access is not ready.")
+            return
+        }
         do {
             let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let gpSavedURL = docsDir.appendingPathComponent("SavedGlobalPrefs.plist")
             
             if FileManager.default.fileExists(atPath: gpSavedURL.path) {
                 let restored = try NSMutableDictionary(contentsOf: gpSavedURL, error: ())
-                _ = try verifyPlist(restored, targetPath: mgCurrentPath)
+                let gpData = try verifyPlist(restored, targetPath: gpCurrentPath)
+                let result = mgr.lara_overwritefile(target: gpCurrentPath, data: gpData)
+                guard result.ok else {
+                    throw "Overwrite failed: \(result.message)"
+                }
                 gpCurrentDict = restored
+                Alertinator.shared.alert(title: "Successfully restored Liquid Glass!", body: "Reboot your device to see any changes")
             } else {
                 throw "No Global Prefs file found!"
             }

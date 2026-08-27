@@ -17,6 +17,18 @@ struct carcolorentry {
 }
 
 enum carparser {
+    static func requireRange(_ data: Data, _ off: Int, _ count: Int) throws {
+        guard off >= 0, count >= 0,
+              count <= data.count,
+              off <= data.count - count else {
+            throw NSError(
+                domain: "CAR",
+                code: 99,
+                userInfo: [NSLocalizedDescriptionKey: "file is truncated or has invalid offsets"]
+            )
+        }
+    }
+
     static func tou32be(_ data: Data, _ off: Int) -> UInt32 {
         (UInt32(data[off]) << 24) |
         (UInt32(data[off + 1]) << 16) |
@@ -30,6 +42,7 @@ enum carparser {
     }
 
     static func parse(_ data: Data) throws -> [carcolorentry] {
+        try requireRange(data, 0, 0x1c)
         let magic = String(bytes: data[0..<8], encoding: .ascii)
         guard magic == "BOMStore" else {
             throw NSError(domain: "CAR", code: 1, userInfo: [NSLocalizedDescriptionKey: "invalid file"])
@@ -38,15 +51,18 @@ enum carparser {
         let idxoff = Int(tou32be(data, 0x10))
         let varoff = Int(tou32be(data, 0x18))
 
+        try requireRange(data, varoff, 4)
         let varcount = Int(tou32be(data, varoff))
         var p = varoff + 4
 
         var blocks: [String: Int] = [:]
 
         for _ in 0..<varcount {
+            try requireRange(data, p, 5)
             let id = Int(tou32be(data, p)); p += 4
             let len = Int(data[p]); p += 1
 
+            try requireRange(data, p, len)
             let name = String(bytes: data[p..<p+len], encoding: .ascii) ?? ""
             p += len
 
@@ -57,23 +73,34 @@ enum carparser {
             throw NSError(domain: "CAR", code: 2)
         }
 
+        try requireRange(data, idxoff, 4)
         let nptr = Int(tou32be(data, idxoff))
         var ptrs: [(Int, Int)] = []
 
         for i in 0..<nptr {
+            try requireRange(data, idxoff + 4 + i*8, 8)
             let off = Int(tou32be(data, idxoff + 4 + i*8))
             let len = Int(tou32be(data, idxoff + 4 + i*8 + 4))
+            try requireRange(data, off, len)
             ptrs.append((off, len))
         }
 
+        guard colorsblock >= 0, colorsblock < ptrs.count else {
+            throw NSError(domain: "CAR", code: 5)
+        }
         let root = ptrs[colorsblock]
 
+        try requireRange(data, root.0, 12)
         let treemagic = String(bytes: data[root.0..<root.0+4], encoding: .ascii)
         guard treemagic == "tree" else { throw NSError(domain: "CAR", code: 3) }
 
         let childid = Int(tou32be(data, root.0 + 8))
+        guard childid >= 0, childid < ptrs.count else {
+            throw NSError(domain: "CAR", code: 6)
+        }
         let child = ptrs[childid]
 
+        try requireRange(data, child.0, 4)
         let isleaf = tou16be(data, child.0)
         let count = Int(tou16be(data, child.0 + 2))
 
@@ -83,10 +110,15 @@ enum carparser {
 
         for i in 0..<count {
             let eOff = child.0 + 12 + i*8
+            try requireRange(data, eOff, 8)
 
             let valblk = Int(tou32be(data, eOff))
             let keyblk = Int(tou32be(data, eOff + 4))
 
+            guard valblk >= 0, valblk < ptrs.count,
+                  keyblk >= 0, keyblk < ptrs.count else {
+                throw NSError(domain: "CAR", code: 7)
+            }
             let key = ptrs[keyblk]
             let val = ptrs[valblk]
 
@@ -101,6 +133,7 @@ enum carparser {
             let name = String(bytes: data[s..<e], encoding: .ascii) ?? "?"
 
             let cOff = val.0 + 8
+            try requireRange(data, cOff, 4)
 
             let b = data[cOff]
             let g = data[cOff+1]
@@ -281,8 +314,18 @@ struct SystemColor: View {
     }
 
     func apply() {
+        guard mgr.sbxready || mgr.vfsready else {
+            status = "Eagle access is not ready"
+            return
+        }
+
         guard var original = ogdata else {
             status = "No original data"
+            return
+        }
+
+        guard entries.count == parsedentries.count else {
+            status = "Color list changed. Reload before applying."
             return
         }
 
@@ -294,6 +337,10 @@ struct SystemColor: View {
         }
 
         for e in parsedentries {
+            guard e.coloroff >= 0, e.coloroff <= original.count - 4 else {
+                status = "Color offset is no longer valid. Reload before applying."
+                return
+            }
             original[e.coloroff]     = e.b
             original[e.coloroff + 1] = e.g
             original[e.coloroff + 2] = e.r
