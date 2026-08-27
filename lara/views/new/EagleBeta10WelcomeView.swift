@@ -193,8 +193,8 @@ struct EagleBeta10WelcomeView: View {
                 color: .orange,
                 title: LaraL10n.text(en: "Tools repaired", es: "Herramientas reparadas"),
                 detail: LaraL10n.text(
-                    en: "Liquid Glass restore, SpringBoard customization, VFS writes, icon sessions, and daemon work now validate completion.",
-                    es: "La restauración de Liquid Glass, SpringBoard, VFS, iconos y daemons ahora verifican que el trabajo termine."
+                    en: "System tools now verify completion and show clearer results when an action cannot finish.",
+                    es: "Las herramientas del sistema ahora verifican el resultado y muestran mensajes más claros cuando una acción no puede terminar."
                 )
             )
 
@@ -384,7 +384,7 @@ struct EagleBeta10WelcomeView: View {
     private var supportTitle: String {
         switch support.status {
         case .possible:
-            return LaraL10n.text(en: "EXPERIMENTAL", es: "EXPERIMENTAL")
+            return LaraL10n.text(en: "LIMITED TEST", es: "PRUEBA LIMITADA")
         case .testedNeedsMoreTesting:
             return LaraL10n.text(en: "LIMITED TEST", es: "PRUEBA LIMITADA")
         case .supported:
