@@ -372,7 +372,7 @@ struct AppRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name).font(.headline)
-                Text(app.bundleID).font(.caption).foregroundColor(.gray)
+                Text(app.bundleID).font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 4) {
                     switch app.isEncrypted {
                     case .encrypted:

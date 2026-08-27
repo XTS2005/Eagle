@@ -22,10 +22,10 @@ public struct PrimaryButtonStyle: PrimitiveButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .buttonStyle(.plain)
-            .foregroundStyle(isEnabled ? Color(.label) : .gray)
+            .foregroundStyle(isEnabled ? Color.white : Color(.tertiaryLabel))
             .frame(maxWidth: useFullWidth ? .infinity : nil)
             .padding()
-            .background(isEnabled ? color : Color(.systemGray).opacity(0.2), in: AnyShape(shape))
+            .background(isEnabled ? color : Color(.quaternarySystemFill), in: AnyShape(shape))
             .onTapGesture(perform: configuration.trigger)
             .modifier(FadeAnimation())
     }

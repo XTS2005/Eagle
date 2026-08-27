@@ -54,8 +54,12 @@ struct LaraAccessView: View {
                 .font(.subheadline.weight(.semibold))
             Spacer()
         }
-        .padding(compact ? 12 : 16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(compact ? 16 : 20)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var preparationView: some View {
@@ -161,6 +165,10 @@ struct LaraAccessView: View {
         }
         .padding(compact ? 16 : 20)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
     }
 
     private var isBusy: Bool {

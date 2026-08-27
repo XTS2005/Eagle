@@ -23,7 +23,7 @@ public struct ThemedHeaderLabel: View {
             Text(text)
         }
         .fontWeight(.medium)
-        .opacity(0.6)
+        .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top)
     }

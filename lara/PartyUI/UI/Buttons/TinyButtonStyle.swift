@@ -18,7 +18,6 @@ public struct TinyButtonStyle: PrimitiveButtonStyle {
         configuration.label
             .font(.subheadline)
             .foregroundStyle(color)
-            .opacity(0.8)
             .padding(.top, 4)
             .modifier(FadeAnimation())
             .simultaneousGesture(TapGesture().onEnded{

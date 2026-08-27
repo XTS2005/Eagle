@@ -20,15 +20,12 @@ struct LaraHomeView: View {
                     if normalizedToolQuery.isEmpty {
                         VStack(alignment: .leading, spacing: 20) {
                             NavigationLink(destination: auraStudioDestination) {
-                                LaraFeatureCard(
+                                AuraStudioHeroCard(
                                     title: "Aura Studio",
                                     subtitle: LaraL10n.text(
                                         en: "Dynamic Island neon, rainbow, and glow.",
                                         es: "Neón, arcoíris y brillo para Dynamic Island."
                                     ),
-                                    systemImage: "capsule.fill",
-                                    accent: Color(red: 0.46, green: 0.24, blue: 1.00),
-                                    artwork: .aura,
                                     badge: hasSeenAuraStudioBeta10
                                         ? nil
                                         : LaraL10n.text(en: "NEW", es: "NUEVO")
@@ -52,7 +49,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: AnimatedWallpapersView()) {
                                     LaraToolRow(
@@ -63,7 +60,7 @@ struct LaraHomeView: View {
                                     )
                                 }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: PasscodeView(mgr: mgr)) {
                                         LaraToolRow(
@@ -74,7 +71,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: CardView()) {
                                         LaraToolRow(
@@ -85,7 +82,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: DockCustomizerView()) {
                                         LaraToolRow(
@@ -96,7 +93,7 @@ struct LaraHomeView: View {
                                         )
                                     }
 
-                                    Divider().padding(.leading, 62)
+                                    Divider().padding(.leading, 65)
 
                                     NavigationLink(destination: homeLabelColorDestination) {
                                         LaraToolRow(
@@ -118,7 +115,7 @@ struct LaraHomeView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                                        .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
                                 }
                             }
 
@@ -175,11 +172,15 @@ struct LaraHomeView: View {
     }
 
     private var eagleTitle: some View {
-        Text("Eagle")
-            .font(.system(size: 38, weight: .bold, design: .rounded))
-            .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
-            .minimumScaleFactor(0.82)
-            .accessibilityAddTraits(.isHeader)
+        HStack(spacing: 10) {
+            Text("Eagle")
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundStyle(EagleSpectrumStyle.wordmarkGradient)
+                .minimumScaleFactor(0.82)
+                .accessibilityAddTraits(.isHeader)
+
+            EagleSmileyFlower(size: 40)
+        }
     }
 
     private var headerBadges: some View {
@@ -287,7 +288,7 @@ struct LaraHomeView: View {
     private var toolSearchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
             TextField(
@@ -316,7 +317,7 @@ struct LaraHomeView: View {
                     toolSearchQuery = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -329,10 +330,10 @@ struct LaraHomeView: View {
         .padding(.leading, 14)
         .padding(.trailing, toolSearchQuery.isEmpty ? 14 : 4)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
         }
     }
 
@@ -342,7 +343,7 @@ struct LaraHomeView: View {
             VStack(spacing: 9) {
                 Image(systemName: "magnifyingglass")
                     .font(.title2)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 Text(LaraL10n.text(
                     en: "No matching tools",
@@ -362,14 +363,14 @@ struct LaraHomeView: View {
             .padding(.vertical, 34)
             .padding(.horizontal, 18)
             .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .accessibilityElement(children: .combine)
         } else {
             VStack(spacing: 0) {
                 ForEach(filteredToolRoutes) { route in
                     searchResult(for: route)
                     if route != filteredToolRoutes.last {
-                        Divider().padding(.leading, 62)
+                        Divider().padding(.leading, 65)
                     }
                 }
             }
@@ -378,7 +379,7 @@ struct LaraHomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                    .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
             }
         }
     }
@@ -612,12 +613,16 @@ private struct LaraFeatureCard: View {
             .clipped()
             .accessibilityHidden(true)
 
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(height: 1)
+
             HStack(alignment: .center, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 38, height: 38)
-                    .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .foregroundStyle(accent)
+                    .frame(width: 40, height: 40)
+                    .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -632,8 +637,8 @@ private struct LaraFeatureCard: View {
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.tertiary)
             }
             .padding(18)
         }
@@ -641,7 +646,7 @@ private struct LaraFeatureCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
             if let badge {
@@ -825,6 +830,121 @@ private struct LaraFeatureCard: View {
     }
 }
 
+private struct AuraStudioHeroCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let title: String
+    let subtitle: String
+    var badge: String? = nil
+
+    var body: some View {
+        HStack(spacing: 16) {
+            neonCapsule
+
+            VStack(alignment: .leading, spacing: -2) {
+                Text("Aura")
+                Text("Studio")
+            }
+            .font(.system(size: 34, weight: .bold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 6)
+
+            Image(systemName: "chevron.right")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(auraBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(
+            color: .black.opacity(colorScheme == .dark ? 0 : 0.16),
+            radius: 14, x: 0, y: 8
+        )
+        .overlay(alignment: .topTrailing) {
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 25)
+                    .background(Color.white.opacity(0.18), in: Capsule())
+                    .padding(12)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
+    }
+
+    private var auraBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [
+                        Color(red: 0.17, green: 0.11, blue: 0.32),
+                        Color(red: 0.09, green: 0.05, blue: 0.19),
+                    ]
+                    : [
+                        Color(red: 0.44, green: 0.28, blue: 0.86),
+                        Color(red: 0.27, green: 0.15, blue: 0.60),
+                    ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [
+                    (colorScheme == .dark
+                        ? Color(red: 0.42, green: 0.24, blue: 0.86)
+                        : Color(red: 0.70, green: 0.52, blue: 1.0))
+                        .opacity(colorScheme == .dark ? 0.45 : 0.5),
+                    .clear,
+                ],
+                center: UnitPoint(x: 0.26, y: 0.5),
+                startRadius: 4,
+                endRadius: 210
+            )
+        }
+    }
+
+    private var neonCapsule: some View {
+        ZStack {
+            Capsule(style: .continuous)
+                .stroke(Color.purple.opacity(0.30), lineWidth: 15)
+                .frame(width: 128, height: 48)
+                .blur(radius: 14)
+
+            Capsule(style: .continuous)
+                .fill(Color.black)
+                .frame(width: 122, height: 44)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
+                                center: .center
+                            ),
+                            lineWidth: 3
+                        )
+                }
+                .shadow(color: .cyan.opacity(0.5), radius: 10)
+                .shadow(color: .pink.opacity(0.36), radius: 16)
+        }
+        .frame(width: 138, height: 96)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct LaraToolRow: View {
     let title: String
     let subtitle: String
@@ -836,9 +956,9 @@ private struct LaraToolRow: View {
         HStack(spacing: 13) {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(accent)
                 .frame(width: 38, height: 38)
-                .background(accent.opacity(0.11), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -868,10 +988,10 @@ private struct LaraToolRow: View {
             }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)

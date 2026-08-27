@@ -73,7 +73,6 @@ struct EagleBeta10WelcomeView: View {
                 Image(systemName: "bird.fill")
                     .font(.system(size: 42, weight: .bold))
                     .foregroundStyle(.white)
-                    .shadow(color: .cyan.opacity(0.7), radius: 9)
             }
             .accessibilityHidden(true)
 
@@ -317,7 +316,7 @@ struct EagleBeta10WelcomeView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(color)
                 .frame(width: 28, height: 28)
-                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {

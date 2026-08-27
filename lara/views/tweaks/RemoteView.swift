@@ -517,7 +517,7 @@ struct RemoteView: View {
                 Text("Credits")
             }
         }
-        .navigationTitle(Text("Tweaks"))
+        .navigationTitle("RemoteCall")
         .onDisappear {
             if freakyrunning, let proc = mgr.sbProc {
                 stopfreakydog(proc)

@@ -46,12 +46,14 @@ public struct HeaderDropdown: View {
                 }
                 if useItemCount {
                     Text(String(itemCount))
+                        .monospacedDigit()
                         .frame(minWidth: 14)
                         .frame(height: 14)
                         .padding(6)
-                        .background(Color(.secondarySystemBackground), in: .capsule)
+                        .background(Color(.tertiarySystemFill), in: .capsule)
                 }
                 Image(systemName: "chevron.down")
+                    .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24, alignment: .center)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
                     .animation(.easeInOut(duration: 0.2), value: isExpanded)
