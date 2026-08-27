@@ -457,9 +457,9 @@ struct AuraStudioView: View {
             // static renderer and cannot receive this mode.
             return target == .island
         case .tint:
-            return target == .island &&
-                ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 18 &&
-                EagleFeaturePolicy.allows(.islandTint, channel: releaseChannel)
+            // Keep the implementation available for future validation, but do
+            // not expose or reselect Tint in the public Aura Studio build.
+            return false
         }
     }
 

@@ -40,14 +40,22 @@ struct LaraHomeView: View {
                                     .accessibilityAddTraits(.isHeader)
 
                                 VStack(spacing: 0) {
-                                    NavigationLink(destination: DarkBoardView()) {
-                                        LaraToolRow(
-                                            title: LaraL10n.text(en: "Icons", es: "Iconos"),
-                                            subtitle: LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android"),
-                                            systemImage: "square.grid.2x2.fill",
-                                            accent: Color(red: 0.18, green: 0.60, blue: 0.42)
-                                        )
-                                    }
+                                    LaraToolRow(
+                                        title: LaraL10n.text(en: "Icon Studio", es: "Icon Studio"),
+                                        subtitle: LaraL10n.text(
+                                            en: "Themes and custom shapes",
+                                            es: "Temas y formas personalizadas"
+                                        ),
+                                        systemImage: "square.grid.2x2.fill",
+                                        accent: Color(red: 0.18, green: 0.60, blue: 0.42),
+                                        badge: LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE"),
+                                        showsDisclosureIndicator: false
+                                    )
+                                    .opacity(0.62)
+                                    .accessibilityHint(LaraL10n.text(
+                                        en: "Icon Studio is coming soon",
+                                        es: "Icon Studio estará disponible próximamente"
+                                    ))
 
                                     Divider().padding(.leading, 65)
 
@@ -386,15 +394,24 @@ struct LaraHomeView: View {
 
     @ViewBuilder
     private func searchResult(for route: LaraHomeToolRoute) -> some View {
-        NavigationLink {
-            toolDestination(for: route)
-        } label: {
+        if route == .icons {
             toolSearchRow(for: route)
+                .opacity(0.62)
+                .accessibilityHint(LaraL10n.text(
+                    en: "Icon Studio is coming soon",
+                    es: "Icon Studio estará disponible próximamente"
+                ))
+        } else {
+            NavigationLink {
+                toolDestination(for: route)
+            } label: {
+                toolSearchRow(for: route)
+            }
+            .accessibilityHint(LaraL10n.text(
+                en: "Opens \(route.title)",
+                es: "Abre \(route.title)"
+            ))
         }
-        .accessibilityHint(LaraL10n.text(
-            en: "Opens \(route.title)",
-            es: "Abre \(route.title)"
-        ))
     }
 
     private func toolSearchRow(for route: LaraHomeToolRoute) -> some View {
@@ -403,11 +420,14 @@ struct LaraHomeView: View {
             subtitle: route.subtitle,
             systemImage: route.systemImage,
             accent: route.accent,
-            badge: route == .auraStudio && !hasSeenAuraStudioBeta10
-                ? LaraL10n.text(en: "NEW", es: "NUEVO")
-                : (route == .homeLabelColor && !hasSeenHomeLabelColorBeta10
+            badge: route == .icons
+                ? LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE")
+                : (route == .auraStudio && !hasSeenAuraStudioBeta10
                     ? LaraL10n.text(en: "NEW", es: "NUEVO")
-                    : nil)
+                    : (route == .homeLabelColor && !hasSeenHomeLabelColorBeta10
+                        ? LaraL10n.text(en: "NEW", es: "NUEVO")
+                        : nil)),
+            showsDisclosureIndicator: route != .icons
         )
     }
 
@@ -476,7 +496,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
             return LaraL10n.text(en: "App Name Color", es: "Color de nombres")
         case .cards: return LaraL10n.text(en: "Cards", es: "Tarjetas")
         case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
-        case .icons: return LaraL10n.text(en: "Icons", es: "Iconos")
+        case .icons: return "Icon Studio"
         case .dock: return "Dock"
         case .advancedSettings:
             return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas")
@@ -951,6 +971,7 @@ private struct LaraToolRow: View {
     let systemImage: String
     let accent: Color
     var badge: String? = nil
+    var showsDisclosureIndicator = true
 
     var body: some View {
         HStack(spacing: 13) {
@@ -986,9 +1007,11 @@ private struct LaraToolRow: View {
                     )
                     .accessibilityHidden(true)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+            if showsDisclosureIndicator {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -996,9 +1019,7 @@ private struct LaraToolRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(
-            badge == nil
-                ? subtitle
-                : "\(subtitle). \(LaraL10n.text(en: "New", es: "Nuevo"))"
+            badge == nil ? subtitle : "\(subtitle). \(badge ?? "")"
         )
     }
 }
