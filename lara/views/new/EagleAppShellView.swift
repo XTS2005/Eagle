@@ -213,15 +213,7 @@ private struct EagleBeta10AccessView: View {
     private var accessHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                HStack(spacing: 10) {
-                    Text("Eagle")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.82)
-                        .accessibilityAddTraits(.isHeader)
-
-                    EagleBrandMark(size: 48)
-                }
+                EagleWordmark()
 
                 Spacer(minLength: 8)
 
@@ -285,10 +277,10 @@ private struct EagleBeta10AccessView: View {
         HStack(spacing: 13) {
             Image(systemName: systemImage)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(.primary)
                 .frame(width: 38, height: 38)
                 .background(
-                    accent.opacity(0.14),
+                    Color.primary.opacity(0.07),
                     in: RoundedRectangle(cornerRadius: 11, style: .continuous)
                 )
 
@@ -339,7 +331,8 @@ private struct EagleBeta10AccessView: View {
 
                 Text("Text me")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(EagleVisualTheme.accent)
+                    .foregroundStyle(.primary)
+                    .eagleRainbowSweep()
 
                 Spacer(minLength: 8)
 

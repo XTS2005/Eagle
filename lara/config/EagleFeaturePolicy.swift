@@ -67,9 +67,10 @@ enum EagleProductFeature: String, CaseIterable, Identifiable {
 
     var minimumChannel: EagleReleaseChannel {
         switch self {
-        case .prepare, .wallpapers, .completeStyles, .islandGlow, .dockGlow:
+        case .prepare, .wallpapers, .completeStyles, .islandGlow, .dockGlow,
+                .auraRainbow:
             return .stable
-        case .scenes, .auraPulse, .auraRainbow, .homeIconNeon, .homeLabelColor:
+        case .scenes, .auraPulse, .homeIconNeon, .homeLabelColor:
             return .beta
         case .islandTint, .advancedSystemTools:
             return .experimental

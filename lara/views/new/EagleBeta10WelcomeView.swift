@@ -66,7 +66,7 @@ struct EagleBeta10WelcomeView: View {
                     .foregroundStyle(EagleVisualTheme.accent)
                     .multilineTextAlignment(.center)
 
-                Text(LaraL10n.text(en: "VERSION 1.0.1", es: "VERSIÓN 1.0.1"))
+                Text(LaraL10n.text(en: "VERSION 1.0.2", es: "VERSIÓN 1.0.2"))
                     .font(.caption.weight(.black))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
@@ -74,8 +74,8 @@ struct EagleBeta10WelcomeView: View {
                     .background(EagleVisualTheme.accent, in: Capsule())
 
                 Text(LaraL10n.text(
-                    en: "A more reliable core, clearer results, and a refined interface.",
-                    es: "Un núcleo más confiable, resultados claros y una interfaz refinada."
+                    en: "A cleaner identity, accurate Aura previews, and an independent system Island control.",
+                    es: "Una identidad más limpia, previews de Aura precisas y control independiente de la Island del sistema."
                 ))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -130,82 +130,82 @@ struct EagleBeta10WelcomeView: View {
             )
 
             welcomeRow(
-                icon: "shield.checkered",
-                color: .green,
-                title: LaraL10n.text(en: "Safer Prepare", es: "Preparación más segura"),
-                detail: LaraL10n.text(
-                    en: "Device, build, cache, and session checks now fail safely instead of continuing with stale data.",
-                    es: "Las verificaciones de dispositivo, build, caché y sesión ahora se detienen de forma segura ante datos antiguos."
-                )
-            )
-
-            welcomeRow(
-                icon: "iphone.and.arrow.forward",
-                color: .green,
-                title: LaraL10n.text(en: "iPhone 16 restored", es: "iPhone 16 restaurado"),
-                detail: LaraL10n.text(
-                    en: "Prepare is available again on iPhone 16 with iOS 18.5 through the established stable route.",
-                    es: "Preparar vuelve a estar disponible en iPhone 16 con iOS 18.5 mediante la ruta estable existente."
-                )
-            )
-
-            welcomeRow(
-                icon: "checkmark.circle",
-                color: .cyan,
-                title: LaraL10n.text(en: "Verified results", es: "Resultados verificados"),
-                detail: LaraL10n.text(
-                    en: "Advanced options no longer report Applied when access, a write, or a protected call actually failed.",
-                    es: "Las opciones avanzadas ya no muestran Aplicado cuando el acceso, la escritura o la llamada protegida fallaron."
-                )
-            )
-
-            welcomeRow(
-                icon: "capsule.fill",
-                color: .purple,
-                title: LaraL10n.text(en: "Dock and Dynamic Island", es: "Dock y Dynamic Island"),
-                detail: LaraL10n.text(
-                    en: "Their stable apply paths remain intact, with safer fresh SpringBoard sessions around protected work.",
-                    es: "Sus rutas estables permanecen intactas, con sesiones nuevas de SpringBoard para el trabajo protegido."
-                )
-            )
-
-            welcomeRow(
-                icon: "iphone.gen3",
-                color: .blue,
-                title: LaraL10n.text(en: "Expanded Aura fit", es: "Aura mejor adaptada"),
-                detail: LaraL10n.text(
-                    en: "Dynamic Island and Dock geometry now adapts to iPhone 14 Pro and Pro Max. The verified iPhone 16 Pro profile remains unchanged.",
-                    es: "La geometría de Dynamic Island y Dock ahora se adapta al iPhone 14 Pro y Pro Max. El perfil verificado del iPhone 16 Pro permanece intacto."
-                )
-            )
-
-            welcomeRow(
-                icon: "wrench.and.screwdriver.fill",
-                color: .orange,
-                title: LaraL10n.text(en: "Tools repaired", es: "Herramientas reparadas"),
-                detail: LaraL10n.text(
-                    en: "System tools now verify completion and show clearer results when an action cannot finish.",
-                    es: "Las herramientas del sistema ahora verifican el resultado y muestran mensajes más claros cuando una acción no puede terminar."
-                )
-            )
-
-            welcomeRow(
-                icon: "paintbrush.fill",
-                color: .pink,
-                title: LaraL10n.text(en: "Interface refinement", es: "Interfaz refinada"),
-                detail: LaraL10n.text(
-                    en: "Home, Aura, Styles, Tweaks, shared controls, and Wallpapers now use a cleaner and more consistent presentation.",
-                    es: "Inicio, Aura, Estilos, Tweaks, controles compartidos y Fondos ahora tienen una presentación más limpia y coherente."
-                )
-            )
-
-            welcomeRow(
-                icon: "hourglass",
+                icon: "bird.fill",
                 color: .indigo,
-                title: LaraL10n.text(en: "Temporary changes", es: "Cambios temporales"),
+                title: LaraL10n.text(en: "Refined Eagle identity", es: "Identidad Eagle refinada"),
                 detail: LaraL10n.text(
-                    en: "Icon Studio is coming soon, and Aura Tint was temporarily removed. Glow, Pulse, and Rainbow stay available where compatible.",
-                    es: "Icon Studio estará disponible próximamente y Aura Tint se retiró temporalmente. Glow, Pulse y Rainbow siguen disponibles según compatibilidad."
+                    en: "The Eagle mark and wordmark now share a restrained spectrum reflection and adapt cleanly to light and dark mode.",
+                    es: "El símbolo y nombre Eagle ahora comparten un reflejo de espectro sutil y se adaptan correctamente a los modos claro y oscuro."
+                )
+            )
+
+            welcomeRow(
+                icon: "waveform.path",
+                color: .cyan,
+                title: LaraL10n.text(en: "Accurate Aura preview", es: "Preview de Aura precisa"),
+                detail: LaraL10n.text(
+                    en: "Glow stays steady, Pulse breathes, and Rainbow moves only when that mode is selected. Preview animation pauses when it is not needed.",
+                    es: "Glow permanece fijo, Pulse respira y Rainbow se mueve solo cuando ese modo está seleccionado. La animación se pausa cuando no hace falta."
+                )
+            )
+
+            welcomeRow(
+                icon: "eye.slash.fill",
+                color: .purple,
+                title: LaraL10n.text(en: "Independent system Island", es: "Island del sistema independiente"),
+                detail: LaraL10n.text(
+                    en: "Hide or restore the system Island without changing its Aura profile, then choose Respring now or later after Eagle verifies the saved setting.",
+                    es: "Oculta o restaura la Island del sistema sin cambiar su perfil Aura y elige Respring ahora o después cuando Eagle verifique el ajuste guardado."
+                )
+            )
+
+            welcomeRow(
+                icon: "rectangle.3.group.fill",
+                color: .blue,
+                title: LaraL10n.text(en: "Cleaner visual system", es: "Sistema visual más limpio"),
+                detail: LaraL10n.text(
+                    en: "Home, Access, Aura cards, navigation, and controls now use calmer adaptive contrast and more consistent surfaces.",
+                    es: "Inicio, Acceso, tarjetas de Aura, navegación y controles ahora usan contraste adaptativo más calmado y superficies coherentes."
+                )
+            )
+
+            welcomeRow(
+                icon: "slider.horizontal.3",
+                color: .indigo,
+                title: LaraL10n.text(en: "Clear release channels", es: "Canales de versión claros"),
+                detail: LaraL10n.text(
+                    en: "Choose Stable, Advanced, or Laboratory directly from Home. Eagle warns which features become unavailable before moving to a lower channel.",
+                    es: "Elige Stable, Advanced o Laboratory directamente desde Inicio. Eagle avisa qué funciones dejarán de estar disponibles antes de bajar de canal."
+                )
+            )
+
+            welcomeRow(
+                icon: "photo.on.rectangle.angled",
+                color: .teal,
+                title: LaraL10n.text(en: "More reliable wallpapers", es: "Fondos más confiables"),
+                detail: LaraL10n.text(
+                    en: "Wallpaper installs now validate their result, identify iOS 26-only entries correctly, and report when the system gallery needs to be opened manually.",
+                    es: "La instalación de fondos ahora valida el resultado, identifica correctamente los exclusivos de iOS 26 y avisa cuando debes abrir manualmente la galería del sistema."
+                )
+            )
+
+            welcomeRow(
+                icon: "checkmark.shield.fill",
+                color: .green,
+                title: LaraL10n.text(en: "Stable paths preserved", es: "Rutas estables preservadas"),
+                detail: LaraL10n.text(
+                    en: "Prepare and device compatibility, Dock and Dynamic Island application paths, and the verified iPhone 16 Pro profile were not changed.",
+                    es: "Preparar y la compatibilidad de dispositivos, las rutas de aplicación del Dock y Dynamic Island, y el perfil verificado del iPhone 16 Pro no cambiaron."
+                )
+            )
+
+            welcomeRow(
+                icon: "person.crop.circle.badge.checkmark",
+                color: .orange,
+                title: LaraL10n.text(en: "Open-source credit", es: "Crédito de código abierto"),
+                detail: LaraL10n.text(
+                    en: "Cyanide and 0xjohnny are now credited for the OTA implementation inherited through Lara, including a notice inside the app.",
+                    es: "Cyanide y 0xjohnny ahora reciben crédito por la implementación OTA heredada mediante Lara, incluido un aviso dentro de la app."
                 )
             )
         }

@@ -53,7 +53,7 @@ struct AnimatedWallpapersView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Modo", selection: $mode) {
+            Picker(LaraL10n.text(en: "Mode", es: "Modo"), selection: $mode) {
                 ForEach(WallpaperMode.allCases) { option in
                     Text(option.title).tag(option)
                 }
@@ -70,7 +70,7 @@ struct AnimatedWallpapersView: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Fondos")
+        .navigationTitle(LaraL10n.text(en: "Wallpapers", es: "Fondos"))
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: mode) { selectedMode in
             if selectedMode == .explore {
@@ -86,18 +86,18 @@ struct AnimatedWallpapersView: View {
         .onDisappear {
             player?.pause()
         }
-        .alert("Fondos animados", isPresented: Binding(
+        .alert(LaraL10n.text(en: "Animated wallpapers", es: "Fondos animados"), isPresented: Binding(
             get: { message != nil },
             set: { if !$0 { message = nil } }
         )) {
             if installer.didInstall {
-                Button("Abrir Fondos") {
+                Button(LaraL10n.text(en: "Open Wallpapers", es: "Abrir Fondos")) {
                     message = nil
                     installer.openWallpaperPicker()
                 }
-                Button("Después", role: .cancel) { message = nil }
+                Button(LaraL10n.text(en: "Later", es: "Después"), role: .cancel) { message = nil }
             } else {
-                Button("Aceptar", role: .cancel) { message = nil }
+                Button(LaraL10n.text(en: "OK", es: "Aceptar"), role: .cancel) { message = nil }
             }
         } message: {
             Text(message ?? "")
@@ -132,9 +132,15 @@ struct AnimatedWallpapersView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Tu video, en la pantalla de bloqueo")
+            Text(LaraL10n.text(
+                en: "Your video, on the Lock Screen",
+                es: "Tu video, en la pantalla de bloqueo"
+            ))
                 .font(.title2.weight(.bold))
-            Text("Elige un clip corto. Eagle lo adapta y lo agrega a la colección de fondos de iOS.")
+            Text(LaraL10n.text(
+                en: "Pick a short clip. Eagle adapts it and adds it to the iOS wallpaper collection.",
+                es: "Elige un clip corto. Eagle lo adapta y lo agrega a la colección de fondos de iOS."
+            ))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -158,7 +164,7 @@ struct AnimatedWallpapersView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
                         .font(.system(size: 38, weight: .medium))
-                    Text("Selecciona un video")
+                    Text(LaraL10n.text(en: "Select a video", es: "Selecciona un video"))
                         .font(.headline)
                 }
                 .foregroundStyle(.white.opacity(0.82))
@@ -190,9 +196,12 @@ struct AnimatedWallpapersView: View {
         VStack(spacing: 0) {
             Toggle(isOn: $autoReverses) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Repetición suave")
+                    Text(LaraL10n.text(en: "Smooth loop", es: "Repetición suave"))
                         .font(.body.weight(.medium))
-                    Text("El video vuelve hacia atrás antes de comenzar otra vez.")
+                    Text(LaraL10n.text(
+                        en: "The video plays backward before starting over.",
+                        es: "El video vuelve hacia atrás antes de comenzar otra vez."
+                    ))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -253,7 +262,7 @@ struct AnimatedWallpapersView: View {
                     }
                     ProgressView(value: installer.progress)
 
-                    Button("Cancelar", role: .cancel) {
+                    Button(LaraL10n.text(en: "Cancel", es: "Cancelar"), role: .cancel) {
                         installer.cancel()
                     }
                     .font(.footnote.weight(.medium))
@@ -265,11 +274,14 @@ struct AnimatedWallpapersView: View {
 
     private var attribution: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Hasta 12 segundos. El audio no se incluye.")
+            Text(LaraL10n.text(
+                en: "Up to 12 seconds. Audio is not included.",
+                es: "Hasta 12 segundos. El audio no se incluye."
+            ))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-            Link("Tecnología basada en Pocket Poster", destination: URL(string: "https://github.com/leminlimez/Pocket-Poster")!)
+            Link(LaraL10n.text(en: "Powered by Pocket Poster", es: "Tecnología basada en Pocket Poster"), destination: URL(string: "https://github.com/leminlimez/Pocket-Poster")!)
                 .font(.footnote.weight(.medium))
         }
         .padding(.top, 4)
@@ -418,15 +430,20 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
 
                 await MainActor.run {
-                    _ = PosterBoardWriter.refreshCollections()
+                    let refreshed = PosterBoardWriter.refreshCollections()
                     self.progress = 1
                     self.progressLabel = LaraL10n.text(en: "Done", es: "Listo")
                     self.isWorking = false
                     self.didInstall = true
-                    self.resultMessage = LaraL10n.text(
-                        en: "The wallpaper was verified and PosterBoard refreshed its collection. You can now select it in Wallpapers.",
-                        es: "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
-                    )
+                    self.resultMessage = refreshed
+                        ? LaraL10n.text(
+                            en: "The wallpaper was verified and PosterBoard refreshed its collection. You can now select it in Wallpapers.",
+                            es: "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
+                        )
+                        : LaraL10n.text(
+                            en: "The wallpaper was verified and installed, but PosterBoard could not refresh automatically. Open Wallpapers; if it is still missing, restart your iPhone.",
+                            es: "El fondo se verificó e instaló, pero PosterBoard no pudo actualizarse automáticamente. Abre Fondos; si todavía no aparece, reinicia tu iPhone."
+                        )
                 }
             } catch {
                 await MainActor.run {

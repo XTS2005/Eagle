@@ -5,6 +5,12 @@ import Darwin
 private struct AuraStudioNotice: Identifiable {
     let id = UUID()
     let message: String
+    let offersRespring: Bool
+
+    init(message: String, offersRespring: Bool = false) {
+        self.message = message
+        self.offersRespring = offersRespring
+    }
 }
 
 struct AuraStudioDisplayGeometry {
@@ -378,8 +384,6 @@ struct AuraStudioView: View {
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
     @State private var isApplying = false
-    @State private var previewPulse = false
-    @State private var previewRainbowHue = 0.0
     @State private var notice: AuraStudioNotice?
     @State private var applyStage = ""
     @State private var applySafetyBlocked = false
@@ -461,7 +465,8 @@ struct AuraStudioView: View {
         case .rainbow:
             // Rainbow is Island-only. Dock keeps its independently verified
             // static renderer and cannot receive this mode.
-            return target == .island
+            return target == .island &&
+                EagleFeaturePolicy.allows(.auraRainbow, channel: releaseChannel)
         case .tint:
             // Keep the implementation available for future validation, but do
             // not expose or reselect Tint in the public Aura Studio build.
@@ -630,10 +635,53 @@ struct AuraStudioView: View {
     private func previewSpectrumHue(for mode: AuraStudioMode) -> Double {
         switch mode {
         case .rainbow:
-            return previewRainbowHue
+            return auraSpectrumPhase(at: Date())
         case .glow, .pulse, .tint:
             return 0
         }
+    }
+
+    /// Wall-clock rainbow phase (0…1) for the live preview. Driven by a
+    /// TimelineView instead of a repeating `withAnimation`, so the hue only
+    /// moves while Rainbow is selected and can never leak onto Glow or Pulse.
+    private func auraSpectrumPhase(at date: Date) -> Double {
+        let cycles = date.timeIntervalSinceReferenceDate / 5.2
+        return cycles - floor(cycles)
+    }
+
+    /// Smooth breathing level (0.58…1.0) for Pulse, from wall-clock time.
+    private func auraPulseLevel(at date: Date) -> Double {
+        let cycles = date.timeIntervalSinceReferenceDate / 2.3
+        let phase = cycles - floor(cycles)
+        let wave = 0.5 - (0.5 * cos(phase * 2 * Double.pi))
+        return 0.58 + (0.42 * wave)
+    }
+
+    /// Full-spectrum ring that circles the loop seamlessly (red → red). Rotating
+    /// its `angle` makes the neon travel around the island for Rainbow; other
+    /// modes keep the steady solid surface colour.
+    private func islandRingStyle(for mode: AuraStudioMode, angle: Double) -> AnyShapeStyle {
+        guard mode == .rainbow else {
+            return AnyShapeStyle(color(for: .island))
+        }
+        return AnyShapeStyle(AngularGradient(
+            colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red],
+            center: .center,
+            angle: .degrees(angle)
+        ))
+    }
+
+    /// Interior fill: the same rotating spectrum for Rainbow so the aura turns
+    /// as one piece; the existing black/tint fill for every other mode.
+    private func islandFillStyle(for mode: AuraStudioMode, angle: Double) -> AnyShapeStyle {
+        guard mode == .rainbow else {
+            return islandPreviewFillStyle(for: mode)
+        }
+        return AnyShapeStyle(AngularGradient(
+            colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red],
+            center: .center,
+            angle: .degrees(angle)
+        ))
     }
 
     private var selectedFlags: UInt32 {
@@ -695,7 +743,23 @@ struct AuraStudioView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isApplying)
         .alert(item: $notice) { notice in
-            Alert(
+            if notice.offersRespring {
+                return Alert(
+                    title: Text("Aura Studio"),
+                    message: Text(notice.message),
+                    primaryButton: .default(Text(LaraL10n.text(
+                        en: "Respring now",
+                        es: "Respring ahora"
+                    ))) {
+                        mgr.respring()
+                    },
+                    secondaryButton: .cancel(Text(LaraL10n.text(
+                        en: "Later",
+                        es: "Después"
+                    )))
+                )
+            }
+            return Alert(
                 title: Text("Aura Studio"),
                 message: Text(notice.message),
                 dismissButton: .default(Text("OK"))
@@ -755,14 +819,6 @@ struct AuraStudioView: View {
                 )
             }
 #endif
-            if !reduceMotion {
-                withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
-                    previewPulse = true
-                }
-                withAnimation(.linear(duration: 5.2).repeatForever(autoreverses: false)) {
-                    previewRainbowHue = 1.0
-                }
-            }
         }
         .onChange(of: releaseChannelRaw) { _ in
             guard !isApplying else { return }
@@ -777,9 +833,9 @@ struct AuraStudioView: View {
         HStack(spacing: 12) {
             Image(systemName: "eye.slash.fill")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.primary)
                 .frame(width: 36, height: 36)
-                .background(Color.cyan.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LaraL10n.text(
@@ -880,12 +936,12 @@ struct AuraStudioView: View {
 
         notice = AuraStudioNotice(message: LaraL10n.text(
             en: enabled
-                ? "The system Island will be hidden after a respring. Your Aura profile is unchanged."
-                : "The system Island will return after a respring. Your Aura profile is unchanged.",
+                ? "The system Island will be hidden after a respring. To complete the change, manually restart your iPhone once more after the respring. Your Aura profile is unchanged."
+                : "The system Island will return after a respring. To complete the change, manually restart your iPhone once more after the respring. Your Aura profile is unchanged.",
             es: enabled
-                ? "La Island del sistema se ocultará después de un respring. Tu perfil Aura no cambió."
-                : "La Island del sistema volverá después de un respring. Tu perfil Aura no cambió."
-        ))
+                ? "La Island del sistema se ocultará después de un respring. Para completar el cambio, reinicia manualmente tu iPhone una vez más después del respring. Tu perfil Aura no cambió."
+                : "La Island del sistema volverá después de un respring. Para completar el cambio, reinicia manualmente tu iPhone una vez más después del respring. Tu perfil Aura no cambió."
+        ), offersRespring: true)
     }
 
     private func plistBoolean(_ value: Any?) -> Bool? {
@@ -898,16 +954,16 @@ struct AuraStudioView: View {
         VStack(spacing: 11) {
             HStack(spacing: 8) {
                 Image(systemName: selectedTarget == .island ? "capsule.fill" : "dock.rectangle")
-                    .foregroundStyle(previewLightColor)
+                    .foregroundStyle(.primary)
                 Text(selectedTarget.title)
                     .font(.headline)
                 Spacer()
                 Text(selectedMode.title)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(previewLightColor)
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(previewLightColor.opacity(0.12), in: Capsule())
+                    .background(Color.primary.opacity(0.07), in: Capsule())
             }
 
             ZStack {
@@ -935,61 +991,80 @@ struct AuraStudioView: View {
                     .blendMode(.screen)
                     .allowsHitTesting(false)
 
-                if selectedTarget == .island {
-                    let islandMode = mode(for: .island)
-                    ZStack {
-                        Capsule()
-                            .stroke(previewRingStyle(for: .island), lineWidth: 12)
-                            .blur(radius: 10)
-                            .opacity(0.48)
-                        Capsule()
-                            .fill(islandPreviewFillStyle(for: islandMode))
-                        Capsule()
-                            .stroke(previewRingStyle(for: .island), lineWidth: 4)
-                        if islandMode.fillsIslandBackground {
-                            HStack(spacing: 6) {
-                                Capsule()
-                                    .fill(.black)
-                                    .frame(width: 58, height: 17)
-                                Circle()
-                                    .fill(.black)
-                                    .frame(width: 17, height: 17)
-                            }
-                            .offset(x: 4)
-                        }
-                    }
-                    .frame(width: 190, height: 55)
-                    .shadow(
-                        color: islandMode == .rainbow ? .clear : previewLightColor,
-                        radius: 14
-                    )
-                    .hueRotation(.degrees(previewSpectrumHue(for: islandMode) * 360))
-                    .opacity(islandMode == .pulse ? (previewPulse ? 1 : 0.58) : 1)
-                } else {
-                    let dockMode = mode(for: .dock)
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 21, style: .continuous)
-                            .fill(Color.white.opacity(0.075))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 21, style: .continuous)
-                                    .fill(previewLightColor.opacity(0.09))
-                            }
-                        HStack(spacing: 13) {
-                            ForEach(0..<4, id: \.self) { index in
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Color.white.opacity(0.82 - Double(index) * 0.08))
-                                    .frame(width: 40, height: 40)
+                TimelineView(.animation(
+                    minimumInterval: 1.0 / 30.0,
+                    paused: reduceMotion ||
+                        (selectedMode != .pulse && selectedMode != .rainbow)
+                )) { context in
+                    let now = context.date
+                    if selectedTarget == .island {
+                        let islandMode = mode(for: .island)
+                        // Rainbow spins the neon smoothly around the island;
+                        // Pulse only breathes the brightness; Glow stays a
+                        // steady solid colour.
+                        let angle = islandMode == .rainbow
+                            ? auraSpectrumPhase(at: now) * 360
+                            : 0
+                        let level = islandMode == .pulse ? auraPulseLevel(at: now) : 1
+                        let ring = islandRingStyle(for: islandMode, angle: angle)
+                        let fill = islandFillStyle(for: islandMode, angle: angle)
+
+                        ZStack {
+                            Capsule()
+                                .stroke(ring, lineWidth: 12)
+                                .blur(radius: 10)
+                                .opacity(0.48)
+                            Capsule()
+                                .fill(fill)
+                            Capsule()
+                                .stroke(ring, lineWidth: 4)
+                            if islandMode.fillsIslandBackground {
+                                HStack(spacing: 6) {
+                                    Capsule()
+                                        .fill(.black)
+                                        .frame(width: 58, height: 17)
+                                    Circle()
+                                        .fill(.black)
+                                        .frame(width: 17, height: 17)
+                                }
+                                .offset(x: 4)
                             }
                         }
+                        .frame(width: 190, height: 55)
+                        .shadow(
+                            color: islandMode == .rainbow ? .clear : previewLightColor,
+                            radius: 14
+                        )
+                        .opacity(level)
+                    } else {
+                        let dockMode = mode(for: .dock)
+                        let hue = dockMode == .rainbow ? auraSpectrumPhase(at: now) : 0
+                        let level = dockMode == .pulse ? auraPulseLevel(at: now) : 1
+
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                .fill(Color.white.opacity(0.075))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                        .fill(previewLightColor.opacity(0.09))
+                                }
+                            HStack(spacing: 13) {
+                                ForEach(0..<4, id: \.self) { index in
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color.white.opacity(0.82 - Double(index) * 0.08))
+                                        .frame(width: 40, height: 40)
+                                }
+                            }
+                        }
+                        .frame(width: 286, height: 78)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                                .stroke(previewRingStyle(for: .dock), lineWidth: 3)
+                        }
+                        .shadow(color: previewLightColor.opacity(0.85), radius: 13)
+                        .hueRotation(.degrees(hue * 360))
+                        .opacity(level)
                     }
-                    .frame(width: 286, height: 78)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 21, style: .continuous)
-                            .stroke(previewRingStyle(for: .dock), lineWidth: 3)
-                    }
-                    .shadow(color: previewLightColor.opacity(0.85), radius: 13)
-                    .hueRotation(.degrees(previewSpectrumHue(for: dockMode) * 360))
-                    .opacity(dockMode == .pulse ? (previewPulse ? 1 : 0.58) : 1)
                 }
             }
             .frame(height: 145)
@@ -1173,7 +1248,6 @@ struct AuraStudioView: View {
     private func profileButton(for target: AuraStudioTarget) -> some View {
         let isSelected = !editingIcons && selectedTarget == target
         let isHardwareAvailable = target != .island || islandProfileAvailable
-        let profileColor = previewLightColor(for: target)
 
         return Button {
             editingIcons = false
@@ -1182,9 +1256,9 @@ struct AuraStudioView: View {
             HStack(spacing: 7) {
                 Image(systemName: target == .island ? "capsule.fill" : "dock.rectangle")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(profileColor)
+                    .foregroundStyle(.primary)
                     .frame(width: 28, height: 28)
-                    .background(profileColor.opacity(0.13), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                 Text(target == .island ? "Island" : target.title)
                     .font(.caption.weight(.semibold))
@@ -1195,12 +1269,12 @@ struct AuraStudioView: View {
             .frame(height: 52)
             .frame(maxWidth: .infinity)
             .background(
-                isSelected ? profileColor.opacity(0.10) : Color(uiColor: .tertiarySystemGroupedBackground),
+                isSelected ? Color.primary.opacity(0.08) : Color(uiColor: .tertiarySystemGroupedBackground),
                 in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .strokeBorder(isSelected ? profileColor.opacity(0.65) : .clear, lineWidth: 1.5)
+                    .strokeBorder(isSelected ? Color.primary.opacity(0.35) : .clear, lineWidth: 1.5)
             }
             .contentShape(Rectangle())
         }
@@ -1226,9 +1300,9 @@ struct AuraStudioView: View {
             HStack(spacing: 7) {
                 Image(systemName: "app.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.primary)
                     .frame(width: 28, height: 28)
-                    .background(Color.cyan.opacity(0.13), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 Text(LaraL10n.text(en: "Icons", es: "Iconos"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -1239,13 +1313,13 @@ struct AuraStudioView: View {
             .frame(maxWidth: .infinity)
             .background(
                 editingIcons
-                    ? Color.cyan.opacity(0.10)
+                    ? Color.primary.opacity(0.08)
                     : Color(uiColor: .tertiarySystemGroupedBackground),
                 in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .strokeBorder(editingIcons ? Color.cyan.opacity(0.65) : .clear, lineWidth: 1.5)
+                    .strokeBorder(editingIcons ? Color.primary.opacity(0.35) : .clear, lineWidth: 1.5)
             }
             .contentShape(Rectangle())
         }

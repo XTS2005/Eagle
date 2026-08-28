@@ -9,13 +9,18 @@ struct LaraHomeView: View {
     private var hasSeenHomeLabelColorBeta10 = false
     @State private var toolSearchQuery = ""
     @FocusState private var isToolSearchFocused: Bool
+    @AppStorage(EagleReleaseChannel.storageKey)
+    private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @State private var pendingDowngrade: EagleReleaseChannel?
+    @State private var flashChannel: EagleReleaseChannel?
+    @State private var flashLevel: Double = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     header
-                    toolSearchField
+                    channelSelector
 
                     if normalizedToolQuery.isEmpty {
                         VStack(alignment: .leading, spacing: 20) {
@@ -152,6 +157,31 @@ struct LaraHomeView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar(.hidden, for: .navigationBar)
+            .alert(
+                LaraL10n.text(en: "You'll lose features", es: "Perderás funciones"),
+                isPresented: Binding(
+                    get: { pendingDowngrade != nil },
+                    set: { if !$0 { pendingDowngrade = nil } }
+                ),
+                presenting: pendingDowngrade
+            ) { target in
+                Button(role: .destructive) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        channelRaw = target.rawValue
+                    }
+                    flashChannelActivation(target)
+                    pendingDowngrade = nil
+                } label: {
+                    Text(LaraL10n.text(en: "Switch anyway", es: "Cambiar igualmente"))
+                }
+                Button(role: .cancel) {
+                    pendingDowngrade = nil
+                } label: {
+                    Text(LaraL10n.text(en: "Cancel", es: "Cancelar"))
+                }
+            } message: { target in
+                Text(downgradeMessage(for: target))
+            }
         }
     }
 
@@ -180,15 +210,7 @@ struct LaraHomeView: View {
     }
 
     private var eagleTitle: some View {
-        HStack(spacing: 10) {
-            Text("Eagle")
-                .font(.system(size: 38, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .minimumScaleFactor(0.82)
-                .accessibilityAddTraits(.isHeader)
-
-            EagleBrandMark(size: 48)
-        }
+        EagleWordmark()
     }
 
     private var headerBadges: some View {
@@ -262,6 +284,120 @@ struct LaraHomeView: View {
             mgr.sbxready
                 ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
                 : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
+        )
+    }
+
+    private var currentChannel: EagleReleaseChannel {
+        EagleFeaturePolicy.channel(from: channelRaw)
+    }
+
+    // Three equal, full-width segments (Stable / Advanced / Laboratory) that
+    // replace the old search bar. The visual shell only flips the stored
+    // channel and warns on a downgrade — the deeper feature handling lives
+    // elsewhere.
+    private var channelSelector: some View {
+        HStack(spacing: 6) {
+            ForEach(EagleReleaseChannel.allCases) { channel in
+                channelButton(channel)
+            }
+        }
+        .padding(6)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(LaraL10n.text(en: "Feature channel", es: "Canal de funciones"))
+    }
+
+    private func channelButton(_ channel: EagleReleaseChannel) -> some View {
+        let isSelected = currentChannel == channel
+        return Button {
+            selectChannel(channel)
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: channelIcon(channel))
+                    .font(.subheadline.weight(.semibold))
+                Text(channel.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .foregroundStyle(
+                isSelected
+                    ? AnyShapeStyle(Color(uiColor: .secondarySystemGroupedBackground))
+                    : AnyShapeStyle(Color.primary)
+            )
+            .background(
+                isSelected ? Color.primary : Color.primary.opacity(0.05),
+                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+            )
+            .overlay {
+                // Green confirmation flash that fades out on selection.
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Color.green.opacity(
+                        0.55 * (flashChannel == channel ? flashLevel : 0)
+                    ))
+                    .allowsHitTesting(false)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
+        .accessibilityLabel(channel.title)
+        .accessibilityValue(
+            isSelected ? LaraL10n.text(en: "Active", es: "Activo") : ""
+        )
+        .accessibilityHint(channel.explanation)
+    }
+
+    private func channelIcon(_ channel: EagleReleaseChannel) -> String {
+        switch channel {
+        case .stable: return "checkmark.shield.fill"
+        case .beta: return "sparkles"
+        case .experimental: return "wand.and.rays"
+        }
+    }
+
+    private func selectChannel(_ channel: EagleReleaseChannel) {
+        guard channel != currentChannel else { return }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        if channel.level < currentChannel.level {
+            pendingDowngrade = channel
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                channelRaw = channel.rawValue
+            }
+            flashChannelActivation(channel)
+        }
+    }
+
+    private func flashChannelActivation(_ channel: EagleReleaseChannel) {
+        flashChannel = channel
+        flashLevel = 1
+        withAnimation(.easeOut(duration: 0.6)) {
+            flashLevel = 0
+        }
+    }
+
+    private func lostFeatures(switchingTo target: EagleReleaseChannel) -> [EagleProductFeature] {
+        let stillAvailable = Set(EagleFeaturePolicy.availableFeatures(channel: target))
+        return EagleFeaturePolicy
+            .availableFeatures(channel: currentChannel)
+            .filter { !stillAvailable.contains($0) }
+    }
+
+    private func downgradeMessage(for target: EagleReleaseChannel) -> String {
+        let names = lostFeatures(switchingTo: target)
+            .map(\.title)
+            .joined(separator: ", ")
+        return LaraL10n.text(
+            en: "Switching to \(target.title) makes these features unavailable: \(names). Existing visual effects are not removed automatically; restore them normally or respring. You can get the features back by moving up a level again.",
+            es: "Cambiar a \(target.title) deja estas funciones no disponibles: \(names). Los efectos visuales existentes no se eliminan automáticamente; restáuralos normalmente o haz respring. Puedes recuperar las funciones volviendo a subir de nivel."
         )
     }
 
@@ -852,6 +988,7 @@ private struct LaraFeatureCard: View {
 
 private struct AuraStudioHeroCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let title: String
     let subtitle: String
@@ -866,7 +1003,7 @@ private struct AuraStudioHeroCard: View {
                 Text("Studio")
             }
             .font(.system(size: 34, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
 
@@ -874,7 +1011,7 @@ private struct AuraStudioHeroCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 22)
@@ -883,11 +1020,11 @@ private struct AuraStudioHeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
         }
         .shadow(
-            color: .black.opacity(colorScheme == .dark ? 0 : 0.16),
-            radius: 14, x: 0, y: 8
+            color: EagleVisualTheme.surfaceShadow(for: colorScheme),
+            radius: 10, x: 0, y: 4
         )
         .overlay(alignment: .topTrailing) {
             if let badge {
@@ -896,7 +1033,14 @@ private struct AuraStudioHeroCard: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 9)
                     .frame(minHeight: 25)
-                    .background(Color.white.opacity(0.18), in: Capsule())
+                    .background(
+                        LinearGradient(
+                            colors: [.cyan, .blue, .pink],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: Capsule()
+                    )
                     .padding(12)
                     .accessibilityHidden(true)
             }
@@ -909,59 +1053,71 @@ private struct AuraStudioHeroCard: View {
 
     private var auraBackground: some View {
         ZStack {
-            // Deep, desaturated indigo in both modes: a deliberate "feature"
-            // surface that stays calm next to the light page's white cards and
-            // keeps the neon capsule readable on a dark backdrop.
-            LinearGradient(
-                colors: colorScheme == .dark
-                    ? [
-                        Color(red: 0.17, green: 0.11, blue: 0.32),
-                        Color(red: 0.09, green: 0.05, blue: 0.19),
-                    ]
-                    : [
-                        Color(red: 0.19, green: 0.14, blue: 0.34),
-                        Color(red: 0.10, green: 0.07, blue: 0.21),
-                    ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [
-                    Color(red: 0.44, green: 0.27, blue: 0.88)
-                        .opacity(colorScheme == .dark ? 0.42 : 0.34),
-                    .clear,
-                ],
-                center: UnitPoint(x: 0.26, y: 0.5),
-                startRadius: 4,
-                endRadius: 210
-            )
+            // Same neutral system surface as every other card — no more purple.
+            Color(uiColor: .secondarySystemGroupedBackground)
+
+            // A soft aurora gathered on the left, behind the dynamic-island
+            // preview, so the island reads with some colour and style without
+            // repainting the whole card.
+            auroraGlow
         }
     }
 
-    private var neonCapsule: some View {
+    private var auroraGlow: some View {
         ZStack {
-            Capsule(style: .continuous)
-                .stroke(Color.purple.opacity(0.30), lineWidth: 15)
-                .frame(width: 128, height: 48)
-                .blur(radius: 14)
-
-            Capsule(style: .continuous)
-                .fill(Color.black)
-                .frame(width: 122, height: 44)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .stroke(
-                            AngularGradient(
-                                colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
-                                center: .center
-                            ),
-                            lineWidth: 3
-                        )
-                }
-                .shadow(color: .cyan.opacity(0.5), radius: 10)
-                .shadow(color: .pink.opacity(0.36), radius: 16)
+            auroraBlob(Color(red: 0.28, green: 0.82, blue: 1.00), size: 165,
+                       x: -128, y: -16, opacity: colorScheme == .dark ? 0.34 : 0.20)
+            auroraBlob(Color(red: 0.60, green: 0.42, blue: 1.00), size: 150,
+                       x: -74, y: 20, opacity: colorScheme == .dark ? 0.30 : 0.17)
+            auroraBlob(Color(red: 1.00, green: 0.44, blue: 0.74), size: 135,
+                       x: -158, y: 26, opacity: colorScheme == .dark ? 0.26 : 0.15)
+            auroraBlob(Color(red: 0.35, green: 0.95, blue: 0.72), size: 120,
+                       x: -104, y: 34, opacity: colorScheme == .dark ? 0.22 : 0.13)
         }
-        .frame(width: 138, height: 96)
+        .allowsHitTesting(false)
+    }
+
+    private func auroraBlob(
+        _ color: Color, size: CGFloat, x: CGFloat, y: CGFloat, opacity: Double
+    ) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .offset(x: x, y: y)
+            .blur(radius: 42)
+            .opacity(opacity)
+    }
+
+    private var neonCapsule: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let cycles = context.date.timeIntervalSinceReferenceDate / 5.2
+            let angle = reduceMotion ? 0 : (cycles - floor(cycles)) * 360
+
+            ZStack {
+                Capsule(style: .continuous)
+                    .stroke(Color.purple.opacity(0.30), lineWidth: 15)
+                    .frame(width: 128, height: 48)
+                    .blur(radius: 14)
+
+                Capsule(style: .continuous)
+                    .fill(Color.black)
+                    .frame(width: 122, height: 44)
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [.cyan, .blue, .purple, .pink, .orange, .cyan],
+                                    center: .center,
+                                    angle: .degrees(angle)
+                                ),
+                                lineWidth: 3
+                            )
+                    }
+                    .shadow(color: .cyan.opacity(0.5), radius: 10)
+                    .shadow(color: .pink.opacity(0.36), radius: 16)
+            }
+            .frame(width: 138, height: 96)
+        }
         .accessibilityHidden(true)
     }
 }
@@ -978,9 +1134,9 @@ private struct LaraToolRow: View {
         HStack(spacing: 13) {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(.primary)
                 .frame(width: 38, height: 38)
-                .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)

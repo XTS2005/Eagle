@@ -5,6 +5,12 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build"
 DERIVED_DATA="$BUILD_DIR/DerivedData"
 PRODUCT_NAME="Eagle"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/private/tmp}/eagle-ipa.XXXXXX")"
+
+cleanup() {
+  rm -rf "$STAGING_DIR"
+}
+trap cleanup EXIT
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -31,14 +37,18 @@ if ! command -v ldid >/dev/null 2>&1; then
   exit 1
 fi
 
-PAYLOAD_DIR="$BUILD_DIR/Payload"
+PAYLOAD_DIR="$STAGING_DIR/Payload"
 PACKAGED_APP="$PAYLOAD_DIR/$PRODUCT_NAME.app"
 mkdir -p "$PAYLOAD_DIR"
-cp -R "$BUILT_APP" "$PACKAGED_APP"
+cp -R -X "$BUILT_APP" "$PACKAGED_APP"
+
+# File-provider workspaces can attach Finder metadata to copied bundles. Those
+# attributes are not part of Eagle and can make downstream signing fail.
+xattr -cr "$PACKAGED_APP" 2>/dev/null || true
 
 codesign --remove-signature "$PACKAGED_APP" 2>/dev/null || true
 ldid -S"$PROJECT_ROOT/Config/lara.entitlements" "$PACKAGED_APP/$PRODUCT_NAME"
 
-(cd "$BUILD_DIR" && /usr/bin/zip -qry "$PRODUCT_NAME.ipa" Payload)
+(cd "$STAGING_DIR" && /usr/bin/zip -qryX "$BUILD_DIR/$PRODUCT_NAME.ipa" Payload)
 
 echo "Eagle IPA: $BUILD_DIR/$PRODUCT_NAME.ipa"

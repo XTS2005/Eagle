@@ -42,7 +42,7 @@ struct NuggetWallpaper: Decodable, Identifiable, Hashable {
     }
 
     var requiresIOS26: Bool {
-        let details = "\(name) \(description ?? "")".lowercased()
+        let details = "\(name) \(description ?? "") \(contest ?? "")".lowercased()
         return details.contains("ios 26")
     }
 
@@ -212,23 +212,33 @@ final class WallpaperCatalogManager: ObservableObject {
             let result = try await Task.detached(priority: .userInitiated) {
                 try TendiesInstaller.install(data: data)
             }.value
-            _ = PosterBoardWriter.refreshCollections()
+            let refreshed = PosterBoardWriter.refreshCollections()
             didInstall = true
+            let refreshGuidance = refreshed ? "" : LaraL10n.text(
+                en: " PosterBoard could not refresh automatically. Open Wallpapers; if it is still missing, restart your iPhone.",
+                es: " PosterBoard no pudo actualizarse automáticamente. Abre Fondos; si todavía no aparece, reinicia tu iPhone."
+            )
             if result.installedCount == 0, result.existingCount > 0 {
-                resultMessage = LaraL10n.text(
-                    en: "\(wallpaper.name) was already installed. PosterBoard refreshed its collection.",
-                    es: "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
-                )
+                let base = refreshed
+                    ? LaraL10n.text(
+                        en: "\(wallpaper.name) was already installed. PosterBoard refreshed its collection.",
+                        es: "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
+                    )
+                    : LaraL10n.text(
+                        en: "\(wallpaper.name) was already installed.",
+                        es: "\(wallpaper.name) ya estaba instalado."
+                    )
+                resultMessage = base + refreshGuidance
             } else if result.installedCount == 1 {
                 resultMessage = LaraL10n.text(
                     en: "\(wallpaper.name) was verified and added to Wallpapers.",
                     es: "\(wallpaper.name) se verificó y se agregó a Fondos."
-                )
+                ) + refreshGuidance
             } else {
                 resultMessage = LaraL10n.text(
                     en: "Verified and added \(result.installedCount) wallpapers from \(wallpaper.name).",
                     es: "Se verificaron y agregaron \(result.installedCount) fondos de \(wallpaper.name)."
-                )
+                ) + refreshGuidance
             }
         } catch {
             didInstall = false

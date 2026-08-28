@@ -19,7 +19,7 @@ struct LaraCustomApp: App {
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
     @AppStorage(EagleAppearanceMode.storageKey)
     private var appearanceModeRaw = EagleAppearanceMode.dark.rawValue
-    @AppStorage("eagle.updates.stable101.completed")
+    @AppStorage("eagle.updates.stable102.completed")
     private var hasSeenStableUpdate = false
     @State private var showingStableUpdate = false
 

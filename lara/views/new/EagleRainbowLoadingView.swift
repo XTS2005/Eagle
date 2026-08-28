@@ -58,33 +58,83 @@ struct EagleBrandMark: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var size: CGFloat = 42
+    /// When true the mark carries its own rainbow sweep. The header turns this
+    /// off so a single sweep can travel across the whole lockup instead.
+    var shimmer: Bool = true
 
     var body: some View {
-        TimelineView(.animation(
-            minimumInterval: 1.0 / 30.0,
-            paused: reduceMotion
-        )) { context in
-            let sweep = reduceMotion
-                ? nil
-                : eagleBrandSweepProgress(at: context.date)
-
-            ZStack {
-                brandGlyph
-                    .foregroundStyle(.primary.opacity(0.92))
-
-                if let sweep {
-                    EagleSpectrumStyle.gradient
-                        .frame(width: size * 0.46, height: size * 1.6)
-                        .rotationEffect(.degrees(-14))
-                        .offset(x: size * (-1.25 + (2.5 * sweep)))
-                        .opacity(0.62)
-                        .mask(brandGlyph)
+        Group {
+            if shimmer && !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    glyph(sweep: eagleBrandSweepProgress(at: context.date))
                 }
+            } else {
+                glyph(sweep: nil)
             }
-            .frame(width: size, height: size)
         }
         .shadow(color: EagleVisualTheme.accent.opacity(0.16), radius: size * 0.10)
         .accessibilityHidden(true)
+    }
+
+    private func glyph(sweep: Double?) -> some View {
+        ZStack {
+            brandGlyph
+                .foregroundStyle(.primary.opacity(0.92))
+
+            if let sweep {
+                brandShine(progress: sweep)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    /// A glossy rainbow reflection that glides across the mark: a feathered
+    /// spectrum band carries the colour while a bright specular core gives the
+    /// gleam, both clipped to the silhouette so only the bird catches the light.
+    private func brandShine(progress: Double) -> some View {
+        let x = size * (-1.2 + 2.4 * progress)
+
+        return ZStack {
+            EagleSpectrumStyle.gradient
+                .frame(width: size * 0.6, height: size * 1.7)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .white.opacity(0.65), location: 0.33),
+                            .init(color: .white, location: 0.5),
+                            .init(color: .white.opacity(0.65), location: 0.67),
+                            .init(color: .clear, location: 1.0),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .rotationEffect(.degrees(-16))
+                .offset(x: x)
+                .opacity(0.92)
+
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .white, location: 0.5),
+                            .init(color: .clear, location: 1.0),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: size * 0.17, height: size * 1.7)
+                .rotationEffect(.degrees(-16))
+                .offset(x: x)
+                .blendMode(.plusLighter)
+                .opacity(0.75)
+        }
+        .frame(width: size, height: size)
+        .mask(brandGlyph)
+        .allowsHitTesting(false)
     }
 
     private var brandGlyph: some View {
@@ -94,6 +144,111 @@ struct EagleBrandMark: View {
             .interpolation(.high)
             .scaledToFit()
             .frame(width: size, height: size)
+    }
+}
+
+/// A reusable rainbow "reflection" that periodically sweeps across whatever it
+/// is attached to, then parks off-screen until the next pass. The band carries
+/// a vivid full-spectrum colour plus a bright white specular core for the gleam,
+/// and is clipped to the content's own shapes so only the glyphs catch the
+/// light — it reads on the solid eagle mark and on thin serif letters alike.
+struct EagleRainbowSweep: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { geo in
+                        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+                            ZStack {
+                                if let progress = eagleBrandSweepProgress(at: ctx.date) {
+                                    band(in: geo.size, progress: progress)
+                                }
+                            }
+                            .frame(width: geo.size.width, height: geo.size.height)
+                        }
+                    }
+                    .mask(content)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
+    }
+
+    private func band(in size: CGSize, progress: Double) -> some View {
+        let h = max(size.height, 1)
+        let bandWidth = h * 1.0
+        let reach = size.width / 2 + bandWidth
+        let x = -reach + progress * (reach * 2)
+        let tall = max(h, size.width) * 2.2
+
+        return ZStack {
+            // Vivid full-spectrum colour, feathered at the edges.
+            Rectangle()
+                .fill(EagleSpectrumStyle.gradient)
+                .frame(width: bandWidth, height: tall)
+                .mask(feather(soft: 0.7))
+                .saturation(1.5)
+                .rotationEffect(.degrees(-18))
+                .offset(x: x)
+
+            // Bright white specular core — the crisp "shine" streak.
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: bandWidth * 0.22, height: tall)
+                .mask(feather(soft: 0.0))
+                .blendMode(.plusLighter)
+                .opacity(0.9)
+                .rotationEffect(.degrees(-18))
+                .offset(x: x)
+        }
+        .frame(width: size.width, height: size.height)
+        .blur(radius: 0.5)
+    }
+
+    private func feather(soft: Double) -> some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .white.opacity(soft), location: 0.30),
+                .init(color: .white, location: 0.5),
+                .init(color: .white.opacity(soft), location: 0.70),
+                .init(color: .clear, location: 1.0),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+}
+
+extension View {
+    /// Adds Eagle's periodic rainbow reflection, clipped to the view's shapes.
+    func eagleRainbowSweep() -> some View {
+        modifier(EagleRainbowSweep())
+    }
+}
+
+/// The header lockup: the eagle mark followed by the serif wordmark, sharing a
+/// single rainbow reflection that sweeps across both at once.
+struct EagleWordmark: View {
+    var logoSize: CGFloat = 54
+    var nameSize: CGFloat = 32
+    var spacing: CGFloat = 12
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            EagleBrandMark(size: logoSize, shimmer: false)
+
+            Text("Eagle")
+                .font(.system(size: nameSize, weight: .heavy, design: .serif))
+                .tracking(0.5)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
+        }
+        .eagleRainbowSweep()
     }
 }
 
@@ -135,7 +290,9 @@ enum EagleSpectrumStyle {
         )
     }
 
-    static let navigationTintColor = EagleVisualTheme.accentUIColor
+    // Monochrome, adaptive navigation tint (black in light, white in dark) so
+    // Back/Close match the rest of the neutral chrome.
+    static let navigationTintColor = UIColor.label
 
     static func configureGlobalNavigationAppearance() {
         UINavigationBar.appearance().tintColor = navigationTintColor

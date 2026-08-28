@@ -65,7 +65,16 @@ struct SettingsView: View {
     private var developerCard: some View {
         Link(destination: URL(string: "https://github.com/leonardob8777-bit")!) {
             HStack(spacing: 14) {
-                EagleBrandMark(size: 56)
+                Image("LeonardoAvatar")
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: 56, height: 56)
+                    .clipShape(Circle())
+                    .overlay {
+                        Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 1)
+                    }
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Leonardo")
