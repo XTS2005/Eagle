@@ -873,6 +873,15 @@ struct AuraStudioView: View {
             systemIslandSuppressed = false
             return
         }
+        // Lara treats an absent SpringBoard preferences domain as the
+        // setting's normal default (`false`). Some devices have never created
+        // this plist, so opening Aura Studio must not show an error alert.
+        guard FileManager.default.fileExists(
+            atPath: springBoardPreferencesPath
+        ) else {
+            systemIslandSuppressed = false
+            return
+        }
         isReadingSystemIslandSetting = true
         defer { isReadingSystemIslandSetting = false }
         let result = mgr.getplistvalue(
@@ -898,6 +907,21 @@ struct AuraStudioView: View {
     }
 
     private func updateSystemIslandSuppression(_ enabled: Bool) {
+        guard mgr.sbxready else {
+            systemIslandSuppressed = false
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Prepare Eagle access before changing the system Island setting.",
+                es: "Prepara el acceso de Eagle antes de cambiar el ajuste de la Island del sistema."
+            ))
+            return
+        }
+        if !enabled,
+           !FileManager.default.fileExists(atPath: springBoardPreferencesPath) {
+            // Missing domain already means the original system behavior. Do
+            // not create an empty protected plist merely to switch it off.
+            systemIslandSuppressed = false
+            return
+        }
         let previousValue = systemIslandSuppressed
         systemIslandSuppressed = enabled
         let result = mgr.setplistvalue(
