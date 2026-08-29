@@ -18,12 +18,11 @@ final class EaglePrepareDiagnostics: ObservableObject {
 
     private init() {}
 
-    func createReport(onCreated: ((URL) -> Void)? = nil) {
+    func createReport() {
         guard !isCreatingReport else { return }
 
         isCreatingReport = true
         reportError = nil
-        reportURL = nil
 
         let metadata = Self.metadata()
         let attemptCheckpoint = EaglePrepareAttemptJournal.diagnosticText()
@@ -36,7 +35,6 @@ final class EaglePrepareDiagnostics: ObservableObject {
                 DispatchQueue.main.async {
                     self.reportURL = url
                     self.isCreatingReport = false
-                    onCreated?(url)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -237,42 +235,34 @@ struct EaglePrepareCrashReportCard: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button {
-                diagnostics.createReport { url in
-                    presentShareSheet(with: url)
+            if let url = diagnostics.reportURL {
+                ShareLink(item: url) {
+                    Label(
+                        LaraL10n.text(en: "Share Prepare Report", es: "Compartir reporte de preparación"),
+                        systemImage: "square.and.arrow.up"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
-            } label: {
-                HStack(spacing: 10) {
-                    if diagnostics.isCreatingReport {
-                        EagleRainbowSpinner(size: 20)
-                    } else {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.15, green: 0.62, blue: 0.87))
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white)
-                                .offset(x: -1, y: 1)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(.orange)
+            } else {
+                Button {
+                    diagnostics.createReport()
+                } label: {
+                    HStack {
+                        if diagnostics.isCreatingReport {
+                            EagleRainbowSpinner(size: 18)
                         }
-                        .frame(width: 25, height: 25)
+                        Text(LaraL10n.text(en: "Create Prepare Report", es: "Crear reporte de preparación"))
+                            .frame(maxWidth: .infinity)
                     }
-
-                    Text(LaraL10n.text(
-                        en: "Create & send to @LEONARDOPHL",
-                        es: "Crear y enviar a @LEONARDOPHL"
-                    ))
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(.orange)
+                .disabled(diagnostics.isCreatingReport)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(Color(red: 0.15, green: 0.62, blue: 0.87))
-            .disabled(diagnostics.isCreatingReport)
-            .accessibilityHint(LaraL10n.text(
-                en: "Creates the diagnostic and opens the share sheet with the file attached.",
-                es: "Crea el diagnóstico y abre la hoja para compartir con el archivo adjunto."
-            ))
 
             if let error = diagnostics.reportError {
                 Text(error)
