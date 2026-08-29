@@ -143,6 +143,14 @@ private struct EagleBeta10AccessView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
+                        Text(LaraL10n.text(en: "Prepare report", es: "Reporte de Preparar"))
+                            .font(.headline)
+                            .padding(.horizontal, 2)
+                            .accessibilityAddTraits(.isHeader)
+                        EaglePrepareCrashReportCard()
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
                         Text(LaraL10n.text(en: "Access tools", es: "Herramientas de acceso"))
                             .font(.headline)
                             .padding(.horizontal, 2)
@@ -186,14 +194,6 @@ private struct EagleBeta10AccessView: View {
                     }
 
                     telegramCard
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(LaraL10n.text(en: "Prepare report", es: "Reporte de Preparar"))
-                            .font(.headline)
-                            .padding(.horizontal, 2)
-                            .accessibilityAddTraits(.isHeader)
-                        EaglePrepareCrashReportCard()
-                    }
 
                     trustNote
                 }

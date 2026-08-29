@@ -212,29 +212,28 @@ struct EaglePrepareCrashReportCard: View {
     @ObservedObject private var diagnostics = EaglePrepareDiagnostics.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: "doc.text.magnifyingglass")
-                    .font(.title3)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.orange)
-                    .frame(width: 28)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(LaraL10n.text(
-                        en: "Prepare diagnostics",
-                        es: "Diagnóstico de preparación"
-                    ))
-                        .font(.headline)
+                Text(LaraL10n.text(
+                    en: "Prepare diagnostics",
+                    es: "Diagnóstico de preparación"
+                ))
+                    .font(.subheadline.weight(.semibold))
 
-                    Text(LaraL10n.text(
-                        en: "If the iPhone restarted, do not retry. Reopen Eagle and create this report; report creation starts only when you request it.",
-                        es: "Si el iPhone se reinició, no lo intentes otra vez. Vuelve a abrir Eagle y crea este reporte; el reporte comienza solo cuando tú lo solicitas."
-                    ))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Spacer(minLength: 0)
             }
+
+            Text(LaraL10n.text(
+                en: "If Prepare fails or the iPhone restarts, create and share this report.",
+                es: "Si Preparar falla o el iPhone se reinicia, crea y comparte este reporte."
+            ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let url = diagnostics.reportURL {
                 ShareLink(item: url) {
@@ -246,6 +245,7 @@ struct EaglePrepareCrashReportCard: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .tint(.orange)
             } else {
                 Button {
                     diagnostics.createReport()
@@ -258,8 +258,9 @@ struct EaglePrepareCrashReportCard: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .tint(.orange)
                 .disabled(diagnostics.isCreatingReport)
             }
 
@@ -269,11 +270,11 @@ struct EaglePrepareCrashReportCard: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(16)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(14)
+        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.orange.opacity(0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.22), lineWidth: 1)
         }
     }
 }
