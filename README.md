@@ -122,7 +122,7 @@ Device strings such as `iPhone15,2` are Apple's technical model identifiers
 Requirements:
 
 - macOS with Xcode
-- `ldid` for packaging an unsigned IPA (`brew install ldid`)
+- the `codesign` tool included with macOS/Xcode
 
 Compile without installing on a device:
 
@@ -175,6 +175,11 @@ Portions of Eagle's OTA implementation are adapted from
 [0xjohnny](https://github.com/0xjohnnydev) (formerly zeroxjf), first published
 in May 2026 under AGPL-3.0 and inherited by Eagle through Lara. See the
 [Cyanide OTA notice](lara/licenses/NOTICE_Cyanide_OTA.md) for provenance links.
+Eagle's on-device PosterBoard descriptor import bridge is adapted from
+[Pocket Poster](https://github.com/leminlimez/Pocket-Poster) by leminlimez,
+published under GPL-3.0. See the
+[Pocket Poster notice](lara/licenses/NOTICE_Pocket_Poster.md) for the exact
+upstream files and license links.
 See Lara's [contributor history](https://github.com/rooootdev/lara/graphs/contributors)
 for the complete upstream record.
 

@@ -40,7 +40,7 @@ struct CreditsView: View {
                 LinkCreditCell(name: "hxhlb", description: "Various bug fixes", url: "https://github.com/hxhlb") {
                     LinkCreditIcon(url: "https://github.com/hxhlb.png")
                 }
-                LinkCreditCell(name: "leminlimez", description: "Various Cowabunga Tweaks", url: "https://github.com/leminlimez") {
+                LinkCreditCell(name: "leminlimez", description: "Pocket Poster import flow and various Cowabunga tweaks", url: "https://github.com/leminlimez/Pocket-Poster") {
                     LinkCreditIcon(url: "https://github.com/leminlimez.png")
                 }
         }

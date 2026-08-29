@@ -212,34 +212,25 @@ final class WallpaperCatalogManager: ObservableObject {
             let result = try await Task.detached(priority: .userInitiated) {
                 try TendiesInstaller.install(data: data)
             }.value
-            let refreshed = PosterBoardWriter.refreshCollections()
             didInstall = true
-            let refreshGuidance = refreshed ? "" : LaraL10n.text(
-                en: " PosterBoard could not refresh automatically. Open Wallpapers; if it is still missing, restart your iPhone.",
-                es: " PosterBoard no pudo actualizarse automáticamente. Abre Fondos; si todavía no aparece, reinicia tu iPhone."
-            )
             if result.installedCount == 0, result.existingCount > 0 {
-                let base = refreshed
-                    ? LaraL10n.text(
-                        en: "\(wallpaper.name) was already installed. PosterBoard refreshed its collection.",
-                        es: "\(wallpaper.name) ya estaba instalado. PosterBoard actualizó su colección."
-                    )
-                    : LaraL10n.text(
-                        en: "\(wallpaper.name) was already installed.",
-                        es: "\(wallpaper.name) ya estaba instalado."
-                    )
-                resultMessage = base + refreshGuidance
+                resultMessage = LaraL10n.text(
+                    en: "\(wallpaper.name) was already imported. Wallpapers is opening so you can select it.",
+                    es: "\(wallpaper.name) ya estaba importado. Fondos se abrirá para que puedas seleccionarlo."
+                )
             } else if result.installedCount == 1 {
                 resultMessage = LaraL10n.text(
-                    en: "\(wallpaper.name) was verified and added to Wallpapers.",
-                    es: "\(wallpaper.name) se verificó y se agregó a Fondos."
-                ) + refreshGuidance
+                    en: "\(wallpaper.name) was imported and verified. Wallpapers is opening so you can select it.",
+                    es: "\(wallpaper.name) se importó y verificó. Fondos se abrirá para que puedas seleccionarlo."
+                )
             } else {
                 resultMessage = LaraL10n.text(
-                    en: "Verified and added \(result.installedCount) wallpapers from \(wallpaper.name).",
-                    es: "Se verificaron y agregaron \(result.installedCount) fondos de \(wallpaper.name)."
-                ) + refreshGuidance
+                    en: "Imported and verified \(result.installedCount) wallpapers from \(wallpaper.name). Wallpapers is opening.",
+                    es: "Se importaron y verificaron \(result.installedCount) fondos de \(wallpaper.name). Fondos se abrirá ahora."
+                )
             }
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            openWallpaperPicker()
         } catch {
             didInstall = false
             resultMessage = error.localizedDescription
@@ -731,10 +722,7 @@ nonisolated enum TendiesInstaller {
                     "(wallpaper) preparing \(descriptor.url.lastPathComponent) for \(descriptor.extensionIdentifier)"
                 )
                 if !descriptor.preservesIdentity {
-                    try randomize(
-                        descriptor: descriptor.url,
-                        normalizeCollections: descriptor.extensionIdentifier == PosterBoardWriter.collectionsExtension
-                    )
+                    try randomize(descriptor: descriptor.url)
                 }
                 let result = try PosterBoardWriter.install(
                     descriptor: descriptor.url,
@@ -883,10 +871,7 @@ nonisolated enum TendiesInstaller {
         return PosterBoardWriter.collectionsExtension
     }
 
-    private static func randomize(
-        descriptor: URL,
-        normalizeCollections: Bool
-    ) throws {
+    private static func randomize(descriptor: URL) throws {
         let identifier = Int.random(in: 10_000...99_999)
         let fm = FileManager.default
 
@@ -912,18 +897,6 @@ nonisolated enum TendiesInstaller {
                 case "Wallpaper.plist":
                     let data = try updatedPlistData(at: file) { plist in
                         plist["identifier"] = identifier
-                        if normalizeCollections {
-                            plist["family"] = "Marble"
-                            plist["name"] = "Lavender"
-                            if var assets = plist["assets"] as? [String: Any],
-                               var lockAndHome = assets["lockAndHome"] as? [String: Any],
-                               var defaultAsset = lockAndHome["default"] as? [String: Any] {
-                                defaultAsset["name"] = "Lavender"
-                                lockAndHome["default"] = defaultAsset
-                                assets["lockAndHome"] = lockAndHome
-                                plist["assets"] = assets
-                            }
-                        }
                     }
                     plistUpdates.append((file, data))
                 default:

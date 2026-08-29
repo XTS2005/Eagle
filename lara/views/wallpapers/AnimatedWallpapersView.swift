@@ -430,20 +430,18 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
 
                 await MainActor.run {
-                    let refreshed = PosterBoardWriter.refreshCollections()
                     self.progress = 1
                     self.progressLabel = LaraL10n.text(en: "Done", es: "Listo")
                     self.isWorking = false
                     self.didInstall = true
-                    self.resultMessage = refreshed
-                        ? LaraL10n.text(
-                            en: "The wallpaper was verified and PosterBoard refreshed its collection. You can now select it in Wallpapers.",
-                            es: "El fondo se verificó y PosterBoard actualizó su colección. Ya puedes seleccionarlo en Fondos."
-                        )
-                        : LaraL10n.text(
-                            en: "The wallpaper was verified and installed, but PosterBoard could not refresh automatically. Open Wallpapers; if it is still missing, restart your iPhone.",
-                            es: "El fondo se verificó e instaló, pero PosterBoard no pudo actualizarse automáticamente. Abre Fondos; si todavía no aparece, reinicia tu iPhone."
-                        )
+                    self.resultMessage = LaraL10n.text(
+                        en: "The wallpaper was imported and verified. Wallpapers is opening so you can select it.",
+                        es: "El fondo se importó y verificó. Fondos se abrirá para que puedas seleccionarlo."
+                    )
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        self.openWallpaperPicker()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -490,6 +488,7 @@ nonisolated enum PosterBoardWriter {
         guard let containerID = posterBoardContainerID() else {
             throw AnimatedWallpaperError.posterBoardNotFound
         }
+        log("(wallpaper) Lara resolved the PosterBoard container on-device")
 
         let sourceFingerprint = try descriptorFingerprint(at: descriptor)
 
@@ -517,20 +516,31 @@ nonisolated enum PosterBoardWriter {
             guard existingFingerprint == sourceFingerprint else {
                 throw AnimatedWallpaperError.descriptorAlreadyExists
             }
-            return PosterBoardInstallResult(destination: destination, wasCreated: false)
+            // Older Eagle builds copied descriptors directly. Re-import an
+            // identical entry through the bridge so PosterBoard receives the
+            // filesystem move it uses to discover a new descriptor.
+            try fm.removeItem(at: destination)
+            do {
+                try importThroughLaraBridge(
+                    descriptor: descriptor,
+                    destination: destination,
+                    targetDirectory: target,
+                    expectedFingerprint: sourceFingerprint
+                )
+                return PosterBoardInstallResult(destination: destination, wasCreated: true)
+            } catch {
+                try? fm.copyItem(at: descriptor, to: destination)
+                throw error
+            }
         }
 
-        do {
-            try fm.copyItem(at: descriptor, to: destination)
-            let copiedFingerprint = try descriptorFingerprint(at: destination)
-            guard copiedFingerprint == sourceFingerprint else {
-                throw AnimatedWallpaperError.invalidDescriptor
-            }
-            return PosterBoardInstallResult(destination: destination, wasCreated: true)
-        } catch {
-            try? fm.removeItem(at: destination)
-            throw error
-        }
+        try importThroughLaraBridge(
+            descriptor: descriptor,
+            destination: destination,
+            targetDirectory: target,
+            expectedFingerprint: sourceFingerprint
+        )
+        return PosterBoardInstallResult(destination: destination, wasCreated: true)
     }
 
     @MainActor
@@ -583,6 +593,75 @@ nonisolated enum PosterBoardWriter {
         return DescriptorFingerprint(files: files)
     }
 
+    /// Adapted from Pocket Poster's GPL-3.0 `SymHandler`/`applyTendies`
+    /// implementation: https://github.com/leminlimez/Pocket-Poster
+    /// Pocket Poster imports descriptors by moving them through a `.Trash`
+    /// symlink aimed at PosterBoard's descriptor store. Eagle can resolve that
+    /// store on-device after Lara opens temporary access, so the same proven
+    /// import path can run without a PC or a separately supplied app hash.
+    private static func importThroughLaraBridge(
+        descriptor: URL,
+        destination: URL,
+        targetDirectory: URL,
+        expectedFingerprint: DescriptorFingerprint
+    ) throws {
+        let fm = FileManager.default
+        let documents = ProcessInfo.processInfo.environment["LC_HOME_PATH"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("Documents", isDirectory: true) }
+            ?? fm.urls(for: .documentDirectory, in: .userDomainMask).first
+        guard let documents else {
+            throw AnimatedWallpaperError.installationFailed
+        }
+
+        let bridge = documents.appendingPathComponent(".Trash", isDirectory: false)
+        let staging = documents.appendingPathComponent(
+            destination.lastPathComponent,
+            isDirectory: true
+        )
+        var bridgeCreated = false
+        var importCompleted = false
+
+        defer {
+            if !importCompleted {
+                try? fm.removeItem(at: destination)
+            }
+            try? fm.removeItem(at: staging)
+            if bridgeCreated {
+                try? fm.removeItem(at: bridge)
+            }
+        }
+
+        if let attributes = try? fm.attributesOfItem(atPath: bridge.path) {
+            guard attributes[.type] as? FileAttributeType == .typeSymbolicLink else {
+                throw AnimatedWallpaperError.installationFailed
+            }
+            try fm.removeItem(at: bridge)
+        }
+
+        try fm.createSymbolicLink(
+            at: bridge,
+            withDestinationURL: targetDirectory
+        )
+        bridgeCreated = true
+
+        try fm.copyItem(at: descriptor, to: staging)
+        var resultingURL: NSURL?
+        try fm.trashItem(at: staging, resultingItemURL: &resultingURL)
+
+        guard fm.fileExists(atPath: destination.path) else {
+            throw AnimatedWallpaperError.installationFailed
+        }
+        let importedFingerprint = try descriptorFingerprint(at: destination)
+        guard importedFingerprint == expectedFingerprint else {
+            throw AnimatedWallpaperError.invalidDescriptor
+        }
+
+        importCompleted = true
+        log(
+            "(wallpaper) Lara bridge imported and verified \(destination.lastPathComponent)"
+        )
+    }
+
     private static func sha256(of file: URL) throws -> Data {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
@@ -591,6 +670,12 @@ nonisolated enum PosterBoardWriter {
             hasher.update(data: chunk)
         }
         return Data(hasher.finalize())
+    }
+
+    private static func log(_ message: String) {
+        Task { @MainActor in
+            globallogger.log(message)
+        }
     }
 
     private static func posterBoardContainerID() -> String? {
