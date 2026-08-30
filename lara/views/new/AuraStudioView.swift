@@ -414,7 +414,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.30-r37-spatial-island-styles"
+    private let auraEngineBuild = "2026.08.30-r38-spatial-readback-budget"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
