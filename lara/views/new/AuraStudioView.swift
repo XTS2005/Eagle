@@ -400,7 +400,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.30-r35-fixed-island-geometry"
+    private let auraEngineBuild = "2026.08.30-r36-standard-display-required"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -1824,6 +1824,25 @@ struct AuraStudioView: View {
             "island=\(String(format: "%.2f,%.2f,%.2f,%.2f", islandFrame.minX, islandFrame.minY, islandFrame.width, islandFrame.height)) " +
             "dock=\(String(format: "%.2f,%.2f,%.2f,%.2f", dockFrame.minX, dockFrame.minY, dockFrame.width, dockFrame.height))"
         )
+
+        // The camera aperture is fixed hardware, while Display Zoom changes
+        // SpringBoard's private window coordinate space between device
+        // families and iOS builds. Do not send an Island mutation from that
+        // ambiguous geometry. Removal remains available, and Dock is
+        // independent of the physical aperture.
+        if !operation.isRemoving,
+           requestedTarget == .island,
+           display.isDisplayZoomed {
+            AuraStudioDiagnostics.log(
+                "display-zoom.reject",
+                "op=\(operationID) target=Island noMutation=1"
+            )
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Dynamic Island requires Standard display size. Open Settings → Display & Brightness → Display Zoom, select Standard, then return to Eagle. Nothing was changed.",
+                es: "Dynamic Island requiere el tamaño de pantalla Estándar. Abre Ajustes → Pantalla y brillo → Zoom de pantalla, selecciona Estándar y vuelve a Eagle. No se cambió nada."
+            ))
+            return
+        }
 
         guard !applySafetyBlocked, !mgr.rcSafetyLocked else {
             notice = AuraStudioNotice(message: LaraL10n.text(
