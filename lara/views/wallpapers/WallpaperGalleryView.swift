@@ -212,25 +212,25 @@ final class WallpaperCatalogManager: ObservableObject {
             let result = try await Task.detached(priority: .userInitiated) {
                 try TendiesInstaller.install(data: data)
             }.value
+            let refreshed = PosterBoardWriter.refreshCollections()
+            globallogger.log("(wallpaper) collection refresh requested, success=\(refreshed)")
             didInstall = true
             if result.installedCount == 0, result.existingCount > 0 {
                 resultMessage = LaraL10n.text(
-                    en: "\(wallpaper.name) was already imported. Wallpapers is opening so you can select it.",
-                    es: "\(wallpaper.name) ya estaba importado. Fondos se abrirá para que puedas seleccionarlo."
+                    en: "\(wallpaper.name) is already imported. Open Wallpapers and select it; close Wallpapers from the app switcher if it does not appear immediately.",
+                    es: "\(wallpaper.name) ya está importado. Abre Fondos y selecciónalo; si no aparece de inmediato, cierra Fondos desde el selector de apps."
                 )
             } else if result.installedCount == 1 {
                 resultMessage = LaraL10n.text(
-                    en: "\(wallpaper.name) was imported and verified. Wallpapers is opening so you can select it.",
-                    es: "\(wallpaper.name) se importó y verificó. Fondos se abrirá para que puedas seleccionarlo."
+                    en: "\(wallpaper.name) was imported and verified. Open Wallpapers and select it; close Wallpapers from the app switcher if it does not appear immediately.",
+                    es: "\(wallpaper.name) se importó y verificó. Abre Fondos y selecciónalo; si no aparece de inmediato, cierra Fondos desde el selector de apps."
                 )
             } else {
                 resultMessage = LaraL10n.text(
-                    en: "Imported and verified \(result.installedCount) wallpapers from \(wallpaper.name). Wallpapers is opening.",
-                    es: "Se importaron y verificaron \(result.installedCount) fondos de \(wallpaper.name). Fondos se abrirá ahora."
+                    en: "Imported and verified \(result.installedCount) wallpapers from \(wallpaper.name). Open Wallpapers and select one.",
+                    es: "Se importaron y verificaron \(result.installedCount) fondos de \(wallpaper.name). Abre Fondos y selecciona uno."
                 )
             }
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            openWallpaperPicker()
         } catch {
             didInstall = false
             resultMessage = error.localizedDescription
@@ -238,8 +238,18 @@ final class WallpaperCatalogManager: ObservableObject {
         installingID = nil
     }
 
-    func openWallpaperPicker() {
-        _ = "com.apple.PosterBoard".withCString { launch_app($0) }
+    @discardableResult
+    func openWallpaperPicker() -> Bool {
+        let opened = "com.apple.PosterBoard".withCString { launch_app($0) } == 0
+        globallogger.log("(wallpaper) PosterBoard launch success=\(opened)")
+        if !opened {
+            didInstall = false
+            resultMessage = LaraL10n.text(
+                en: "Eagle imported the wallpaper, but Wallpapers could not be opened. Open Wallpapers manually and select the new item.",
+                es: "Eagle importó el fondo, pero no pudo abrir Fondos. Abre Fondos manualmente y selecciona el elemento nuevo."
+            )
+        }
+        return opened
     }
 
     func clearResult() {

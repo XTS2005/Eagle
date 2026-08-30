@@ -430,18 +430,16 @@ final class AnimatedWallpaperInstaller: ObservableObject {
                 _ = try PosterBoardWriter.install(descriptor: build.descriptorURL)
 
                 await MainActor.run {
+                    let refreshed = PosterBoardWriter.refreshCollections()
+                    globallogger.log("(wallpaper) collection refresh requested, success=\(refreshed)")
                     self.progress = 1
                     self.progressLabel = LaraL10n.text(en: "Done", es: "Listo")
                     self.isWorking = false
                     self.didInstall = true
                     self.resultMessage = LaraL10n.text(
-                        en: "The wallpaper was imported and verified. Wallpapers is opening so you can select it.",
-                        es: "El fondo se importó y verificó. Fondos se abrirá para que puedas seleccionarlo."
+                        en: "Imported and verified. Open Wallpapers, select the new wallpaper, then close Wallpapers from the app switcher if it does not appear immediately.",
+                        es: "Importado y verificado. Abre Fondos, selecciona el fondo nuevo y, si no aparece de inmediato, cierra Fondos desde el selector de apps."
                     )
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        self.openWallpaperPicker()
-                    }
                 }
             } catch {
                 await MainActor.run {
@@ -462,8 +460,18 @@ final class AnimatedWallpaperInstaller: ObservableObject {
         progressLabel = LaraL10n.text(en: "Canceling", es: "Cancelando")
     }
 
-    func openWallpaperPicker() {
-        _ = "com.apple.PosterBoard".withCString { launch_app($0) }
+    @discardableResult
+    func openWallpaperPicker() -> Bool {
+        let opened = "com.apple.PosterBoard".withCString { launch_app($0) } == 0
+        globallogger.log("(wallpaper) PosterBoard launch success=\(opened)")
+        if !opened {
+            didInstall = false
+            resultMessage = LaraL10n.text(
+                en: "Eagle imported the wallpaper, but Wallpapers could not be opened. Open Wallpapers manually and select the new item.",
+                es: "Eagle importó el fondo, pero no pudo abrir Fondos. Abre Fondos manualmente y selecciona el elemento nuevo."
+            )
+        }
+        return opened
     }
 
 }
