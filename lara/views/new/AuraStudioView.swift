@@ -33,11 +33,12 @@ struct AuraStudioDisplayGeometry {
     }
 
     var compactIslandFrame: CGRect {
-        let firstGenerationIsland = devicemachine() == "iPhone15,2" ||
-            devicemachine() == "iPhone15,3"
+        let model = devicemachine()
+        let firstGenerationIsland = model == "iPhone15,2" || model == "iPhone15,3"
+        let baseY: CGFloat = firstGenerationIsland ? 7 : (model == "iPhone17,3" ? 10 : 13)
         return scaleStandardFrame(CGRect(
             x: (standardLogicalSize.width - 134) / 2,
-            y: firstGenerationIsland ? 7 : 13,
+            y: baseY,
             width: 134,
             height: firstGenerationIsland ? 45 : 39
         ))
@@ -825,7 +826,11 @@ struct AuraStudioView: View {
             normalizeDraftModesForPolicy()
         }
         .onChange(of: mgr.sbxready) { ready in
-            if ready { readSystemIslandSetting() }
+            if ready {
+                readSystemIslandSetting()
+            } else {
+                systemIslandSuppressed = false
+            }
         }
     }
 
@@ -944,8 +949,8 @@ struct AuraStudioView: View {
             verified = storedValue == enabled
         } else {
             verified = !enabled &&
-                verification.value == nil &&
-                verification.message.hasPrefix("key ")
+                (!FileManager.default.fileExists(atPath: springBoardPreferencesPath) ||
+                 (verification.value == nil && verification.message.hasPrefix("key ")))
         }
         guard verified else {
             systemIslandSuppressed = previousValue
