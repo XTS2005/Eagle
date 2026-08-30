@@ -173,8 +173,8 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
             )
         case .orbit:
             return LaraL10n.text(
-                en: "A cyan, violet, pink and orange light travels smoothly around the Island edge.",
-                es: "Una luz cian, violeta, rosa y naranja recorre suavemente el borde de la Island."
+                en: "A pure-white Island glows while black particles travel continuously from side to side.",
+                es: "Una Island totalmente blanca brilla mientras partículas negras viajan continuamente de lado a lado."
             )
         case .chase:
             return LaraL10n.text(
@@ -414,7 +414,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.30-r38-spatial-readback-budget"
+    private let auraEngineBuild = "2026.08.30-r39-white-orbit-particles"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -642,15 +642,19 @@ struct AuraStudioView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             ))
-        case .glow, .pulse, .orbit, .chase:
+        case .glow, .pulse, .chase:
             return AnyShapeStyle(Color.black)
+        case .orbit:
+            return AnyShapeStyle(Color.white)
         }
     }
 
     private func previewSpectrumHue(for mode: AuraStudioMode) -> Double {
         switch mode {
-        case .rainbow, .orbit:
+        case .rainbow:
             return auraSpectrumPhase(at: Date())
+        case .orbit:
+            return 0
         case .chase:
             return 0.52
         case .glow, .pulse, .tint:
@@ -686,18 +690,7 @@ struct AuraStudioView: View {
                 angle: .degrees(angle)
             ))
         case .orbit:
-            return AnyShapeStyle(AngularGradient(
-                colors: [
-                    Color(red: 0.11, green: 0.86, blue: 1.00),
-                    Color(red: 0.15, green: 0.48, blue: 1.00),
-                    Color(red: 0.47, green: 0.27, blue: 1.00),
-                    Color(red: 1.00, green: 0.21, blue: 0.61),
-                    Color(red: 1.00, green: 0.60, blue: 0.11),
-                    Color(red: 0.11, green: 0.86, blue: 1.00),
-                ],
-                center: .center,
-                angle: .degrees(angle)
-            ))
+            return AnyShapeStyle(Color.white)
         case .chase:
             return AnyShapeStyle(AngularGradient(
                 colors: [
@@ -1071,9 +1064,10 @@ struct AuraStudioView: View {
                     let now = context.date
                     if selectedTarget == .island {
                         let islandMode = mode(for: .island)
-                        // Rainbow and Orbit rotate their spectrum; Chase moves
-                        // rounded neon segments around the same capsule path.
-                        let angle = islandMode == .rainbow || islandMode == .orbit
+                        // Rainbow rotates its spectrum; Orbit moves black
+                        // particles inside a white capsule; Chase advances its
+                        // rounded neon segments around the capsule path.
+                        let angle = islandMode == .rainbow
                             ? auraSpectrumPhase(at: now) * 360
                             : 0
                         let dashPhase: CGFloat = islandMode == .chase
@@ -1094,27 +1088,39 @@ struct AuraStudioView: View {
                             Capsule()
                                 .stroke(
                                     ring,
-                                    style: islandMode == .orbit || islandMode == .chase
+                                    style: islandMode == .chase
                                         ? StrokeStyle(
                                             lineWidth: 12,
                                             lineCap: .round,
                                             lineJoin: .round,
-                                            dash: islandMode == .chase ? [11, 7] : [],
+                                            dash: [11, 7],
                                             dashPhase: dashPhase
                                         )
                                         : StrokeStyle(lineWidth: 12)
                                 )
                                 .blur(radius: 10)
-                                .opacity(0.48)
+                                .opacity(islandMode == .orbit ? 0.72 : 0.48)
                             Capsule()
                                 .fill(fill)
                             Capsule()
                                 .stroke(
                                     ring,
-                                    style: islandMode == .orbit || islandMode == .chase
+                                    style: islandMode == .chase
                                         ? spatialStyle
                                         : StrokeStyle(lineWidth: 4)
                                 )
+                            if islandMode == .orbit {
+                                let phase = auraSpectrumPhase(at: now)
+                                ForEach(0..<5, id: \.self) { index in
+                                    let shifted = phase + (Double(index) / 5.0)
+                                    let loop = shifted - floor(shifted)
+                                    let travel = 0.5 - (0.5 * cos(loop * 2 * Double.pi))
+                                    Circle()
+                                        .fill(.black)
+                                        .frame(width: 11, height: 11)
+                                        .offset(x: -72 + CGFloat(travel) * 144)
+                                }
+                            }
                             if islandMode.fillsIslandBackground {
                                 HStack(spacing: 6) {
                                     Capsule()
@@ -1129,7 +1135,9 @@ struct AuraStudioView: View {
                         }
                         .frame(width: 190, height: 55)
                         .shadow(
-                            color: islandMode == .rainbow ? .clear : previewLightColor,
+                            color: islandMode == .rainbow
+                                ? .clear
+                                : (islandMode == .orbit ? .white : previewLightColor),
                             radius: 14
                         )
                         .opacity(level)
@@ -1647,6 +1655,7 @@ struct AuraStudioView: View {
 
     private func previewLightColor(for target: AuraStudioTarget) -> Color {
         let mode = mode(for: target)
+        if mode == .orbit { return .white }
         return mode.usesFixedPalette
             ? Color(
                 hue: previewSpectrumHue(for: mode),
