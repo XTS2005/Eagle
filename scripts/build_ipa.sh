@@ -7,6 +7,7 @@ DERIVED_DATA="$BUILD_DIR/DerivedData"
 PRODUCT_NAME="Eagle"
 STAGING_DIR="$(mktemp -d "${TMPDIR:-/private/tmp}/eagle-ipa.XXXXXX")"
 VERIFY_MATRIX_SCRIPT="$PROJECT_ROOT/scripts/verify_prepare_matrices.sh"
+VERIFY_POINTER_GUARDS_SCRIPT="$PROJECT_ROOT/scripts/verify_kernel_pointer_guards.sh"
 
 cleanup() {
   rm -rf "$STAGING_DIR"
@@ -23,6 +24,13 @@ if [ ! -x "$VERIFY_MATRIX_SCRIPT" ]; then
 fi
 
 "$VERIFY_MATRIX_SCRIPT"
+
+if [ ! -x "$VERIFY_POINTER_GUARDS_SCRIPT" ]; then
+  echo "ERROR: kernel pointer verifier is missing or not executable: $VERIFY_POINTER_GUARDS_SCRIPT" >&2
+  exit 1
+fi
+
+"$VERIFY_POINTER_GUARDS_SCRIPT"
 
 echo "Building Eagle release..."
 xcodebuild \
