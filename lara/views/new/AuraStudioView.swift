@@ -35,13 +35,20 @@ struct AuraStudioDisplayGeometry {
     var compactIslandFrame: CGRect {
         let model = devicemachine()
         let firstGenerationIsland = model == "iPhone15,2" || model == "iPhone15,3"
-        let baseY: CGFloat = firstGenerationIsland ? 7 : (model == "iPhone17,3" ? 10 : 13)
-        return scaleStandardFrame(CGRect(
+        let baseY: CGFloat = firstGenerationIsland ? 10 : (model == "iPhone17,3" ? 10 : 13)
+        var scaled = scaleStandardFrame(CGRect(
             x: (standardLogicalSize.width - 134) / 2,
             y: baseY,
             width: 134,
-            height: firstGenerationIsland ? 45 : 39
+            height: 39
         ))
+        // Scaling the standard origin as well as its width shifts a centered
+        // frame left in Display Zoom. The hardware aperture remains centered,
+        // so center the model-scoped iPhone 14 Pro frame after scaling.
+        if firstGenerationIsland {
+            scaled.origin.x = (logicalSize.width - scaled.width) / 2
+        }
+        return scaled
     }
 
     var dockAuraFrame: CGRect {
