@@ -553,15 +553,58 @@ nonisolated enum PosterBoardWriter {
 
     @MainActor
     static func refreshCollections() -> Bool {
-        guard #available(iOS 18.0, *),
-              let language = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first,
-              let settingsUtilities = objc_getClass("IPSettingsUtilities") as? NSObject else {
+        let flagsWritten = requestPosterBoardRefresh()
+        var languageRefreshRequested = false
+
+        if #available(iOS 18.0, *),
+           let language = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first,
+           let settingsUtilities = objc_getClass("IPSettingsUtilities") as? NSObject {
+            // setLanguage: returns void on some builds, so a nil perform result
+            // does not mean the selector was not invoked.
+            _ = settingsUtilities.perform(
+                NSSelectorFromString("setLanguage:"),
+                with: language
+            )
+            languageRefreshRequested = true
+        }
+
+        return flagsWritten || languageRefreshRequested
+    }
+
+    /// Matches Nugget's current PosterBoard refresh request. Preserve every
+    /// existing preference and update only the two cache/file-protection flags.
+    private static func requestPosterBoardRefresh() -> Bool {
+        guard let containerID = posterBoardContainerID() else { return false }
+
+        let preferences = URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application")
+            .appendingPathComponent(containerID, isDirectory: true)
+            .appendingPathComponent("Library/Preferences/com.apple.PosterBoard.unprotectedUserDefaults.plist")
+
+        do {
+            var values: [String: Any] = [:]
+            var format: PropertyListSerialization.PropertyListFormat = .binary
+            if let existing = try? Data(contentsOf: preferences), !existing.isEmpty {
+                values = try PropertyListSerialization.propertyList(
+                    from: existing,
+                    options: [],
+                    format: &format
+                ) as? [String: Any] ?? [:]
+            }
+
+            values["PBF_LOCALE_DID_CHANGE"] = false
+            values["PBF_RESET_FILE_PROTECTIONS"] = true
+            let encoded = try PropertyListSerialization.data(
+                fromPropertyList: values,
+                format: format == .openStep ? .binary : format,
+                options: 0
+            )
+            try encoded.write(to: preferences, options: .atomic)
+            log("(wallpaper) requested PosterBoard cache and file-protection refresh")
+            return true
+        } catch {
+            log("(wallpaper) PosterBoard refresh request failed: \(error.localizedDescription)")
             return false
         }
-        return settingsUtilities.perform(
-            NSSelectorFromString("setLanguage:"),
-            with: language
-        ) != nil
     }
 
     private static func descriptorFingerprint(at descriptor: URL) throws -> DescriptorFingerprint {

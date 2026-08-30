@@ -687,7 +687,6 @@ nonisolated struct TendiesInstallResult: Sendable {
 nonisolated private struct TendiesDescriptor: Sendable {
     let url: URL
     let extensionIdentifier: String
-    let preservesIdentity: Bool
 }
 
 nonisolated enum TendiesInstaller {
@@ -731,13 +730,16 @@ nonisolated enum TendiesInstaller {
                 log(
                     "(wallpaper) preparing \(descriptor.url.lastPathComponent) for \(descriptor.extensionIdentifier)"
                 )
-                if !descriptor.preservesIdentity {
-                    try randomize(descriptor: descriptor.url)
-                }
+                // Pocket Poster randomizes every imported descriptor,
+                // including descriptors packaged under Container/. Keeping a
+                // packaged identity makes PosterBoard treat a freshly copied
+                // item as an already-known poster and it may never appear in
+                // Collections.
+                try randomize(descriptor: descriptor.url)
                 let result = try PosterBoardWriter.install(
                     descriptor: descriptor.url,
                     extensionIdentifier: descriptor.extensionIdentifier,
-                    preserveDescriptorName: descriptor.preservesIdentity
+                    preserveDescriptorName: false
                 )
                 log(
                     "(wallpaper) verified descriptor at \(result.destination.lastPathComponent), created=\(result.wasCreated)"
@@ -839,15 +841,12 @@ nonisolated enum TendiesInstaller {
                   versionsIsDirectory.boolValue else { continue }
 
             let relativeComponents = descriptor.pathComponents.dropFirst(root.pathComponents.count)
-            let lowerComponents = relativeComponents.map { $0.lowercased() }
-            let preservesIdentity = lowerComponents.contains("container")
             let extensionIdentifier = try posterExtension(for: Array(relativeComponents))
 
             if !descriptors.contains(where: { $0.url == descriptor }) {
                 descriptors.append(TendiesDescriptor(
                     url: descriptor,
-                    extensionIdentifier: extensionIdentifier,
-                    preservesIdentity: preservesIdentity
+                    extensionIdentifier: extensionIdentifier
                 ))
             }
         }
@@ -913,12 +912,14 @@ nonisolated enum TendiesInstaller {
                     continue
                 }
             } catch {
-                // A few legacy tendies use opaque metadata here. They can still
-                // be installed safely with their original internal identity.
+                // Pocket Poster tolerates opaque legacy metadata one file at a
+                // time, but still assigns the descriptor a fresh top-level
+                // identity. Aborting here leaves PosterBoard seeing a duplicate
+                // and the newly imported wallpaper can remain invisible.
                 log(
-                    "(wallpaper) preserving legacy descriptor identity because \(file.lastPathComponent) could not be updated: \(error.localizedDescription)"
+                    "(wallpaper) skipped legacy identity field in \(file.lastPathComponent): \(error.localizedDescription)"
                 )
-                return
+                continue
             }
         }
 
