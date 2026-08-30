@@ -35,20 +35,21 @@ struct AuraStudioDisplayGeometry {
     var compactIslandFrame: CGRect {
         let model = devicemachine()
         let firstGenerationIsland = model == "iPhone15,2" || model == "iPhone15,3"
+        if model == "iPhone15,3" {
+            return CGRect(
+                x: (logicalSize.width - 134) / 2,
+                y: 10,
+                width: 134,
+                height: 39
+            )
+        }
         let baseY: CGFloat = firstGenerationIsland ? 10 : (model == "iPhone17,3" ? 10 : 13)
-        var scaled = scaleStandardFrame(CGRect(
+        return scaleStandardFrame(CGRect(
             x: (standardLogicalSize.width - 134) / 2,
             y: baseY,
             width: 134,
             height: 39
         ))
-        // Scaling the standard origin as well as its width shifts a centered
-        // frame left in Display Zoom. The hardware aperture remains centered,
-        // so center the model-scoped iPhone 14 Pro frame after scaling.
-        if firstGenerationIsland {
-            scaled.origin.x = (logicalSize.width - scaled.width) / 2
-        }
-        return scaled
     }
 
     var dockAuraFrame: CGRect {
@@ -407,7 +408,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.25-r33-island-rainbow-fill"
+    private let auraEngineBuild = "2026.08.30-r34-iphone14pm-host-geometry"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
