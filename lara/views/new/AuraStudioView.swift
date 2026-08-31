@@ -133,10 +133,9 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
     case pulse = 2
     case tint = 3
     case rainbow = 4
-    case orbit = 5
-    case chase = 6
-    case comet = 7
-    case prism = 8
+    case glacier = 5
+    case ember = 6
+    case aurora = 7
 
     var id: Int { rawValue }
 
@@ -146,10 +145,9 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
         case .pulse: return LaraL10n.text(en: "Pulse", es: "Pulso")
         case .tint: return LaraL10n.text(en: "Tint", es: "Color")
         case .rainbow: return LaraL10n.text(en: "Rainbow", es: "Arcoíris")
-        case .orbit: return LaraL10n.text(en: "Pearl", es: "Perla")
-        case .chase: return LaraL10n.text(en: "Chase", es: "Carrera")
-        case .comet: return LaraL10n.text(en: "Comet", es: "Cometa")
-        case .prism: return LaraL10n.text(en: "Prism", es: "Prisma")
+        case .glacier: return LaraL10n.text(en: "Glacier", es: "Glaciar")
+        case .ember: return LaraL10n.text(en: "Ember", es: "Brasa")
+        case .aurora: return LaraL10n.text(en: "Aurora", es: "Aurora")
         }
     }
 
@@ -175,32 +173,27 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
                 en: "A vivid spectrum moves through the background, bright edge, and outer light.",
                 es: "Un espectro intenso recorre el fondo, el borde brillante y la luz exterior."
             )
-        case .orbit:
+        case .glacier:
             return LaraL10n.text(
-                en: "A pure-white Island with a soft breathing light.",
-                es: "Una Island totalmente blanca con una luz suave que respira."
+                en: "Cyan, blue, and white light move around the edge while the center stays black.",
+                es: "Luz cian, azul y blanca recorre el borde mientras el centro permanece negro."
             )
-        case .chase:
+        case .ember:
             return LaraL10n.text(
-                en: "Cyan and orange neon segments chase each other around the compact Island.",
-                es: "Segmentos de neón cian y naranja se persiguen alrededor de la Island compacta."
+                en: "Red, orange, and gold light move around the edge while the center stays black.",
+                es: "Luz roja, naranja y dorada recorre el borde mientras el centro permanece negro."
             )
-        case .comet:
+        case .aurora:
             return LaraL10n.text(
-                en: "A long white, cyan, blue, and violet light trail circles the compact Island.",
-                es: "Una larga estela blanca, cian, azul y violeta recorre la Island compacta."
-            )
-        case .prism:
-            return LaraL10n.text(
-                en: "A moving spectrum lights only the edge and glow while the center stays clear.",
-                es: "Un espectro móvil ilumina solo el borde y el resplandor mientras el centro permanece libre."
+                en: "Green, cyan, and violet light move around the edge while the center stays black.",
+                es: "Luz verde, cian y violeta recorre el borde mientras el centro permanece negro."
             )
         }
     }
 
     var usesFixedPalette: Bool {
-        self == .rainbow || self == .orbit || self == .chase ||
-            self == .comet || self == .prism
+        self == .rainbow || self == .glacier || self == .ember ||
+            self == .aurora
     }
 
     var fillsIslandBackground: Bool {
@@ -429,7 +422,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.30-r41-four-verified-engines"
+    private let auraEngineBuild = "2026.08.30-r42-palette-only"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -492,7 +485,7 @@ struct AuraStudioView: View {
             return true
         case .pulse:
             return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
-        case .rainbow, .orbit, .chase, .comet, .prism:
+        case .rainbow, .glacier, .ember, .aurora:
             // Animated palettes are Island-only. Dock keeps its independently
             // verified static renderer and cannot receive these modes.
             return target == .island &&
@@ -657,21 +650,21 @@ struct AuraStudioView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             ))
-        case .glow, .pulse, .chase, .comet, .prism:
+        case .glow, .pulse, .glacier, .ember, .aurora:
             return AnyShapeStyle(Color.black)
-        case .orbit:
-            return AnyShapeStyle(Color.white)
         }
     }
 
     private func previewSpectrumHue(for mode: AuraStudioMode) -> Double {
         switch mode {
-        case .rainbow, .prism:
+        case .rainbow:
             return auraSpectrumPhase(at: Date())
-        case .orbit:
-            return 0
-        case .chase, .comet:
+        case .glacier:
             return 0.52
+        case .ember:
+            return 0.06
+        case .aurora:
+            return 0.42
         case .glow, .pulse, .tint:
             return 0
         }
@@ -698,31 +691,34 @@ struct AuraStudioView: View {
     /// modes keep the steady solid surface colour.
     private func islandRingStyle(for mode: AuraStudioMode, angle: Double) -> AnyShapeStyle {
         switch mode {
-        case .rainbow, .prism:
+        case .rainbow:
             return AnyShapeStyle(AngularGradient(
                 colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red],
                 center: .center,
                 angle: .degrees(angle)
             ))
-        case .orbit:
-            return AnyShapeStyle(Color.white)
-        case .chase:
+        case .glacier:
             return AnyShapeStyle(AngularGradient(
                 colors: [
-                    Color(red: 0.08, green: 0.88, blue: 1.00),
-                    Color(red: 0.10, green: 0.56, blue: 1.00),
-                    Color(red: 1.00, green: 0.59, blue: 0.14),
-                    Color(red: 1.00, green: 0.30, blue: 0.28),
-                    Color(red: 0.08, green: 0.88, blue: 1.00),
+                    .cyan,
+                    .blue,
+                    .white,
+                    .cyan,
                 ],
                 center: .center,
-                angle: .degrees(0)
+                angle: .degrees(angle)
             ))
-        case .comet:
+        case .ember:
             return AnyShapeStyle(AngularGradient(
-                colors: [.white, .cyan, .blue, .purple, .white],
+                colors: [.red, .orange, .yellow, .red],
                 center: .center,
-                angle: .degrees(0)
+                angle: .degrees(angle)
+            ))
+        case .aurora:
+            return AnyShapeStyle(AngularGradient(
+                colors: [.green, .cyan, .purple, .green],
+                center: .center,
+                angle: .degrees(angle)
             ))
         case .glow, .pulse, .tint:
             return AnyShapeStyle(color(for: .island))
@@ -1080,62 +1076,30 @@ struct AuraStudioView: View {
                 TimelineView(.animation(
                     minimumInterval: 1.0 / 30.0,
                     paused: reduceMotion ||
-                        ![.pulse, .rainbow, .orbit, .chase, .comet, .prism]
+                        ![.pulse, .rainbow, .glacier, .ember, .aurora]
                             .contains(selectedMode)
                 )) { context in
                     let now = context.date
                     if selectedTarget == .island {
                         let islandMode = mode(for: .island)
-                        // Spectrum modes rotate their palette; the spatial
-                        // modes advance rounded segments around the capsule.
-                        let angle = islandMode == .rainbow || islandMode == .prism
+                        // Every animated palette uses the same proven rotating
+                        // ring preview; only its restricted colors differ.
+                        let angle = islandMode.usesFixedPalette
                             ? auraSpectrumPhase(at: now) * 360
-                            : 0
-                        let spatialMode = islandMode == .chase || islandMode == .comet
-                        let dashTravel: CGFloat = islandMode == .comet ? 92 : 36
-                        let dashPhase: CGFloat = spatialMode
-                            ? CGFloat(-auraSpectrumPhase(at: now)) * dashTravel
                             : 0
                         let level = islandMode == .pulse ? auraPulseLevel(at: now) : 1
                         let ring = islandRingStyle(for: islandMode, angle: angle)
                         let fill = islandFillStyle(for: islandMode, angle: angle)
-                        let spatialStyle = StrokeStyle(
-                            lineWidth: islandMode == .comet ? 4.6 : 5.2,
-                            lineCap: .round,
-                            lineJoin: .round,
-                            dash: islandMode == .comet
-                                ? [26, 12]
-                                : (islandMode == .chase ? [11, 7] : []),
-                            dashPhase: dashPhase
-                        )
 
                         ZStack {
                             Capsule()
-                                .stroke(
-                                    ring,
-                                    style: spatialMode
-                                        ? StrokeStyle(
-                                            lineWidth: 12,
-                                            lineCap: .round,
-                                            lineJoin: .round,
-                                            dash: islandMode == .comet
-                                                ? [26, 12]
-                                                : [11, 7],
-                                            dashPhase: dashPhase
-                                        )
-                                        : StrokeStyle(lineWidth: 12)
-                                )
+                                .stroke(ring, lineWidth: 12)
                                 .blur(radius: 10)
-                                .opacity(islandMode == .orbit ? 0.72 : 0.48)
+                                .opacity(0.48)
                             Capsule()
                                 .fill(fill)
                             Capsule()
-                                .stroke(
-                                    ring,
-                                    style: spatialMode
-                                        ? spatialStyle
-                                        : StrokeStyle(lineWidth: 4)
-                                )
+                                .stroke(ring, lineWidth: 4)
                             if islandMode.fillsIslandBackground {
                                 HStack(spacing: 6) {
                                     Capsule()
@@ -1152,7 +1116,7 @@ struct AuraStudioView: View {
                         .shadow(
                             color: islandMode == .rainbow
                                 ? .clear
-                                : (islandMode == .orbit ? .white : previewLightColor),
+                                : previewLightColor,
                             radius: 14
                         )
                         .opacity(level)
@@ -1670,7 +1634,6 @@ struct AuraStudioView: View {
 
     private func previewLightColor(for target: AuraStudioTarget) -> Color {
         let mode = mode(for: target)
-        if mode == .orbit { return .white }
         return mode.usesFixedPalette
             ? Color(
                 hue: previewSpectrumHue(for: mode),
