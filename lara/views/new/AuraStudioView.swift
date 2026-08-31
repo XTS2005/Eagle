@@ -136,6 +136,7 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
     case glacier = 5
     case ember = 6
     case aurora = 7
+    case photo = 8
 
     var id: Int { rawValue }
 
@@ -148,6 +149,7 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
         case .glacier: return LaraL10n.text(en: "Glacier", es: "Glaciar")
         case .ember: return LaraL10n.text(en: "Ember", es: "Brasa")
         case .aurora: return LaraL10n.text(en: "Aurora", es: "Aurora")
+        case .photo: return LaraL10n.text(en: "Photo", es: "Foto")
         }
     }
 
@@ -188,12 +190,17 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
                 en: "Green, cyan, and violet light move around the edge while the center stays black.",
                 es: "Luz verde, cian y violeta recorre el borde mientras el centro permanece negro."
             )
+        case .photo:
+            return LaraL10n.text(
+                en: "A filled galaxy Island with a vivid violet halo and floating gold stars.",
+                es: "Una Island galáctica rellena con un halo violeta intenso y estrellas doradas."
+            )
         }
     }
 
     var usesFixedPalette: Bool {
         self == .rainbow || self == .glacier || self == .ember ||
-            self == .aurora
+            self == .aurora || self == .photo
     }
 
     var fillsIslandBackground: Bool {
@@ -422,7 +429,7 @@ struct AuraStudioView: View {
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.30-r42-palette-only"
+    private let auraEngineBuild = "2026.08.31-r51-photo-final-offset"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -485,7 +492,7 @@ struct AuraStudioView: View {
             return true
         case .pulse:
             return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
-        case .rainbow, .glacier, .ember, .aurora:
+        case .rainbow, .glacier, .ember, .aurora, .photo:
             // Animated palettes are Island-only. Dock keeps its independently
             // verified static renderer and cannot receive these modes.
             return target == .island &&
@@ -650,7 +657,7 @@ struct AuraStudioView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             ))
-        case .glow, .pulse, .glacier, .ember, .aurora:
+        case .glow, .pulse, .glacier, .ember, .aurora, .photo:
             return AnyShapeStyle(Color.black)
         }
     }
@@ -665,6 +672,8 @@ struct AuraStudioView: View {
             return 0.06
         case .aurora:
             return 0.42
+        case .photo:
+            return 0.73
         case .glow, .pulse, .tint:
             return 0
         }
@@ -720,6 +729,10 @@ struct AuraStudioView: View {
                 center: .center,
                 angle: .degrees(angle)
             ))
+        case .photo:
+            // The real preview is the bundled transparent PNG. This fallback
+            // style is used only by shared shape helpers.
+            return AnyShapeStyle(Color.purple)
         case .glow, .pulse, .tint:
             return AnyShapeStyle(color(for: .island))
         }
@@ -1091,35 +1104,43 @@ struct AuraStudioView: View {
                         let ring = islandRingStyle(for: islandMode, angle: angle)
                         let fill = islandFillStyle(for: islandMode, angle: angle)
 
-                        ZStack {
-                            Capsule()
-                                .stroke(ring, lineWidth: 12)
-                                .blur(radius: 10)
-                                .opacity(0.48)
-                            Capsule()
-                                .fill(fill)
-                            Capsule()
-                                .stroke(ring, lineWidth: 4)
-                            if islandMode.fillsIslandBackground {
-                                HStack(spacing: 6) {
-                                    Capsule()
-                                        .fill(.black)
-                                        .frame(width: 58, height: 17)
-                                    Circle()
-                                        .fill(.black)
-                                        .frame(width: 17, height: 17)
+                        if islandMode == .photo {
+                            Image("PhotoAuraGalaxy")
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFit()
+                                .frame(width: 220, height: 92)
+                        } else {
+                            ZStack {
+                                Capsule()
+                                    .stroke(ring, lineWidth: 12)
+                                    .blur(radius: 10)
+                                    .opacity(0.48)
+                                Capsule()
+                                    .fill(fill)
+                                Capsule()
+                                    .stroke(ring, lineWidth: 4)
+                                if islandMode.fillsIslandBackground {
+                                    HStack(spacing: 6) {
+                                        Capsule()
+                                            .fill(.black)
+                                            .frame(width: 58, height: 17)
+                                        Circle()
+                                            .fill(.black)
+                                            .frame(width: 17, height: 17)
+                                    }
+                                    .offset(x: 4)
                                 }
-                                .offset(x: 4)
                             }
+                            .frame(width: 190, height: 55)
+                            .shadow(
+                                color: islandMode == .rainbow
+                                    ? .clear
+                                    : previewLightColor,
+                                radius: 14
+                            )
+                            .opacity(level)
                         }
-                        .frame(width: 190, height: 55)
-                        .shadow(
-                            color: islandMode == .rainbow
-                                ? .clear
-                                : previewLightColor,
-                            radius: 14
-                        )
-                        .opacity(level)
                     } else {
                         let dockMode = mode(for: .dock)
                         let hue = dockMode == .rainbow ? auraSpectrumPhase(at: now) : 0
