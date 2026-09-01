@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 import Darwin
 
 private struct AuraStudioNotice: Identifiable {
@@ -10,6 +11,114 @@ private struct AuraStudioNotice: Identifiable {
     init(message: String, offersRespring: Bool = false) {
         self.message = message
         self.offersRespring = offersRespring
+    }
+}
+
+private enum EagleDockBackgroundRecipe {
+    private static let targets = [
+        "/System/Library/PrivateFrameworks/CoreMaterial.framework/dockDark.materialrecipe",
+        "/System/Library/PrivateFrameworks/CoreMaterial.framework/dockLight.materialrecipe",
+    ]
+
+    private static var backupDirectory: URL {
+        URL.documents.appendingPathComponent(
+            "EagleDockBackgroundBackup",
+            isDirectory: true
+        )
+    }
+
+    static func setHidden(_ hidden: Bool, manager: laramgr) throws {
+        if hidden {
+            try installTransparentRecipes(manager: manager)
+        } else {
+            try restoreOriginalRecipes(manager: manager)
+        }
+    }
+
+    private static func installTransparentRecipes(manager: laramgr) throws {
+        try FileManager.default.createDirectory(
+            at: backupDirectory,
+            withIntermediateDirectories: true
+        )
+
+        var prepared: [(path: String, original: Data, replacement: Data)] = []
+        let transparent = CIColor(red: 0, green: 0, blue: 0, alpha: 0)
+
+        for path in targets {
+            let sourceURL = URL(fileURLWithPath: path)
+            let original = try Data(contentsOf: sourceURL)
+            let backupURL = backupDirectory.appendingPathComponent(
+                sourceURL.lastPathComponent
+            )
+            if !FileManager.default.fileExists(atPath: backupURL.path) {
+                try original.write(to: backupURL, options: .atomic)
+            }
+
+            let replacement = try ColorSwapManager.setColor(
+                url: sourceURL,
+                color: transparent,
+                blur: 0
+            )
+            guard replacement.count == original.count else {
+                throw NSError(
+                    domain: "Eagle.DockBackground",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Dock recipe size mismatch"]
+                )
+            }
+            prepared.append((path, original, replacement))
+        }
+
+        try apply(
+            prepared.map { ($0.path, $0.replacement) },
+            rollback: prepared.map { ($0.path, $0.original) },
+            manager: manager
+        )
+    }
+
+    private static func restoreOriginalRecipes(manager: laramgr) throws {
+        let originals = try targets.map { path -> (String, Data) in
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            let backupURL = backupDirectory.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: backupURL.path) else {
+                throw NSError(
+                    domain: "Eagle.DockBackground",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Original Dock backup is missing"]
+                )
+            }
+            return (path, try Data(contentsOf: backupURL))
+        }
+
+        let current = try targets.map {
+            ($0, try Data(contentsOf: URL(fileURLWithPath: $0)))
+        }
+        try apply(originals, rollback: current, manager: manager)
+    }
+
+    private static func apply(
+        _ files: [(String, Data)],
+        rollback: [(String, Data)],
+        manager: laramgr
+    ) throws {
+        var applied = 0
+        for (path, data) in files {
+            let result = manager.lara_overwritefile(target: path, data: data)
+            guard result.ok else {
+                for index in 0..<applied {
+                    _ = manager.lara_overwritefile(
+                        target: rollback[index].0,
+                        data: rollback[index].1
+                    )
+                }
+                throw NSError(
+                    domain: "Eagle.DockBackground",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: result.message]
+                )
+            }
+            applied += 1
+        }
     }
 }
 
@@ -133,10 +242,13 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
     case pulse = 2
     case tint = 3
     case rainbow = 4
-    case glacier = 5
-    case ember = 6
-    case aurora = 7
     case photo = 8
+    case photoRainbow = 9
+    case photoInferno = 10
+    case photoSky = 11
+    case photoVortex = 12
+    case photoBubblegum = 13
+    case photoTraffic = 14
 
     var id: Int { rawValue }
 
@@ -146,10 +258,13 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
         case .pulse: return LaraL10n.text(en: "Pulse", es: "Pulso")
         case .tint: return LaraL10n.text(en: "Tint", es: "Color")
         case .rainbow: return LaraL10n.text(en: "Rainbow", es: "Arcoíris")
-        case .glacier: return LaraL10n.text(en: "Glacier", es: "Glaciar")
-        case .ember: return LaraL10n.text(en: "Ember", es: "Brasa")
-        case .aurora: return LaraL10n.text(en: "Aurora", es: "Aurora")
         case .photo: return LaraL10n.text(en: "Photo", es: "Foto")
+        case .photoRainbow: return LaraL10n.text(en: "Starlight", es: "Luz estelar")
+        case .photoInferno: return LaraL10n.text(en: "Inferno", es: "Inferno")
+        case .photoSky: return LaraL10n.text(en: "Horizon", es: "Horizonte")
+        case .photoVortex: return LaraL10n.text(en: "Vortex", es: "Vórtice")
+        case .photoBubblegum: return LaraL10n.text(en: "Bubblegum", es: "Chicle")
+        case .photoTraffic: return LaraL10n.text(en: "Traffic", es: "Tráfico")
         }
     }
 
@@ -175,32 +290,35 @@ private enum AuraStudioMode: Int, CaseIterable, Identifiable {
                 en: "A vivid spectrum moves through the background, bright edge, and outer light.",
                 es: "Un espectro intenso recorre el fondo, el borde brillante y la luz exterior."
             )
-        case .glacier:
+        case .photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+             .photoBubblegum, .photoTraffic:
             return LaraL10n.text(
-                en: "Cyan, blue, and white light move around the edge while the center stays black.",
-                es: "Luz cian, azul y blanca recorre el borde mientras el centro permanece negro."
-            )
-        case .ember:
-            return LaraL10n.text(
-                en: "Red, orange, and gold light move around the edge while the center stays black.",
-                es: "Luz roja, naranja y dorada recorre el borde mientras el centro permanece negro."
-            )
-        case .aurora:
-            return LaraL10n.text(
-                en: "Green, cyan, and violet light move around the edge while the center stays black.",
-                es: "Luz verde, cian y violeta recorre el borde mientras el centro permanece negro."
-            )
-        case .photo:
-            return LaraL10n.text(
-                en: "A filled galaxy Island with a vivid violet halo and floating gold stars.",
-                es: "Una Island galáctica rellena con un halo violeta intenso y estrellas doradas."
+                en: "A photographic Island style with a fixed high-contrast halo.",
+                es: "Un estilo fotográfico para Island con un halo fijo de alto contraste."
             )
         }
     }
 
     var usesFixedPalette: Bool {
-        self == .rainbow || self == .glacier || self == .ember ||
-            self == .aurora || self == .photo
+        self == .rainbow || isPhotoTexture
+    }
+
+    var isPhotoTexture: Bool {
+        [.photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+         .photoBubblegum, .photoTraffic].contains(self)
+    }
+
+    var photoAssetName: String? {
+        switch self {
+        case .photo: return "PhotoAuraGalaxy"
+        case .photoRainbow: return "PhotoAuraRainbow"
+        case .photoInferno: return "PhotoAuraInferno"
+        case .photoSky: return "PhotoAuraSky"
+        case .photoVortex: return "PhotoAuraVortex"
+        case .photoBubblegum: return "PhotoAuraBubblegum"
+        case .photoTraffic: return "PhotoAuraTraffic"
+        default: return nil
+        }
     }
 
     var fillsIslandBackground: Bool {
@@ -411,6 +529,8 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockRed") private var activeDockRed = 158
     @AppStorage("eagle.auraStudio.activeDockGreen") private var activeDockGreen = 64
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
+    @AppStorage("eagle.dockGallery.activeStyle") private var activeDockGalleryStyleRaw = 0
+    @AppStorage("eagle.dock.backgroundRecipeHidden") private var dockBackgroundHidden = false
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
     @State private var isApplying = false
@@ -424,12 +544,13 @@ struct AuraStudioView: View {
     @State private var operationIsRemoval = false
     @State private var systemIslandSuppressed = false
     @State private var isReadingSystemIslandSetting = false
+    @State private var isUpdatingDockBackground = false
 
     private let springBoardPreferencesPath =
         "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
-    private let auraEngineBuild = "2026.08.31-r51-photo-final-offset"
+    private let auraEngineBuild = "2026.08.31-r57-trimmed-styles"
 
     private var islandCompatibility: EagleDynamicIslandCompatibility {
         .current
@@ -492,11 +613,17 @@ struct AuraStudioView: View {
             return true
         case .pulse:
             return EagleFeaturePolicy.allows(.auraPulse, channel: releaseChannel)
-        case .rainbow, .glacier, .ember, .aurora, .photo:
+        case .rainbow:
             // Animated palettes are Island-only. Dock keeps its independently
             // verified static renderer and cannot receive these modes.
             return target == .island &&
                 EagleFeaturePolicy.allows(.auraRainbow, channel: releaseChannel)
+        case .photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+             .photoBubblegum, .photoTraffic:
+            // Photo styles moved to Island Gallery. Keeping the enum values
+            // here lets Aura Studio describe an active Gallery style without
+            // exposing a second, conflicting Apply control.
+            return false
         case .tint:
             // Keep the implementation available for future validation, but do
             // not expose or reselect Tint in the public Aura Studio build.
@@ -657,7 +784,9 @@ struct AuraStudioView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             ))
-        case .glow, .pulse, .glacier, .ember, .aurora, .photo:
+        case .glow, .pulse,
+             .photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+             .photoBubblegum, .photoTraffic:
             return AnyShapeStyle(Color.black)
         }
     }
@@ -666,13 +795,8 @@ struct AuraStudioView: View {
         switch mode {
         case .rainbow:
             return auraSpectrumPhase(at: Date())
-        case .glacier:
-            return 0.52
-        case .ember:
-            return 0.06
-        case .aurora:
-            return 0.42
-        case .photo:
+        case .photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+             .photoBubblegum, .photoTraffic:
             return 0.73
         case .glow, .pulse, .tint:
             return 0
@@ -706,30 +830,8 @@ struct AuraStudioView: View {
                 center: .center,
                 angle: .degrees(angle)
             ))
-        case .glacier:
-            return AnyShapeStyle(AngularGradient(
-                colors: [
-                    .cyan,
-                    .blue,
-                    .white,
-                    .cyan,
-                ],
-                center: .center,
-                angle: .degrees(angle)
-            ))
-        case .ember:
-            return AnyShapeStyle(AngularGradient(
-                colors: [.red, .orange, .yellow, .red],
-                center: .center,
-                angle: .degrees(angle)
-            ))
-        case .aurora:
-            return AnyShapeStyle(AngularGradient(
-                colors: [.green, .cyan, .purple, .green],
-                center: .center,
-                angle: .degrees(angle)
-            ))
-        case .photo:
+        case .photo, .photoRainbow, .photoInferno, .photoSky, .photoVortex,
+             .photoBubblegum, .photoTraffic:
             // The real preview is the bundled transparent PNG. This fallback
             // style is used only by shared shape helpers.
             return AnyShapeStyle(Color.purple)
@@ -808,7 +910,7 @@ struct AuraStudioView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Aura Studio")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isApplying)
+        .navigationBarBackButtonHidden(isApplying || isUpdatingDockBackground)
         .alert(item: $notice) { notice in
             if notice.offersRespring {
                 return Alert(
@@ -833,12 +935,17 @@ struct AuraStudioView: View {
             )
         }
         .overlay {
-            if isApplying {
+            if isApplying || isUpdatingDockBackground {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                 VStack(spacing: 12) {
                     EagleRainbowSpinner(size: 28)
-                        Text(applyStage.isEmpty
+                        Text(isUpdatingDockBackground
+                             ? LaraL10n.text(
+                                en: "Updating the Dock background…",
+                                es: "Actualizando el fondo del Dock…"
+                             )
+                             : applyStage.isEmpty
                              ? LaraL10n.text(
                                 en: "Preparing a safe system update…",
                                 es: "Preparando una actualización segura…"
@@ -901,6 +1008,23 @@ struct AuraStudioView: View {
     }
 
     private var systemIslandCard: some View {
+        VStack(spacing: 0) {
+            systemIslandRow
+
+            Divider()
+                .padding(.leading, 62)
+
+            dockBackgroundRow
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
+    }
+
+    private var systemIslandRow: some View {
         HStack(spacing: 12) {
             Image(systemName: "eye.slash.fill")
                 .font(.system(size: 16, weight: .semibold))
@@ -928,14 +1052,121 @@ struct AuraStudioView: View {
                 set: updateSystemIslandSuppression
             ))
             .labelsHidden()
-            .disabled(!mgr.sbxready || isReadingSystemIslandSetting || isApplying)
+            .disabled(
+                !mgr.sbxready || isReadingSystemIslandSetting ||
+                isApplying || isUpdatingDockBackground
+            )
         }
         .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+    }
+
+    private var dockBackgroundRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "dock.rectangle")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 36, height: 36)
+                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LaraL10n.text(
+                    en: "Hide Dock background",
+                    es: "Ocultar fondo del Dock"
+                ))
+                .font(.subheadline.weight(.semibold))
+                Text(mgr.vfsready
+                     ? LaraL10n.text(
+                        en: "Requires respring",
+                        es: "Requiere respring"
+                     )
+                     : (mgr.dsready && mgr.hasOffsets)
+                     ? LaraL10n.text(
+                        en: "VFS prepares automatically",
+                        es: "VFS se prepara automáticamente"
+                     )
+                     : LaraL10n.text(en: "Prepare access first", es: "Prepara el acceso primero"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            Toggle("", isOn: Binding(
+                get: { dockBackgroundHidden },
+                set: updateDockBackgroundVisibility
+            ))
+            .labelsHidden()
+            .disabled(
+                !mgr.dsready || !mgr.hasOffsets || mgr.vfsrunning ||
+                isApplying || isUpdatingDockBackground
+            )
+        }
+        .padding(14)
+    }
+
+    private func updateDockBackgroundVisibility(_ enabled: Bool) {
+        guard !isApplying, !isUpdatingDockBackground else { return }
+        guard mgr.dsready, mgr.hasOffsets else {
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "Prepare Eagle access before changing the Dock background.",
+                es: "Prepara el acceso de Eagle antes de cambiar el fondo del Dock."
+            ))
+            return
+        }
+
+        let previousValue = dockBackgroundHidden
+        isUpdatingDockBackground = true
+
+        let apply = {
+            self.applyDockBackgroundRecipe(
+                enabled,
+                previousValue: previousValue
+            )
+        }
+        if mgr.vfsready {
+            apply()
+        } else {
+            mgr.vfsinit { ready in
+                guard ready else {
+                    self.dockBackgroundHidden = previousValue
+                    self.isUpdatingDockBackground = false
+                    self.notice = AuraStudioNotice(message: LaraL10n.text(
+                        en: "VFS could not be initialized for the Dock change.",
+                        es: "No se pudo inicializar VFS para cambiar el Dock."
+                    ))
+                    return
+                }
+                apply()
+            }
+        }
+    }
+
+    private func applyDockBackgroundRecipe(
+        _ enabled: Bool,
+        previousValue: Bool
+    ) {
+        do {
+            try EagleDockBackgroundRecipe.setHidden(enabled, manager: mgr)
+            dockBackgroundHidden = enabled
+            isUpdatingDockBackground = false
+            notice = AuraStudioNotice(
+                message: LaraL10n.text(
+                    en: enabled
+                        ? "The Dock background is ready to be hidden. Respring to apply it."
+                        : "The original Dock background is ready to return. Respring to apply it.",
+                    es: enabled
+                        ? "El fondo del Dock está listo para ocultarse. Haz respring para aplicarlo."
+                        : "El fondo original del Dock está listo para volver. Haz respring para aplicarlo."
+                ),
+                offersRespring: true
+            )
+        } catch {
+            dockBackgroundHidden = previousValue
+            isUpdatingDockBackground = false
+            notice = AuraStudioNotice(message: LaraL10n.text(
+                en: "The Dock background could not be changed: \(error.localizedDescription)",
+                es: "No se pudo cambiar el fondo del Dock: \(error.localizedDescription)"
+            ))
         }
     }
 
@@ -1089,7 +1320,7 @@ struct AuraStudioView: View {
                 TimelineView(.animation(
                     minimumInterval: 1.0 / 30.0,
                     paused: reduceMotion ||
-                        ![.pulse, .rainbow, .glacier, .ember, .aurora]
+                        ![.pulse, .rainbow]
                             .contains(selectedMode)
                 )) { context in
                     let now = context.date
@@ -1104,8 +1335,8 @@ struct AuraStudioView: View {
                         let ring = islandRingStyle(for: islandMode, angle: angle)
                         let fill = islandFillStyle(for: islandMode, angle: angle)
 
-                        if islandMode == .photo {
-                            Image("PhotoAuraGalaxy")
+                        if let photoAssetName = islandMode.photoAssetName {
+                            Image(photoAssetName)
                                 .resizable()
                                 .interpolation(.high)
                                 .scaledToFit()
@@ -1743,6 +1974,14 @@ struct AuraStudioView: View {
                     es: "Este iPhone no tiene Dynamic Island"
                 )
         }
+        if target == .dock,
+           isTargetActive(target),
+           (15...17).contains(activeDockModeRaw) {
+            return LaraL10n.text(
+                en: "Dock Gallery artwork active",
+                es: "Arte de Galería Dock activo"
+            )
+        }
         guard let appliedMode = activeMode(for: target), isTargetActive(target) else {
             return LaraL10n.text(en: "Not active", es: "No activo")
         }
@@ -1814,6 +2053,7 @@ struct AuraStudioView: View {
             activeModeRaw = 0
             activeIslandModeRaw = 0
             activeDockModeRaw = 0
+            activeDockGalleryStyleRaw = 0
             activeSpringBoardPID = 0
             return
         }
@@ -1831,6 +2071,7 @@ struct AuraStudioView: View {
             activeModeRaw = 0
             activeIslandModeRaw = 0
             activeDockModeRaw = 0
+            activeDockGalleryStyleRaw = 0
             activeSpringBoardPID = 0
             return
         }
@@ -1843,6 +2084,7 @@ struct AuraStudioView: View {
         }
         if savedFlags & Flag.dock == 0 {
             activeDockModeRaw = 0
+            activeDockGalleryStyleRaw = 0
         }
 
         // One-time migration from the original shared style field.
@@ -2454,6 +2696,7 @@ struct AuraStudioView: View {
                                 activeModeRaw = 0
                             } else if step.flag == Flag.dock {
                                 activeDockModeRaw = 0
+                                activeDockGalleryStyleRaw = 0
                             }
                             activeFlagsRaw = Int(retainedVerified | newlyApplied)
                             activeSpringBoardPID = activeFlagsRaw == 0
@@ -2616,6 +2859,7 @@ struct AuraStudioView: View {
                             activeIslandBlue = Int(blueValue)
                         } else if step.flag == Flag.dock {
                             activeDockModeRaw = mode
+                            activeDockGalleryStyleRaw = 0
                             activeDockRed = Int(redValue)
                             activeDockGreen = Int(greenValue)
                             activeDockBlue = Int(blueValue)

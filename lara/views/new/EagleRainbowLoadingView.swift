@@ -241,14 +241,137 @@ struct EagleWordmark: View {
             EagleBrandMark(size: logoSize, shimmer: false)
 
             Text("Eagle")
-                .font(.system(size: nameSize, weight: .heavy, design: .serif))
-                .tracking(0.5)
+                .font(.system(size: nameSize, weight: .semibold, design: .serif).lowercaseSmallCaps())
+                .tracking(1.5)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .fixedSize()
                 .accessibilityAddTraits(.isHeader)
         }
         .eagleRainbowSweep()
+    }
+}
+
+/// Shared top header for both the Customize and Access screens: the Eagle
+/// wordmark on the left, the language and settings controls together on the
+/// right at the same level, and the device-identity pill fixed on the line
+/// directly below the wordmark.
+struct EagleHeaderBar: View {
+    @Binding var language: LaraLanguage
+    var onSettings: () -> Void
+
+    @ObservedObject private var mgr = laramgr.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                EagleWordmark()
+                Spacer(minLength: 8)
+                languageBadge
+                settingsButton
+            }
+            readinessBadge
+        }
+    }
+
+    private var languageBadge: some View {
+        Menu {
+            Picker(
+                LaraL10n.text(en: "Language", es: "Idioma"),
+                selection: $language
+            ) {
+                ForEach(LaraLanguage.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                    .foregroundStyle(.primary)
+                Text(language.shortName)
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 11)
+            .frame(minHeight: 34)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+            }
+        }
+        .tint(.primary)
+        .accessibilityLabel(LaraL10n.text(en: "Language", es: "Idioma"))
+        .accessibilityValue(language.displayName)
+    }
+
+    private var settingsButton: some View {
+        Button {
+            onSettings()
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground),
+                    in: Circle()
+                )
+                .overlay {
+                    Circle().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(LaraL10n.text(en: "Settings", es: "Ajustes"))
+    }
+
+    private var deviceModelName: String {
+        let full = EagleDynamicIslandCompatibility.current.displayModel
+        if let cut = full.range(of: " (") {
+            return String(full[..<cut.lowerBound])
+        }
+        return full
+    }
+
+    private var iosVersionString: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return v.patchVersion == 0
+            ? "\(v.majorVersion).\(v.minorVersion)"
+            : "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }
+
+    private var readinessBadge: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
+                .frame(width: 8, height: 8)
+            Text(mgr.sbxready
+                ? "\(deviceModelName) · iOS \(iosVersionString)"
+                : LaraL10n.text(en: "Not identified", es: "No identificado"))
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 34)
+        .background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: Capsule()
+        )
+        .overlay {
+            Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            mgr.sbxready
+                ? LaraL10n.text(
+                    en: "Identified: \(deviceModelName), iOS \(iosVersionString)",
+                    es: "Identificado: \(deviceModelName), iOS \(iosVersionString)"
+                )
+                : LaraL10n.text(en: "Not identified", es: "No identificado")
+        )
     }
 }
 

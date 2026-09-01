@@ -27,6 +27,22 @@ enum logsdisplaymode: String, CaseIterable {
     case content = "Directly in ContentView"
 }
 
+/// Subtle press feedback for custom card-style buttons (e.g. the developer card).
+/// Honors Reduce Motion by dropping the scale transform and animation.
+private struct PressableCardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
+            .opacity(configuration.isPressed ? 0.96 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.16),
+                value: configuration.isPressed
+            )
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var mgr: laramgr
@@ -109,7 +125,7 @@ struct SettingsView: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(LaraL10n.text(
             en: "Leonardo, creator of Eagle. Opens GitHub profile.",
@@ -286,11 +302,12 @@ struct SettingsView: View {
                 // tips
                 if advancedToolsAllowed && showkcachetips {
                     Section {
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("How to obtain a kernelcache (macOS)")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundColor(.primary)
-                            
+                                .padding(.bottom, 2)
+
                             Text("1. Download the IPSW tool for your device.")
                             Link("https://github.com/blacktop/ipsw/releases",
                                  destination: URL(string: "https://github.com/blacktop/ipsw/releases")!)

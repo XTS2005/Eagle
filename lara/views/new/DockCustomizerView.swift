@@ -8,15 +8,18 @@ private struct EagleDockAlert: Identifiable {
 struct DockCustomizerView: View {
     @ObservedObject private var mgr = laramgr.shared
     @AppStorage("eagle.dock.capacity") private var selectedCapacity = 5
+    @AppStorage("eagle.dock.backgroundRecipeHidden") private var hideDockBackground = false
 
     @State private var isApplying = false
     @State private var alert: EagleDockAlert?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let capacities = [4, 5, 6]
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: 20) {
                 dockPreview
                 capacityCard
                 explanationCard
@@ -56,39 +59,18 @@ struct DockCustomizerView: View {
 
     private var dockPreview: some View {
         VStack(spacing: 18) {
-            VStack(spacing: 5) {
+            VStack(spacing: 6) {
                 Text(LaraL10n.text(en: "More room, same Dock", es: "Más espacio, el mismo Dock"))
                     .font(.title2.bold())
+                    .multilineTextAlignment(.center)
                 Text(capacityDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .animation(.easeInOut(duration: 0.25), value: selectedCapacity)
             }
 
-            HStack(spacing: selectedCapacity == 6 ? 8 : 11) {
-                ForEach(0..<selectedCapacity, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: selectedCapacity == 6 ? 10 : 12, style: .continuous)
-                        .fill(previewColor(for: index).gradient)
-                        .frame(
-                            width: selectedCapacity == 6 ? 39 : 45,
-                            height: selectedCapacity == 6 ? 39 : 45
-                        )
-                        .overlay {
-                            Image(systemName: previewSymbol(for: index))
-                                .font(.system(size: selectedCapacity == 6 ? 15 : 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity)
-            .frame(height: 78)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.10), lineWidth: 1)
-            }
+            dockStrip
         }
         .padding(20)
         .frame(maxWidth: .infinity)
@@ -98,10 +80,88 @@ struct DockCustomizerView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
         }
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+    }
+
+    /// The little Dock mock-up. A slow colour wash drifts behind the tiles and
+    /// each icon breathes on its own phase, so the preview feels alive without
+    /// distracting. Everything freezes cleanly when Reduce Motion is on.
+    private var dockStrip: some View {
+        let compact = selectedCapacity == 6
+        return TimelineView(.animation(paused: reduceMotion)) { context in
+            ZStack {
+                AngularGradient(
+                    colors: washColors,
+                    center: .center,
+                    angle: .degrees(reduceMotion ? 45 : washAngle(at: context.date))
+                )
+                .blur(radius: 26)
+                .opacity(0.85)
+                .allowsHitTesting(false)
+
+                HStack(spacing: compact ? 8 : 11) {
+                    ForEach(0..<selectedCapacity, id: \.self) { index in
+                        let glow = reduceMotion ? 0.8 : tileGlow(at: context.date, index: index)
+                        RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
+                            .fill(previewColor(for: index).gradient)
+                            .frame(
+                                width: compact ? 39 : 45,
+                                height: compact ? 39 : 45
+                            )
+                            .overlay {
+                                Image(systemName: previewSymbol(for: index))
+                                    .font(.system(size: compact ? 15 : 17, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .shadow(
+                                color: previewColor(for: index).opacity(0.45 * glow),
+                                radius: 7 * glow,
+                                y: 2
+                            )
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 78)
+        .background {
+            if !hideDockBackground {
+                Rectangle().fill(.ultraThinMaterial)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            if !hideDockBackground {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.10), lineWidth: 1)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: selectedCapacity)
+    }
+
+    /// Soft, low-alpha hues for the wash behind the Dock tiles. The first colour
+    /// repeats at the end so the angular sweep loops seamlessly.
+    private var washColors: [Color] {
+        [Color.blue, .indigo, .purple, .pink, .orange, .blue].map { $0.opacity(0.18) }
+    }
+
+    /// One slow rotation (0…360) for the colour wash behind the tiles.
+    private func washAngle(at date: Date) -> Double {
+        let cycles = date.timeIntervalSinceReferenceDate / 16.0
+        return (cycles - floor(cycles)) * 360
+    }
+
+    /// Gentle breathing level (0.55…1.0) for a tile's colour halo, offset per
+    /// icon so the row shimmers rather than pulsing in unison.
+    private func tileGlow(at date: Date, index: Int) -> Double {
+        let cycles = date.timeIntervalSinceReferenceDate / 4.8 + Double(index) * 0.18
+        let phase = cycles - floor(cycles)
+        return 0.55 + 0.45 * (0.5 - 0.5 * cos(phase * 2 * Double.pi))
     }
 
     private var capacityCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(LaraL10n.text(en: "Dock Capacity", es: "Capacidad del Dock"))
                 .font(.headline)
 
@@ -115,16 +175,20 @@ struct DockCustomizerView: View {
             }
             .pickerStyle(.segmented)
 
-            HStack {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 7, height: 7)
                 Text(capacityLabel)
                     .font(.subheadline.weight(.semibold))
-                Spacer()
+                    .contentTransition(.interpolate)
+                Spacer(minLength: 0)
                 if selectedCapacity == 4 {
-                    Text(LaraL10n.text(en: "Apple default", es: "Original de Apple"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    ThinBadge(text: LaraL10n.text(en: "Apple default", es: "Original de Apple"))
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
             }
+            .animation(.easeInOut(duration: 0.22), value: selectedCapacity)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,11 +201,16 @@ struct DockCustomizerView: View {
     }
 
     private var explanationCard: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 14) {
             Image(systemName: "hand.draw.fill")
-                .foregroundStyle(.secondary)
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 4) {
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 38, height: 38)
+                .background(
+                    Color.accentColor.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                )
+            VStack(alignment: .leading, spacing: 5) {
                 Text(LaraL10n.text(en: "Add apps after applying", es: "Añade apps después de aplicar"))
                     .font(.subheadline.weight(.semibold))
                 Text(LaraL10n.text(
@@ -166,7 +235,9 @@ struct DockCustomizerView: View {
     private var applyButton: some View {
         Button(action: applySelectedCapacity) {
             HStack(spacing: 9) {
-                Image(systemName: selectedCapacity == 4 ? "arrow.counterclockwise" : "checkmark.circle.fill")
+                Image(systemName: selectedCapacity == 4
+                      ? "arrow.counterclockwise"
+                      : "checkmark.circle.fill")
                 Text(selectedCapacity == 4
                      ? LaraL10n.text(en: "Restore Standard Dock", es: "Restaurar Dock estándar")
                      : LaraL10n.text(en: "Apply \(selectedCapacity)-Icon Dock", es: "Aplicar Dock de \(selectedCapacity) iconos"))
@@ -175,10 +246,14 @@ struct DockCustomizerView: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color.accentColor)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .background(
+                Color.accentColor.gradient,
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+            )
+            .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DockPressButtonStyle())
         .disabled(isApplying)
     }
 
@@ -229,16 +304,16 @@ struct DockCustomizerView: View {
 
             let capacity = self.selectedCapacity
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = set_dock_icon_count(process, Int32(capacity))
+                let capacityResult = set_dock_icon_count(process, Int32(capacity))
                 DispatchQueue.main.async {
                     self.isApplying = false
-                    if result == 0 {
+                    if capacityResult == 0 {
                         self.alert = EagleDockAlert(message: LaraL10n.text(
                             en: "The Dock now accepts \(capacity) icons. Return to the Home Screen and drag apps into the new spaces.",
                             es: "El Dock ahora acepta \(capacity) iconos. Vuelve a la pantalla de inicio y arrastra apps a los espacios nuevos."
                         ))
                     } else {
-                        self.alert = EagleDockAlert(message: self.message(forResult: result))
+                        self.alert = EagleDockAlert(message: self.message(forResult: capacityResult))
                     }
                 }
             }
@@ -302,5 +377,34 @@ struct DockCustomizerView: View {
                 es: "Se encontró el Dock, pero iOS no aceptó la nueva capacidad."
             )
         }
+    }
+
+}
+
+/// Slim, quiet capsule for a single-word status ("Apple default").
+private struct ThinBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+            .overlay {
+                Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+            }
+    }
+}
+
+/// Gentle press feedback for the primary Dock action: a small scale so the
+/// button feels responsive under the finger without any layout change.
+private struct DockPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

@@ -1428,6 +1428,7 @@ struct EagleSystemView: View {
     @ObservedObject private var scenes = EagleSceneManager.shared
     @AppStorage(EagleReleaseChannel.storageKey)
     private var channelRaw = EagleReleaseChannel.stable.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var scenesAllowed: Bool {
         EagleFeaturePolicy.allows(
@@ -1554,14 +1555,36 @@ struct EagleSystemView: View {
         .foregroundStyle(.white)
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [Color(red: 0.09, green: 0.18, blue: 0.42), .indigo, Color(red: 0.36, green: 0.18, blue: 0.65)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.09, green: 0.18, blue: 0.42), .indigo, Color(red: 0.36, green: 0.18, blue: 0.65)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                heroSheen
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    // A soft light that drifts slowly across the hero so the header feels alive;
+    // it holds still when Reduce Motion is on.
+    private var heroSheen: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            let a = reduceMotion
+                ? 0.6
+                : (seconds / 9).truncatingRemainder(dividingBy: 1) * 2 * Double.pi
+
+            Circle()
+                .fill(Color.white.opacity(0.13))
+                .frame(width: 190, height: 190)
+                .blur(radius: 55)
+                .offset(x: CGFloat(cos(a)) * 120, y: CGFloat(sin(a)) * 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .allowsHitTesting(false)
     }
 
     private func systemRow(title: String, subtitle: String, symbol: String, color: Color) -> some View {
@@ -1573,7 +1596,6 @@ struct EagleSystemView: View {
                 .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.headline).foregroundStyle(.primary)
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
@@ -1587,6 +1609,7 @@ struct EagleSystemView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
         }
+        .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
     }
 }
 

@@ -77,7 +77,7 @@ struct EagleAppShellView: View {
                 Group {
                     if selected {
                         Image(systemName: systemImage)
-                            .foregroundStyle(EagleSpectrumStyle.gradient)
+                            .foregroundStyle(EagleVisualTheme.accent)
                     } else {
                         Image(systemName: systemImage)
                             .foregroundStyle(.secondary)
@@ -114,6 +114,7 @@ private struct EagleBeta10AccessView: View {
     @ObservedObject private var mgr = laramgr.shared
     @ObservedObject private var sceneManager = EagleSceneManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
     @State private var showingSettings = false
     @State private var showingTelegram = false
 
@@ -211,40 +212,24 @@ private struct EagleBeta10AccessView: View {
     }
 
     private var accessHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                EagleWordmark()
-
-                Spacer(minLength: 8)
-
-                readinessBadge
-
-                Button {
-                    showingSettings = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Color(uiColor: .secondarySystemGroupedBackground),
-                            in: Circle()
-                        )
-                        .overlay {
-                            Circle().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(LaraL10n.text(en: "Settings", es: "Ajustes"))
-            }
-
-            Text(LaraL10n.text(
-                en: "Prepare and verify system access.",
-                es: "Prepara y verifica el acceso al sistema."
-            ))
-            .font(.title3)
-            .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
+        EagleHeaderBar(language: $language) {
+            showingSettings = true
         }
+    }
+
+    private var deviceModelName: String {
+        let full = EagleDynamicIslandCompatibility.current.displayModel
+        if let cut = full.range(of: " (") {
+            return String(full[..<cut.lowerBound])
+        }
+        return full
+    }
+
+    private var iosVersionString: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return v.patchVersion == 0
+            ? "\(v.majorVersion).\(v.minorVersion)"
+            : "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
     private var readinessBadge: some View {
@@ -253,9 +238,11 @@ private struct EagleBeta10AccessView: View {
                 .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
                 .frame(width: 8, height: 8)
             Text(mgr.sbxready
-                ? LaraL10n.text(en: "Ready", es: "Lista")
-                : LaraL10n.text(en: "Setup", es: "Preparar"))
+                ? "\(deviceModelName) · iOS \(iosVersionString)"
+                : LaraL10n.text(en: "Not identified", es: "No identificado"))
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 10)
         .frame(minHeight: 34)
@@ -266,6 +253,15 @@ private struct EagleBeta10AccessView: View {
         .overlay {
             Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            mgr.sbxready
+                ? LaraL10n.text(
+                    en: "Identified: \(deviceModelName), iOS \(iosVersionString)",
+                    es: "Identificado: \(deviceModelName), iOS \(iosVersionString)"
+                )
+                : LaraL10n.text(en: "Not identified", es: "No identificado")
+        )
     }
 
     private func accessRow(
@@ -288,10 +284,6 @@ private struct EagleBeta10AccessView: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 4)

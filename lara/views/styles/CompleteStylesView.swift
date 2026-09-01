@@ -2306,6 +2306,7 @@ enum CompleteWallpaperStyleEngine {
 struct CompleteStylesView: View {
     @ObservedObject private var manager = CompleteStyleManager.shared
     @ObservedObject private var mgr = laramgr.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmRestore = false
 
     private let columns = [
@@ -2366,7 +2367,7 @@ struct CompleteStylesView: View {
                             .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StylePressableCard())
 
                 NavigationLink {
                     EagleResonanceView()
@@ -2410,15 +2411,16 @@ struct CompleteStylesView: View {
                             .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StylePressableCard())
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text("Colección Eagle")
                         .font(.title3.bold())
                     Text("Seis estilos completos. Ningún ajuste innecesario.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.top, 2)
 
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(CompleteStylePack.all) { pack in
@@ -2430,7 +2432,7 @@ struct CompleteStylesView: View {
                                 isActive: manager.activePackID == pack.id
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(StylePressableCard())
                     }
                 }
 
@@ -2459,16 +2461,16 @@ struct CompleteStylesView: View {
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.tertiary)
                     }
-                    .contentShape(Rectangle())
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
-                .padding(16)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                }
-                .buttonStyle(.plain)
+                .buttonStyle(StylePressableCard())
 
                 Text("Los fondos y números provienen de la colección abierta de Nugget Wallpapers. Los diseños de tarjeta se generan en el dispositivo y Eagle conserva los originales.")
                     .font(.footnote)
@@ -2526,6 +2528,11 @@ struct CompleteStylesView: View {
                     ),
                     in: RoundedRectangle(cornerRadius: 15, style: .continuous)
                 )
+                .overlay {
+                    StyleLivingSheen(reduceMotion: reduceMotion, intensity: 0.20)
+                        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+                .shadow(color: pack.secondary.color.opacity(0.35), radius: 8, y: 4)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Estilo actual")
@@ -2566,6 +2573,7 @@ struct CompleteStylesView: View {
 private struct CompleteStyleCard: View {
     let pack: CompleteStylePack
     let isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2575,6 +2583,7 @@ private struct CompleteStyleCard: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
+                StyleLivingSheen(reduceMotion: reduceMotion, intensity: 0.16)
                 motif
 
                 Image(systemName: pack.symbol)
@@ -2599,10 +2608,6 @@ private struct CompleteStyleCard: View {
                 Text(pack.localizedName)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(pack.localizedTagline)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(13)
@@ -2611,8 +2616,16 @@ private struct CompleteStyleCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 21, style: .continuous)
-                .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                .strokeBorder(
+                    isActive ? pack.tertiary.color.opacity(0.55) : .primary.opacity(0.06),
+                    lineWidth: isActive ? 2 : 1
+                )
         }
+        .shadow(
+            color: isActive ? pack.secondary.color.opacity(0.22) : .black.opacity(0.04),
+            radius: isActive ? 12 : 5,
+            y: isActive ? 6 : 3
+        )
     }
 
     private var motif: some View {
@@ -2709,48 +2722,7 @@ private struct CompleteStyleDetailView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                if manager.isWorking {
-                    VStack(alignment: .leading, spacing: 9) {
-                        HStack {
-                            Text(manager.stage)
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text("\(Int(manager.progress * 100))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        ProgressView(value: manager.progress)
-                            .tint(pack.tertiary.color)
-                    }
-                    .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-
-                Button {
-                    manager.apply(
-                        pack: pack,
-                        wallpaper: includeWallpaper,
-                        passcode: includePasscode,
-                        card: includeCard
-                    )
-                } label: {
-                    HStack(spacing: 10) {
-                        if manager.isWorking {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "sparkles")
-                        }
-                        Text(manager.isWorking
-                            ? LaraL10n.text(en: "Applying \(pack.localizedName)…", es: "Aplicando \(pack.localizedName)…")
-                            : LaraL10n.text(en: "Apply style", es: "Aplicar estilo"))
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(pack.secondary.color)
-                .controlSize(.large)
-                .disabled(manager.isWorking || !mgr.sbxready || !(includeWallpaper || includePasscode || includeCard))
+                applyBar
 
                 credits
             }
@@ -2778,6 +2750,52 @@ private struct CompleteStyleDetailView: View {
                 )
             }
         }
+    }
+
+    private var applyBar: some View {
+        VStack(spacing: 12) {
+            if manager.isWorking {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        Text(manager.stage)
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("\(Int(manager.progress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: manager.progress)
+                        .tint(pack.tertiary.color)
+                }
+                .transition(.opacity)
+            }
+
+            Button {
+                manager.apply(
+                    pack: pack,
+                    wallpaper: includeWallpaper,
+                    passcode: includePasscode,
+                    card: includeCard
+                )
+            } label: {
+                HStack(spacing: 10) {
+                    if manager.isWorking {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "sparkles")
+                    }
+                    Text(manager.isWorking
+                        ? LaraL10n.text(en: "Applying \(pack.localizedName)…", es: "Aplicando \(pack.localizedName)…")
+                        : LaraL10n.text(en: "Apply style", es: "Aplicar estilo"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(pack.secondary.color)
+            .controlSize(.large)
+            .disabled(manager.isWorking || !mgr.sbxready || !(includeWallpaper || includePasscode || includeCard))
+        }
+        .animation(.easeInOut(duration: 0.25), value: manager.isWorking)
     }
 
     private var componentSummary: some View {
@@ -2851,6 +2869,7 @@ private struct CompleteStyleDetailView: View {
 
 private struct CompleteStylePreview: View {
     let pack: CompleteStylePack
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -2860,11 +2879,19 @@ private struct CompleteStylePreview: View {
                 endPoint: .bottomTrailing
             )
 
-            Circle()
-                .fill(pack.tertiary.color.opacity(0.24))
-                .frame(width: 210, height: 210)
-                .blur(radius: 2)
-                .offset(x: 130, y: -130)
+            StyleLivingSheen(reduceMotion: reduceMotion, intensity: 0.14)
+
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let breathe = 1 + 0.06 * sin(t * 0.5)
+                let drift = 7 * cos(t * 0.4)
+                Circle()
+                    .fill(pack.tertiary.color.opacity(0.24))
+                    .frame(width: 210, height: 210)
+                    .blur(radius: 2)
+                    .scaleEffect(breathe)
+                    .offset(x: 130 + drift, y: -130 - drift * 0.5)
+            }
 
             HStack(alignment: .bottom, spacing: -20) {
                 phonePreview
@@ -2945,6 +2972,10 @@ private struct CompleteStylePreview: View {
                     .foregroundStyle(.white.opacity(0.78))
                     .padding(16)
             }
+            .overlay {
+                StyleTravelingGlint(reduceMotion: reduceMotion)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
             .rotationEffect(.degrees(4))
             .shadow(color: .black.opacity(0.25), radius: 14, y: 9)
     }
@@ -2955,17 +2986,33 @@ private struct CompleteStyleResultView: View {
     @ObservedObject private var manager = CompleteStyleManager.shared
     @ObservedObject private var mgr = laramgr.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var statusApplied: Bool {
+        result.components.contains { $0.state == .applied }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Image(systemName: result.components.contains(where: { $0.state == .applied })
+                        Image(systemName: statusApplied
                               ? "checkmark.seal.fill"
                               : "exclamationmark.triangle.fill")
                             .font(.system(size: 38))
-                            .foregroundStyle(result.components.contains(where: { $0.state == .applied }) ? Color.green : Color.orange)
+                            .foregroundStyle(statusApplied ? Color.green : Color.orange)
+                            .background {
+                                TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+                                    let t = timeline.date.timeIntervalSinceReferenceDate
+                                    let pulse = 0.92 + 0.12 * sin(t * 1.3)
+                                    Circle()
+                                        .fill((statusApplied ? Color.green : Color.orange).opacity(0.16))
+                                        .frame(width: 64, height: 64)
+                                        .scaleEffect(pulse)
+                                        .blur(radius: 6)
+                                }
+                            }
                         Text(result.title)
                             .font(.title2.bold())
                         Text(result.message)
@@ -3064,5 +3111,77 @@ private struct CompleteStyleResultView: View {
         }
         .presentationDetents([.medium, .large])
         .onDisappear { manager.clearResult() }
+    }
+}
+
+// MARK: - Presentation helpers (visual only)
+
+/// Tactile press feedback for card-like buttons: a gentle scale and dimming with
+/// a spring settle. Purely visual — it forwards the label untouched.
+private struct StylePressableCard: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.94 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+/// A soft light that slowly drifts across a coloured surface so gradients feel
+/// alive without ever calling attention to themselves. Honours Reduce Motion by
+/// pausing the timeline, in which case the light simply rests in place.
+private struct StyleLivingSheen: View {
+    var reduceMotion: Bool
+    var highlight: Color = .white
+    var intensity: Double = 0.16
+
+    var body: some View {
+        GeometryReader { geo in
+            let maxDim = max(geo.size.width, geo.size.height)
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let x = 0.5 + 0.30 * cos(t * 0.33)
+                let y = 0.40 + 0.22 * sin(t * 0.26)
+                RadialGradient(
+                    colors: [highlight.opacity(intensity), highlight.opacity(0)],
+                    center: UnitPoint(x: x, y: y),
+                    startRadius: 0,
+                    endRadius: max(1, maxDim * 0.85)
+                )
+                .blendMode(.plusLighter)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// A thin diagonal glint that travels across a surface on a slow loop, like light
+/// grazing a card. Hidden entirely when Reduce Motion is on so nothing moves and
+/// no static streak is left parked on the surface.
+private struct StyleTravelingGlint: View {
+    var reduceMotion: Bool
+    var period: Double = 5.5
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let travel = w * 1.7
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let p = t.truncatingRemainder(dividingBy: period) / period
+                LinearGradient(
+                    colors: [.white.opacity(0), .white.opacity(0.28), .white.opacity(0)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: w * 0.28)
+                .rotationEffect(.degrees(18))
+                .offset(x: -travel * 0.5 + travel * p)
+                .frame(width: w, alignment: .leading)
+                .opacity(reduceMotion ? 0 : 1)
+                .blendMode(.plusLighter)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

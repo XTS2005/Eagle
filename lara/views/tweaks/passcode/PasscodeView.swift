@@ -152,7 +152,8 @@ final class PasscodeThemeManager: ObservableObject {
 
 struct PasscodeView: View {
     @ObservedObject var mgr: laramgr
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var selectedKeys: [String: Data] = [:]
     @State private var showImagePicker: String?
     @State private var showFilePicker = false
@@ -205,10 +206,27 @@ struct PasscodeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Un código más personal")
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption2.weight(.bold))
+                        Text(LaraL10n.text(en: "Lock Screen", es: "Pantalla de bloqueo"))
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(.purple)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.purple.opacity(0.12), in: Capsule())
+
+                    Text(LaraL10n.text(
+                        en: "A more personal passcode",
+                        es: "Un código más personal"
+                    ))
                         .font(.title2.bold())
-                    Text("Elige un estilo completo o cambia cada número por separado. Eagle guarda los originales antes de aplicar.")
+                    Text(LaraL10n.text(
+                        en: "Choose a complete style or change each digit individually. Eagle saves the originals before applying.",
+                        es: "Elige un estilo completo o cambia cada número por separado. Eagle guarda los originales antes de aplicar."
+                    ))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -230,7 +248,10 @@ struct PasscodeView: View {
                             Text("Explorar estilos")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
-                            Text("Diseños creados por la comunidad")
+                            Text(LaraL10n.text(
+                                en: "Designs created by the community",
+                                es: "Diseños creados por la comunidad"
+                            ))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -243,8 +264,12 @@ struct PasscodeView: View {
                     .padding(16)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PasscodePressStyle())
 
                 Button { showFilePicker = true } label: {
                     Label("Importar archivo .passthm", systemImage: "square.and.arrow.down")
@@ -272,7 +297,10 @@ struct PasscodeView: View {
                         if !selectedKeys.isEmpty {
                             Text("\(selectedKeys.count)/10")
                                 .font(.caption.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.white.opacity(0.9))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.12), in: Capsule())
                         }
                     }
 
@@ -300,8 +328,12 @@ struct PasscodeView: View {
                     .padding(.horizontal, 14)
                 }
                 .padding(18)
-                .background(Color.black)
+                .background { PasscodePreviewBackdrop(reduceMotion: reduceMotion) }
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
                 .environment(\.colorScheme, .dark)
 
                 if passcodeThemeManager.isApplying {
@@ -319,58 +351,71 @@ struct PasscodeView: View {
                     .padding(16)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+                    )
                 }
 
                 if !statusMessage.isEmpty {
-                    Label(
-                        statusMessage,
-                        systemImage: statusMessage.hasPrefix("Error") ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+                    PasscodeStatusBanner(message: statusMessage)
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        applyTheme()
+                    } label: {
+                        Text(LaraL10n.text(en: "Apply style", es: "Aplicar estilo"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(
+                        selectedKeys.isEmpty ||
+                        processing ||
+                        passcodeThemeManager.isApplying ||
+                        !mgr.sbxready
                     )
-                    .font(.footnote)
-                    .foregroundStyle(statusMessage.hasPrefix("Error") ? Color.red : Color.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
 
-                Button {
-                    applyTheme()
-                } label: {
-                    Text("Aplicar estilo")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(
-                    selectedKeys.isEmpty ||
-                    processing ||
-                    passcodeThemeManager.isApplying ||
-                    !mgr.sbxready
-                )
+                    Menu {
+                        Button(role: .destructive) {
+                            selectedKeys.removeAll()
+                        } label: {
+                            Label(
+                                LaraL10n.text(en: "Clear selection", es: "Limpiar selección"),
+                                systemImage: "xmark.circle"
+                            )
+                        }
 
-                Menu {
-                    Button(role: .destructive) {
-                        selectedKeys.removeAll()
+                        Button(role: .destructive) {
+                            restoreTheme()
+                        } label: {
+                            Label(
+                                LaraL10n.text(
+                                    en: "Restore original digits",
+                                    es: "Restaurar números originales"
+                                ),
+                                systemImage: "arrow.uturn.backward"
+                            )
+                        }
+                        .disabled(processing || passcodeThemeManager.isApplying || !mgr.sbxready)
                     } label: {
-                        Label("Limpiar selección", systemImage: "xmark.circle")
+                        Image(systemName: "ellipsis")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
-
-                    Button(role: .destructive) {
-                        restoreTheme()
-                    } label: {
-                        Label("Restaurar números originales", systemImage: "arrow.uturn.backward")
-                    }
-                    .disabled(processing || passcodeThemeManager.isApplying || !mgr.sbxready)
-                } label: {
-                    Label("Más opciones", systemImage: "ellipsis.circle")
-                        .frame(maxWidth: .infinity)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                 }
-                .buttonStyle(.bordered)
+                .padding(.top, 4)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Estilo del código")
+        .navigationTitle(LaraL10n.text(en: "Passcode Style", es: "Estilo del código"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $showImagePicker) { keyId in
             ImagePicker(imageData: $selectedKeys[keyId])
@@ -712,7 +757,8 @@ struct PasscodeKeyButton: View {
     let onSelect: () -> Void
     
     var body: some View {
-        Button(action: onSelect) {
+        let isCustom = imageData != nil
+        return Button(action: onSelect) {
             GeometryReader { geo in
                 ZStack {
                     Circle()
@@ -735,16 +781,95 @@ struct PasscodeKeyButton: View {
                     }
 
                     Circle()
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(
+                            isCustom ? Color.purple.opacity(0.9) : Color.white.opacity(0.12),
+                            lineWidth: isCustom ? 1.5 : 1
+                        )
                 }
                 .frame(
                     width: geo.size.width,
                     height: geo.size.width
                 )
+                .shadow(
+                    color: isCustom ? Color.purple.opacity(0.45) : .clear,
+                    radius: isCustom ? 7 : 0
+                )
             }
             .aspectRatio(1, contentMode: .fit)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PasscodePressStyle(scale: 0.94))
+    }
+}
+
+private struct PasscodePressStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
+    }
+}
+
+private struct PasscodePreviewBackdrop: View {
+    var reduceMotion: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate * 0.10
+            let breath = 0.5 + 0.5 * sin(phase * 1.3)
+
+            ZStack {
+                Color.black
+                RadialGradient(
+                    colors: [Color.purple.opacity(0.30 + 0.10 * breath), .clear],
+                    center: UnitPoint(
+                        x: CGFloat(0.30 + 0.14 * cos(phase)),
+                        y: CGFloat(0.26 + 0.10 * sin(phase * 0.9))
+                    ),
+                    startRadius: 4,
+                    endRadius: 280
+                )
+                RadialGradient(
+                    colors: [Color(red: 0.28, green: 0.20, blue: 0.55).opacity(0.36), .clear],
+                    center: UnitPoint(
+                        x: CGFloat(0.74 + 0.12 * cos(phase * 0.8 + 1.6)),
+                        y: CGFloat(0.78 + 0.10 * sin(phase * 1.1 + 0.5))
+                    ),
+                    startRadius: 4,
+                    endRadius: 320
+                )
+            }
+        }
+    }
+}
+
+private struct PasscodeStatusBanner: View {
+    let message: String
+
+    private var isError: Bool { message.hasPrefix("Error") }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(isError ? Color.red : Color.green)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(
+            (isError ? Color.red : Color.green).opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder((isError ? Color.red : Color.green).opacity(0.22), lineWidth: 1)
+        )
     }
 }
 

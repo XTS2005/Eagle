@@ -54,34 +54,19 @@ struct CardView: View {
         let previewimg: (carditem) -> UIImage?
 
         var body: some View {
+            let preview = previewimg(card)
             VStack(alignment: .leading, spacing: 16) {
-                Group {
-                    if let img = previewimg(card) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        ZStack {
-                            Color(uiColor: .tertiarySystemFill)
-                            Image(systemName: "creditcard.fill")
-                                .font(.system(size: 38, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1.586, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-                }
+                CardPreview(image: preview)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Tarjeta de Wallet")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("Tarjeta de Wallet")
+                            .font(.headline)
+                        Spacer(minLength: 8)
+                        CardBadge(text: "Wallet", systemImage: "wallet.pass")
+                    }
                     Text("Lista para personalizar")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
@@ -102,9 +87,9 @@ struct CardView: View {
                         Label("Cambiar diseño", systemImage: "photo.badge.plus")
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 46)
+                            .frame(height: 48)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(CardProminentButtonStyle())
 
                     Menu {
                         Button {
@@ -121,9 +106,9 @@ struct CardView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.headline)
-                            .frame(width: 46, height: 46)
+                            .frame(width: 48, height: 48)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(CardSecondaryButtonStyle())
                     .accessibilityLabel("Más opciones")
                 }
             }
@@ -132,8 +117,118 @@ struct CardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                    .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
             }
+        }
+    }
+
+    // Preview de la tarjeta con un brillo especular sutil que la recorre y
+    // "respira", como la luz sobre una tarjeta física. Solo presentación.
+    private struct CardPreview: View {
+        let image: UIImage?
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color(uiColor: .tertiarySystemFill)
+                        Image(systemName: "creditcard.fill")
+                            .font(.system(size: 38, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1.586, contentMode: .fit)
+            .overlay { sheen }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
+            }
+        }
+
+        @ViewBuilder private var sheen: some View {
+            if image != nil {
+                TimelineView(.animation(paused: reduceMotion)) { timeline in
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    let sweep = 6.5
+                    let breath = 5.0
+                    let phase = (t.truncatingRemainder(dividingBy: sweep)) / sweep
+                    let p = phase * 1.4 - 0.2
+                    let lo = min(max(p - 0.16, 0), 1)
+                    let mid = min(max(p, 0), 1)
+                    let hi = min(max(p + 0.16, 0), 1)
+                    let breathPhase = (t.truncatingRemainder(dividingBy: breath)) / breath
+                    let breathe = 0.5 + 0.5 * sin(breathPhase * 2 * .pi)
+                    let peak = reduceMotion ? 0.0 : (0.07 + 0.06 * breathe)
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: lo),
+                            .init(color: .white.opacity(peak), location: mid),
+                            .init(color: .clear, location: hi)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    // Badge fina y neutra para etiquetar la tarjeta.
+    private struct CardBadge: View {
+        let text: String
+        let systemImage: String
+
+        var body: some View {
+            Label(text, systemImage: systemImage)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                )
+        }
+    }
+
+    // Acción principal: relleno estable en el acento (no derivado del color del
+    // usuario) con feedback de escala al presionar.
+    private struct CardProminentButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .foregroundStyle(.white)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.accentColor)
+                        .opacity(configuration.isPressed ? 0.85 : 1)
+                )
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
+        }
+    }
+
+    // Acción secundaria: relleno translúcido neutro y misma escala al presionar.
+    private struct CardSecondaryButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .foregroundStyle(Color.accentColor)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                        .opacity(configuration.isPressed ? 0.7 : 1)
+                )
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
         }
     }
     

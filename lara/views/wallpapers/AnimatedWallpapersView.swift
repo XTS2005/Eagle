@@ -50,6 +50,7 @@ struct AnimatedWallpapersView: View {
     @State private var message: String?
     @AppStorage("eagle.wallpapers.mode")
     private var mode: WallpaperMode = .explore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -152,6 +153,12 @@ struct AnimatedWallpapersView: View {
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(Color.black)
 
+            if player == nil {
+                previewAurora
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .allowsHitTesting(false)
+            }
+
             if let player {
                 VideoPlayer(player: player)
                     .disabled(true)
@@ -184,12 +191,43 @@ struct AnimatedWallpapersView: View {
         }
         .aspectRatio(9.0 / 17.5, contentMode: .fit)
         .frame(maxWidth: 286)
+        .overlay {
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+        }
         .frame(maxWidth: .infinity)
         .shadow(color: .black.opacity(0.13), radius: 20, y: 10)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(movieURL == nil
             ? LaraL10n.text(en: "Empty preview", es: "Vista previa vacía")
             : LaraL10n.text(en: "Animated wallpaper preview", es: "Vista previa del fondo animado"))
+    }
+
+    // Slow, soft aurora that orbits behind the empty preview so the mock feels
+    // alive. Hidden once a real video is loaded; frozen with Reduce Motion.
+    private var previewAurora: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            let spin = reduceMotion
+                ? 0
+                : (seconds / 16).truncatingRemainder(dividingBy: 1) * 360
+
+            ZStack {
+                auroraBlob(Color(red: 0.30, green: 0.80, blue: 1.00), size: 220, x: -60, y: -150)
+                auroraBlob(Color(red: 0.62, green: 0.40, blue: 1.00), size: 240, x: 70, y: -20)
+                auroraBlob(Color(red: 1.00, green: 0.42, blue: 0.72), size: 200, x: -50, y: 150)
+            }
+            .rotationEffect(.degrees(spin))
+            .blur(radius: 45)
+            .opacity(0.5)
+        }
+    }
+
+    private func auroraBlob(_ color: Color, size: CGFloat, x: CGFloat, y: CGFloat) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .offset(x: x, y: y)
     }
 
     private var options: some View {

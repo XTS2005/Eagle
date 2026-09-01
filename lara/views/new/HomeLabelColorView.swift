@@ -56,9 +56,23 @@ private enum HomeLabelColorApplyGate {
     }
 }
 
+private struct HomeLabelColorPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.15),
+                value: configuration.isPressed
+            )
+    }
+}
+
 struct HomeLabelColorView: View {
     @ObservedObject private var mgr = laramgr.shared
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
@@ -102,6 +116,19 @@ struct HomeLabelColorView: View {
             Int32((g * 255).rounded()),
             Int32((b * 255).rounded())
         )
+    }
+
+    private func matchesSelection(_ preset: HomeLabelColorPreset) -> Bool {
+        let resolved = UIColor(preset.color).resolvedColor(with: .current)
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else { return false }
+        let target = selectedRGB
+        return Int32((r * 255).rounded()) == target.red
+            && Int32((g * 255).rounded()) == target.green
+            && Int32((b * 255).rounded()) == target.blue
     }
 
     private var releaseChannel: EagleReleaseChannel {
@@ -188,7 +215,7 @@ struct HomeLabelColorView: View {
                     es: "Solo color sólido: sin brillo, borde ni animación."
                 ))
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
             }
 
@@ -198,6 +225,10 @@ struct HomeLabelColorView: View {
                 previewApp(icon: "music.note", name: "Music", tint: .pink)
             }
             .accessibilityHidden(true)
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 0.25),
+                value: selectedColor
+            )
 
             Label(
                 cleanupRequired
@@ -213,7 +244,7 @@ struct HomeLabelColorView: View {
                     : (activePageCount > 0 ? "checkmark.circle.fill" : "circle")
             )
             .font(.caption.weight(.semibold))
-            .foregroundStyle(cleanupRequired ? .orange : (activePageCount > 0 ? .green : .secondary))
+            .foregroundStyle(cleanupRequired ? Color.orange : (activePageCount > 0 ? Color.green : Color.white.opacity(0.7)))
         }
         .frame(maxWidth: .infinity)
         .padding(18)
@@ -225,6 +256,10 @@ struct HomeLabelColorView: View {
             ),
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        }
         .foregroundStyle(.white)
     }
 
@@ -267,10 +302,20 @@ struct HomeLabelColorView: View {
                                     .strokeBorder(.primary.opacity(0.22), lineWidth: 1)
                             }
                             .frame(width: 52, height: 52)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(Color.accentColor, lineWidth: 2.5)
+                                    .opacity(matchesSelection(preset) ? 1 : 0)
+                            }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(HomeLabelColorPressStyle())
                     .disabled(isApplying)
                     .accessibilityLabel(preset.title)
+                    .accessibilityAddTraits(matchesSelection(preset) ? .isSelected : [])
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.18),
+                        value: matchesSelection(preset)
+                    )
                 }
             }
 

@@ -79,13 +79,23 @@ struct EagleCompatibilityCenterView: View {
                     let enabled = EagleFeaturePolicy.allows(feature, channel: channel)
                     HStack(spacing: 12) {
                         Image(systemName: enabled ? "checkmark.circle.fill" : "lock.circle")
+                            .font(.body)
                             .foregroundStyle(enabled ? Color.green : Color.secondary)
+                            .frame(width: 24)
                         Text(feature.title)
-                        Spacer()
+                            .foregroundStyle(enabled ? .primary : .secondary)
+                        Spacer(minLength: 12)
                         Text(feature.minimumChannel.title)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(
+                                Color(uiColor: .tertiarySystemFill),
+                                in: Capsule()
+                            )
                     }
+                    .padding(.vertical, 2)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(feature.title)
                     .accessibilityValue(enabled
@@ -146,31 +156,40 @@ struct EagleCompatibilityCenterView: View {
     ) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(color)
-                    .frame(width: 24)
+                statusIcon(systemImage, color: color)
                 Text(title)
-                Spacer()
+                Spacer(minLength: 12)
                 Text(value)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: true, vertical: false)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
-                    Image(systemName: systemImage)
-                        .foregroundStyle(color)
-                        .frame(width: 24)
+                    statusIcon(systemImage, color: color)
                     Text(title)
                 }
                 Text(value)
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 36)
+                    .padding(.leading, 40)
             }
         }
+        .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(value)
+    }
+
+    @ViewBuilder
+    private func statusIcon(_ systemImage: String, color: Color) -> some View {
+        Image(systemName: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(color)
+            .frame(width: 28, height: 28)
+            .background(
+                color.opacity(0.14),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
     }
 
     private var supportTitle: String {

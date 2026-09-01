@@ -3,10 +3,14 @@ import SwiftUI
 struct LaraHomeView: View {
     @ObservedObject private var mgr = laramgr.shared
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
-    @AppStorage("eagle.home.auraStudio.beta10Seen")
-    private var hasSeenAuraStudioBeta10 = false
+    @AppStorage("eagle.home.auraStudio.newFeatureSeen")
+    private var hasSeenAuraStudioNew = false
     @AppStorage("eagle.home.homeLabelColor.beta10Seen")
     private var hasSeenHomeLabelColorBeta10 = false
+    @AppStorage("eagle.home.islandGallery.seen")
+    private var hasSeenIslandGallery = false
+    @AppStorage("eagle.home.dockGallery.seen")
+    private var hasSeenDockGallery = false
     @State private var toolSearchQuery = ""
     @FocusState private var isToolSearchFocused: Bool
     @AppStorage(EagleReleaseChannel.storageKey)
@@ -14,6 +18,7 @@ struct LaraHomeView: View {
     @State private var pendingDowngrade: EagleReleaseChannel?
     @State private var flashChannel: EagleReleaseChannel?
     @State private var flashLevel: Double = 0
+    @State private var showingSettings = false
 
     var body: some View {
         NavigationStack {
@@ -31,7 +36,7 @@ struct LaraHomeView: View {
                                         en: "Dynamic Island neon, rainbow, and glow.",
                                         es: "Neón, arcoíris y brillo para Dynamic Island."
                                     ),
-                                    badge: hasSeenAuraStudioBeta10
+                                    badge: hasSeenAuraStudioNew
                                         ? nil
                                         : LaraL10n.text(en: "NEW", es: "NUEVO")
                                 )
@@ -45,6 +50,38 @@ struct LaraHomeView: View {
                                     .accessibilityAddTraits(.isHeader)
 
                                 VStack(spacing: 0) {
+                                    NavigationLink(destination: islandGalleryDestination) {
+                                        LaraToolRow(
+                                            title: LaraL10n.text(en: "Island Gallery", es: "Galería Island"),
+                                            subtitle: LaraL10n.text(
+                                                en: "Photo styles with intense halos",
+                                                es: "Estilos fotográficos con halos intensos"
+                                            ),
+                                            systemImage: "capsule.fill",
+                                            accent: Color(red: 0.69, green: 0.32, blue: 0.87),
+                                            badgeCount: hasSeenIslandGallery
+                                                ? nil
+                                                : IslandGalleryStyle.allCases.count
+                                        )
+                                    }
+
+                                    Divider().padding(.leading, 65)
+
+                                    NavigationLink(destination: dockGalleryDestination) {
+                                        LaraToolRow(
+                                            title: LaraL10n.text(en: "Dock Gallery", es: "Galería Dock"),
+                                            subtitle: LaraL10n.text(
+                                                en: "Artwork behind your Dock apps",
+                                                es: "Arte detrás de las apps del Dock"
+                                            ),
+                                            systemImage: "dock.rectangle",
+                                            accent: Color(red: 1.00, green: 0.18, blue: 0.62),
+                                            badgeCount: hasSeenDockGallery ? nil : 3
+                                        )
+                                    }
+
+                                    Divider().padding(.leading, 65)
+
                                     NavigationLink(destination: AnimatedWallpapersView()) {
                                     LaraToolRow(
                                         title: LaraL10n.text(en: "Wallpapers", es: "Fondos"),
@@ -97,10 +134,7 @@ struct LaraHomeView: View {
                                                 es: "Colores sólidos para los textos de Inicio · Avanzado"
                                             ),
                                             systemImage: "textformat",
-                                            accent: Color(red: 0.36, green: 0.30, blue: 0.88),
-                                            badge: hasSeenHomeLabelColorBeta10
-                                                ? nil
-                                                : LaraL10n.text(en: "NEW", es: "NUEVO")
+                                            accent: Color(red: 0.36, green: 0.30, blue: 0.88)
                                         )
                                     }
 
@@ -115,6 +149,7 @@ struct LaraHomeView: View {
                                         systemImage: "square.grid.2x2.fill",
                                         accent: Color(red: 0.18, green: 0.60, blue: 0.42),
                                         badge: LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE"),
+                                        badgeIsMuted: true,
                                         showsDisclosureIndicator: false
                                     )
                                     .opacity(0.62)
@@ -157,6 +192,10 @@ struct LaraHomeView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+                    .environmentObject(mgr)
+            }
             .alert(
                 LaraL10n.text(en: "You'll lose features", es: "Perderás funciones"),
                 isPresented: Binding(
@@ -186,26 +225,8 @@ struct LaraHomeView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    eagleTitle
-                    Spacer(minLength: 8)
-                    headerBadges
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    eagleTitle
-                    headerBadges
-                }
-            }
-
-            Text(LaraL10n.text(
-                en: "Customize what you actually see.",
-                es: "Personaliza lo que realmente ves."
-            ))
-                .font(.title3)
-                .foregroundStyle(.secondary)
+        EagleHeaderBar(language: $language) {
+            showingSettings = true
         }
     }
 
@@ -214,16 +235,9 @@ struct LaraHomeView: View {
     }
 
     private var headerBadges: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                languageBadge
-                readinessBadge
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                languageBadge
-                readinessBadge
-            }
+        VStack(alignment: .trailing, spacing: 8) {
+            languageBadge
+            readinessBadge
         }
     }
 
@@ -260,15 +274,32 @@ struct LaraHomeView: View {
         .accessibilityValue(language.displayName)
     }
 
+    private var deviceModelName: String {
+        let full = EagleDynamicIslandCompatibility.current.displayModel
+        if let cut = full.range(of: " (") {
+            return String(full[..<cut.lowerBound])
+        }
+        return full
+    }
+
+    private var iosVersionString: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return v.patchVersion == 0
+            ? "\(v.majorVersion).\(v.minorVersion)"
+            : "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }
+
     private var readinessBadge: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(mgr.sbxready ? Color.green : Color.secondary.opacity(0.32))
                 .frame(width: 8, height: 8)
             Text(mgr.sbxready
-                ? LaraL10n.text(en: "Ready", es: "Lista")
-                : LaraL10n.text(en: "Setup", es: "Preparar"))
+                ? "\(deviceModelName) · iOS \(iosVersionString)"
+                : LaraL10n.text(en: "Not identified", es: "No identificado"))
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 10)
         .frame(minHeight: 34)
@@ -282,8 +313,11 @@ struct LaraHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             mgr.sbxready
-                ? LaraL10n.text(en: "Eagle is ready", es: "Eagle está lista")
-                : LaraL10n.text(en: "Eagle needs preparation", es: "Eagle necesita preparación")
+                ? LaraL10n.text(
+                    en: "Identified: \(deviceModelName), iOS \(iosVersionString)",
+                    es: "Identificado: \(deviceModelName), iOS \(iosVersionString)"
+                )
+                : LaraL10n.text(en: "Not identified", es: "No identificado")
         )
     }
 
@@ -320,6 +354,7 @@ struct LaraHomeView: View {
             VStack(spacing: 4) {
                 Image(systemName: channelIcon(channel))
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(channelIconColor(channel))
                 Text(channel.title)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
@@ -357,9 +392,19 @@ struct LaraHomeView: View {
 
     private func channelIcon(_ channel: EagleReleaseChannel) -> String {
         switch channel {
-        case .stable: return "checkmark.shield.fill"
-        case .beta: return "sparkles"
-        case .experimental: return "wand.and.rays"
+        case .stable: return "checkmark.shield.fill"     // safe, proven
+        case .beta: return "bolt.fill"                    // advanced, more power
+        case .experimental: return "testtube.2"           // laboratory, experimental
+        }
+    }
+
+    /// Each channel keeps its own accent so the icon reads as that function's
+    /// colour, whether the pill is selected (white) or not (dark).
+    private func channelIconColor(_ channel: EagleReleaseChannel) -> Color {
+        switch channel {
+        case .stable: return Color(red: 0.10, green: 0.72, blue: 0.30)       // vivid green
+        case .beta: return Color(red: 1.00, green: 0.48, blue: 0.00)         // vivid amber
+        case .experimental: return Color(red: 0.55, green: 0.22, blue: 1.00) // vivid purple
         }
     }
 
@@ -409,7 +454,8 @@ struct LaraHomeView: View {
         LaraHomeToolRoute.allCases.filter { route in
             switch route {
             case .auraStudio, .completeStyles, .wallpapers,
-                    .homeLabelColor, .cards, .passcode, .icons, .dock:
+                    .homeLabelColor, .cards, .passcode, .icons, .dock,
+                    .dockGallery:
                 return true
             case .eagleSystem, .advancedSettings:
                 return false
@@ -558,11 +604,12 @@ struct LaraHomeView: View {
             accent: route.accent,
             badge: route == .icons
                 ? LaraL10n.text(en: "SOON", es: "PRÓXIMAMENTE")
-                : (route == .auraStudio && !hasSeenAuraStudioBeta10
+                : (route == .auraStudio && !hasSeenAuraStudioNew
                     ? LaraL10n.text(en: "NEW", es: "NUEVO")
                     : (route == .homeLabelColor && !hasSeenHomeLabelColorBeta10
                         ? LaraL10n.text(en: "NEW", es: "NUEVO")
                         : nil)),
+            badgeIsMuted: route == .icons,
             showsDisclosureIndicator: route != .icons
         )
     }
@@ -586,6 +633,8 @@ struct LaraHomeView: View {
             DarkBoardView()
         case .dock:
             DockCustomizerView()
+        case .dockGallery:
+            DockGalleryView()
         case .advancedSettings:
             EmptyView()
         case .auraStudio:
@@ -596,7 +645,7 @@ struct LaraHomeView: View {
     private var auraStudioDestination: some View {
         AuraStudioView()
             .onAppear {
-                hasSeenAuraStudioBeta10 = true
+                hasSeenAuraStudioNew = true
             }
     }
 
@@ -604,6 +653,20 @@ struct LaraHomeView: View {
         HomeLabelColorView()
             .onAppear {
                 hasSeenHomeLabelColorBeta10 = true
+            }
+    }
+
+    private var islandGalleryDestination: some View {
+        IslandGalleryView()
+            .onAppear {
+                hasSeenIslandGallery = true
+            }
+    }
+
+    private var dockGalleryDestination: some View {
+        DockGalleryView()
+            .onAppear {
+                hasSeenDockGallery = true
             }
     }
 
@@ -618,6 +681,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case cards
     case passcode
     case dock
+    case dockGallery
     case advancedSettings
     case icons
 
@@ -634,6 +698,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .passcode: return LaraL10n.text(en: "Passcode", es: "Código")
         case .icons: return "Icon Studio"
         case .dock: return "Dock"
+        case .dockGallery:
+            return LaraL10n.text(en: "Dock Gallery", es: "Galería Dock")
         case .advancedSettings:
             return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas")
         case .auraStudio: return "Aura Studio"
@@ -661,6 +727,11 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
             return LaraL10n.text(en: "Themes and Android shapes", es: "Temas y formas Android")
         case .dock:
             return LaraL10n.text(en: "Fit up to six apps", es: "Hasta seis apps")
+        case .dockGallery:
+            return LaraL10n.text(
+                en: "Artwork behind your Dock apps",
+                es: "Arte detrás de las apps del Dock"
+            )
         case .advancedSettings:
             return LaraL10n.text(en: "Expert controls", es: "Controles expertos")
         case .auraStudio:
@@ -678,6 +749,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .passcode: return "circle.grid.3x3.fill"
         case .icons: return "square.grid.2x2.fill"
         case .dock: return "dock.rectangle"
+        case .dockGallery: return "dock.rectangle"
         case .advancedSettings: return "wrench.and.screwdriver.fill"
         case .auraStudio: return "sparkles"
         }
@@ -693,6 +765,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .passcode: return Color(red: 0.56, green: 0.28, blue: 0.72)
         case .icons: return Color(red: 0.18, green: 0.60, blue: 0.42)
         case .dock: return Color(red: 0.12, green: 0.46, blue: 0.86)
+        case .dockGallery: return Color(red: 1.00, green: 0.18, blue: 0.62)
         case .advancedSettings: return .orange
         case .auraStudio: return Color(red: 0.10, green: 0.78, blue: 1.00)
         }
@@ -709,6 +782,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .passcode: return "passcode code código unlock desbloqueo key keys números"
         case .icons: return "icon icons icono iconos theme themes tema temas android shape formas"
         case .dock: return "dock apps icons iconos capacity capacidad"
+        case .dockGallery:
+            return "dock gallery galería art arte photo foto theme tema apps"
         case .advancedSettings: return "advanced avanzado settings ajustes expert experto kernelcache"
         case .auraStudio: return "aura neon neón island isla dock glow"
         }
@@ -807,18 +882,14 @@ private struct LaraFeatureCard: View {
         .overlay(alignment: .topTrailing) {
             if let badge {
                 Text(badge)
-                    .font(.caption2.weight(.black))
+                    .font(.system(size: 10, weight: .heavy))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 9)
-                    .frame(minHeight: 25)
-                    .background(
-                        LinearGradient(
-                            colors: [.pink, .purple, .blue],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: Capsule()
-                    )
+                    .padding(.horizontal, 8)
+                    .frame(minHeight: 20)
+                    .background(EagleVisualTheme.accent, in: Capsule())
+                    .shadow(color: EagleVisualTheme.accent.opacity(0.35), radius: 4, y: 1)
                     .padding(12)
                     .accessibilityLabel(LaraL10n.text(en: "New", es: "Nuevo"))
             }
@@ -993,6 +1064,7 @@ private struct AuraStudioHeroCard: View {
     let title: String
     let subtitle: String
     var badge: String? = nil
+    var badgeCount: Int? = nil
 
     var body: some View {
         HStack(spacing: 16) {
@@ -1027,20 +1099,19 @@ private struct AuraStudioHeroCard: View {
             radius: 10, x: 0, y: 4
         )
         .overlay(alignment: .topTrailing) {
-            if let badge {
+            if let badgeCount {
+                EagleCountBadge(count: badgeCount)
+                    .padding(12)
+            } else if let badge {
                 Text(badge)
-                    .font(.caption2.weight(.black))
+                    .font(.system(size: 10, weight: .heavy))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 9)
-                    .frame(minHeight: 25)
-                    .background(
-                        LinearGradient(
-                            colors: [.cyan, .blue, .pink],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: Capsule()
-                    )
+                    .padding(.horizontal, 8)
+                    .frame(minHeight: 20)
+                    .background(EagleCountBadge.multicolor, in: Capsule())
+                    .shadow(color: EagleCountBadge.multicolorShadow.opacity(0.35), radius: 4, y: 1)
                     .padding(12)
                     .accessibilityHidden(true)
             }
@@ -1128,6 +1199,10 @@ private struct LaraToolRow: View {
     let systemImage: String
     let accent: Color
     var badge: String? = nil
+    /// A muted badge (grey, no glow) reads as "not yet" — used for SOON so it
+    /// doesn't compete with the vivid NEW / bell badges.
+    var badgeIsMuted: Bool = false
+    var badgeCount: Int? = nil
     var showsDisclosureIndicator = true
 
     var body: some View {
@@ -1142,25 +1217,27 @@ private struct LaraToolRow: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            if let badge {
+            if let badgeCount {
+                EagleCountBadge(count: badgeCount)
+            } else if let badge {
                 Text(badge)
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 10, weight: .heavy))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+                    .foregroundStyle(badgeIsMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.white))
                     .padding(.horizontal, 7)
-                    .frame(minHeight: 22)
+                    .frame(minHeight: 20)
                     .background(
-                        LinearGradient(
-                            colors: [.pink, .purple, .blue],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
+                        badgeIsMuted
+                            ? AnyShapeStyle(Color.primary.opacity(0.10))
+                            : AnyShapeStyle(EagleVisualTheme.accent),
                         in: Capsule()
+                    )
+                    .shadow(
+                        color: badgeIsMuted ? .clear : EagleVisualTheme.accent.opacity(0.30),
+                        radius: 3, y: 1
                     )
                     .accessibilityHidden(true)
             }
@@ -1176,7 +1253,49 @@ private struct LaraToolRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(
-            badge == nil ? subtitle : "\(subtitle). \(badge ?? "")"
+            badgeCount != nil
+                ? LaraL10n.text(
+                    en: "\(subtitle). \(badgeCount ?? 0) features",
+                    es: "\(subtitle). \(badgeCount ?? 0) funciones"
+                )
+                : (badge == nil ? subtitle : "\(subtitle). \(badge ?? "")")
         )
+    }
+}
+
+/// A small notification-style badge: a bell followed by the number of features
+/// available inside that entry.
+struct EagleCountBadge: View {
+    let count: Int
+
+    /// Shared pink→purple→blue→cyan sweep used by every notification badge
+    /// (the bell counters and the Aura Studio "NEW" tag) so they all match.
+    static let multicolor = LinearGradient(
+        colors: [
+            Color(red: 1.00, green: 0.30, blue: 0.62),
+            Color(red: 0.62, green: 0.35, blue: 1.00),
+            Color(red: 0.20, green: 0.64, blue: 1.00),
+            Color(red: 0.18, green: 0.86, blue: 0.82),
+        ],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
+    static let multicolorShadow = Color(red: 0.62, green: 0.35, blue: 1.00)
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 9, weight: .bold))
+            Text("\(count)")
+                .font(.system(size: 11, weight: .heavy))
+                .contentTransition(.numericText())
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .frame(minHeight: 20)
+        .background(Self.multicolor, in: Capsule())
+        .shadow(color: Self.multicolorShadow.opacity(0.35), radius: 3, y: 1)
+        .accessibilityHidden(true)
     }
 }

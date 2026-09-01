@@ -16,13 +16,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.2/Eagle-1.0.2-61.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.2-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.2 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.3/Eagle-1.0.3-62.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.3-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.3 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.2)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.3)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 1.0.2 · build 61 |
+| **Current release** | Eagle 1.0.3 · build 62 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
 | **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow/outline · isolated apply and verification |
@@ -56,20 +56,21 @@
 | 🔢 **Passcode** | Browses, imports, previews, applies and restores compatible key themes. |
 | 🧩 **Icon Studio · Coming soon** | Temporarily unavailable while theme importing and custom shapes are validated. |
 | 📱 **Dock** | Provides layouts supporting up to six apps where SpringBoard accepts them. |
-| ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting. Glow, Pulse and Island Rainbow remain available where compatible; Tint is temporarily unavailable. |
+| ✨ **Aura Studio** | Applies independently colored Dynamic Island and Dock lighting, manages the system Island and Dock background, and keeps verified surface state isolated. |
+| 🖼️ **Island Gallery** | Applies six calibrated photo styles at one verified size and position, each with a fixed color-matched halo. |
+| 🌈 **Dock Gallery** | Places exact-size artwork behind Dock apps without stretching it and preserves independent apply/restore state. |
 | 🔤 **App Name Color · Advanced** | Applies a page-owned solid color to app names on the current Home Screen page. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Eagle 1.0.2
+### New in Eagle 1.0.3
 
-- Eagle's mark and wordmark now use a restrained spectrum reflection with adaptive light/dark presentation.
-- Aura Studio previews keep Glow steady, animate Pulse independently and move the spectrum only for Rainbow.
-- The system Island can be hidden or restored independently from Island Aura, with verified persistence and a Respring now/later choice.
-- Home now provides direct Stable, Advanced and Laboratory channel controls with a warning before features become unavailable on downgrade.
-- Wallpaper installation reports refresh failures honestly and correctly identifies entries that require iOS 26.
-- Home, Access, navigation and shared visual surfaces use calmer, more consistent contrast.
-- Cyanide and 0xjohnny are credited for the OTA implementation inherited through Lara, with the notice retained in the app bundle.
-- Prepare and device compatibility, Dock and Dynamic Island application paths, and the verified iPhone 16 Pro profile remain unchanged.
+- Added Island Gallery with Starlight, Inferno, Horizon, Vortex, Bubblegum and Traffic artwork, all using one verified geometry and color-matched fixed halos.
+- Added Dock Gallery with Bubblegum, Springfield and Bikini Bottom themes rendered at the exact 382 × 106-point Dock frame.
+- Added an independent, verified Dock-background control while preserving Dock icons and their hit targets.
+- Gallery cards now use color-aware presentation light and gentle motion that respects Reduce Motion.
+- Aura Studio and Dock Gallery now synchronize their verified active state instead of leaving stale selection badges.
+- Improved TrollStore preparation by recognizing an existing mobile-filesystem access path before attempting a sandbox transition.
+- Refined Home navigation, Passcode localization, wallpaper copy, diagnostics and adaptive light/dark presentation throughout the app.
 
 ### Aura Studio safety model
 
