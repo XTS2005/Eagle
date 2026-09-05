@@ -11,8 +11,8 @@ import SwiftUI
 /// Double-tapping an empty area of the Home Screen or Lock Screen background
 /// locks the device. Icons, the dock and the passcode screen never trigger it.
 /// Passcode-style interaction: fixed "Apply" / "Respring" buttons (labels
-/// never flip), an in-page Prepare entry when the exploit has not run yet,
-/// and feedback via alerts plus the status banner.
+/// never flip), the shared Prepare card while access is not ready yet, and
+/// feedback via alerts plus the status banner.
 struct DoubleTapLockView: View {
     @ObservedObject var mgr: laramgr
     @AppStorage("doubleTapToLock") private var doubleTapToLock: Bool = false

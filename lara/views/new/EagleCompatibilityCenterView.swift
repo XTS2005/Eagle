@@ -125,11 +125,11 @@ struct EagleCompatibilityCenterView: View {
                 }
 
                 EagleSupportSnapshotCard()
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                     .listRowBackground(Color.clear)
 
                 EaglePrepareCrashReportCard()
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                     .listRowBackground(Color.clear)
             } header: {
                 Text(LaraL10n.text(en: "Support", es: "Soporte"))

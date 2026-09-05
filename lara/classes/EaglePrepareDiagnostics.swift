@@ -237,10 +237,10 @@ struct EaglePrepareCrashReportCard: View {
 
             if let url = diagnostics.reportURL {
                 ShareLink(item: url) {
-                    Label(
-                        LaraL10n.text(en: "Share Prepare Report", es: "Compartir reporte de preparación"),
-                        systemImage: "square.and.arrow.up"
-                    )
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.up")
+                        Text(LaraL10n.text(en: "Share Prepare Report", es: "Compartir reporte de preparación"))
+                    }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)

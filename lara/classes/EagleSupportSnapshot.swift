@@ -138,10 +138,10 @@ struct EagleSupportSnapshotCard: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     ShareLink(item: snapshot) {
-                        Label(
-                            LaraL10n.text(en: "Share", es: "Compartir"),
-                            systemImage: "square.and.arrow.up"
-                        )
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text(LaraL10n.text(en: "Share", es: "Compartir"))
+                        }
                         .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.borderedProminent)
@@ -151,10 +151,10 @@ struct EagleSupportSnapshotCard: View {
 
                 VStack(spacing: 10) {
                     ShareLink(item: snapshot) {
-                        Label(
-                            LaraL10n.text(en: "Share", es: "Compartir"),
-                            systemImage: "square.and.arrow.up"
-                        )
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text(LaraL10n.text(en: "Share", es: "Compartir"))
+                        }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
