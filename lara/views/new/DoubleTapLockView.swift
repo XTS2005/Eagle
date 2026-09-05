@@ -10,8 +10,9 @@ import SwiftUI
 /// Double-Tap to Lock — ported from Cyanide's darksword_tweaks.m.
 /// Double-tapping an empty area of the Home Screen or Lock Screen background
 /// locks the device. Icons, the dock and the passcode screen never trigger it.
-/// Passcode-style interaction: a status banner plus a single Enable/Disable
-/// action button (no toggle), and a manual Respring button.
+/// Passcode-style interaction: fixed "Apply" / "Respring" buttons (labels
+/// never flip), an in-page Prepare entry when the exploit has not run yet,
+/// and feedback via alerts plus the status banner.
 struct DoubleTapLockView: View {
     @ObservedObject var mgr: laramgr
     @AppStorage("doubleTapToLock") private var doubleTapToLock: Bool = false
@@ -25,6 +26,9 @@ struct DoubleTapLockView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 statusBanner
+                if !mgr.dsready {
+                    prepareButton
+                }
                 applyButton
                 respringButton
                 infoCard
@@ -92,15 +96,15 @@ struct DoubleTapLockView: View {
             )
         }
         return doubleTapToLock
-            ? LaraL10n.text(en: "Enabled", es: "Activado")
-            : LaraL10n.text(en: "Disabled", es: "Desactivado")
+            ? LaraL10n.text(en: "Applied", es: "Aplicado")
+            : LaraL10n.text(en: "Not applied", es: "No aplicado")
     }
 
     private var statusSubtitle: String {
         if !mgr.dsready {
             return LaraL10n.text(
-                en: "Run Prepare first — the buttons unlock after the exploit succeeds.",
-                es: "Ejecuta Prepare primero — los botones se desbloquean tras el exploit."
+                en: "Run Prepare below — Apply unlocks once the exploit succeeds.",
+                es: "Ejecuta Prepare abajo — Aplicar se desbloquea tras el exploit."
             )
         }
         if !sessionReady {
@@ -132,6 +136,31 @@ struct DoubleTapLockView: View {
     // "Respring" restarts SpringBoard (clearing it). The labels never flip;
     // feedback comes from the alert after the remote call completes and from
     // the status banner.
+
+    private var prepareButton: some View {
+        Button {
+            prepareNow()
+        } label: {
+            HStack(spacing: 10) {
+                if mgr.dsrunning {
+                    ProgressView()
+                        .tint(.white)
+                }
+                Text(LaraL10n.text(en: "Prepare iPhone", es: "Preparar iPhone"))
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(.indigo)
+        .disabled(mgr.dsrunning || mgr.rcrunning || busy)
+        .accessibilityHint(LaraL10n.text(
+            en: "Runs the exploit so Apply can install the gesture.",
+            es: "Ejecuta el exploit para que Aplicar pueda instalar el gesto."
+        ))
+    }
 
     private var applyButton: some View {
         Button {
@@ -173,7 +202,6 @@ struct DoubleTapLockView: View {
         .buttonStyle(.bordered)
         .controlSize(.large)
         .tint(.secondary)
-        .disabled(!mgr.dsready || busy || mgr.rcrunning)
     }
 
     // MARK: - Info
@@ -197,15 +225,15 @@ struct DoubleTapLockView: View {
             .foregroundStyle(.secondary)
 
             Text(LaraL10n.text(
-                en: "Apply starts the SpringBoard RemoteCall session automatically after Prepare, then installs the gesture.",
-                es: "Aplicar inicia la sesión RemoteCall de SpringBoard automáticamente tras Prepare y luego instala el gesto."
+                en: "Prepare runs the exploit once; Apply then starts the SpringBoard RemoteCall session automatically and installs the gesture.",
+                es: "Prepare ejecuta el exploit una vez; Aplicar inicia entonces la sesión RemoteCall de SpringBoard automáticamente e instala el gesto."
             ))
             .font(.footnote)
             .foregroundStyle(.secondary)
 
             Text(LaraL10n.text(
-                en: "The gesture lives in SpringBoard until it restarts. Tap Respring to restart and clear it; tap Apply again afterwards to reinstall.",
-                es: "El gesto vive en SpringBoard hasta que se reinicie. Toca Reiniciar para reiniciarlo y eliminarlo; después toca Aplicar de nuevo para reinstalarlo."
+                en: "Respring needs no Prepare: it restarts SpringBoard (clearing the gesture) from any state. Tap Apply again afterwards to reinstall.",
+                es: "Reiniciar no requiere Prepare: reinicia SpringBoard (eliminando el gesto) desde cualquier estado. Toca Aplicar de nuevo después para reinstalarlo."
             ))
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -224,21 +252,42 @@ struct DoubleTapLockView: View {
 
     // MARK: - Actions
 
-    private func respringNow() {
-        // Same approach as RemoteView's "Respring" tool: terminate SpringBoard
-        // through the live RemoteCall session and let launchd bring it back.
-        // A SpringBoard restart clears the injected gesture, so mirror that in
-        // the persisted flag.
-        performWithSession { _ in
-            self.doubleTapToLock = false
-            _ = self.mgr.rccall(name: "exit", args: [0], timeout: 100)
-            self.mgr.logmsg("(rc) respring requested")
+    private func prepareNow() {
+        guard !mgr.dsrunning else { return }
+        mgr.logmsg("(ds) prepare requested from Double-Tap to Lock")
+        mgr.run { success in
+            DispatchQueue.main.async {
+                if success {
+                    Alertinator.shared.alert(
+                        title: LaraL10n.text(en: "Prepared", es: "Preparado"),
+                        body: LaraL10n.text(
+                            en: "Exploit succeeded — tap Apply to install the gesture.",
+                            es: "Exploit completado — toca Aplicar para instalar el gesto."
+                        )
+                    )
+                } else {
+                    let error = self.mgr.rcLastError
+                        ?? LaraL10n.text(en: "The device could not be prepared. Try again.", es: "No se pudo preparar el dispositivo. Inténtalo de nuevo.")
+                    Alertinator.shared.alert(
+                        title: LaraL10n.text(en: "Prepare Failed", es: "Prepare falló"),
+                        body: error
+                    )
+                }
+            }
         }
+    }
+
+    private func respringNow() {
+        // Generic respring used by every other page: works without Prepare or
+        // a RemoteCall session (web-technique overlay presented by ContentView).
+        doubleTapToLock = false // A SpringBoard restart clears the gesture
+        mgr.respring()
+        mgr.logmsg("(rc) respring requested from Double-Tap to Lock")
     }
 
     // Runs an action against the SpringBoard RemoteCall session, initializing
     // the session on demand when the exploit succeeded but no session exists
-    // yet — so the buttons stay tappable right after Prepare.
+    // yet — so Apply stays tappable right after Prepare.
     private func performWithSession(_ action: @escaping (RemoteCall) -> Void) {
         if let proc = mgr.sbProc, mgr.rcready {
             action(proc)
