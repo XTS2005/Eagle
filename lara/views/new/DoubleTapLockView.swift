@@ -26,8 +26,10 @@ struct DoubleTapLockView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 statusBanner
-                if !mgr.dsready {
-                    prepareButton
+                if !mgr.sbxready {
+                    // Reuse the exact same Prepare card as the Access tab so
+                    // the exploit entry looks and behaves identically.
+                    LaraAccessView(compact: true)
                 }
                 applyButton
                 respringButton
@@ -137,30 +139,8 @@ struct DoubleTapLockView: View {
     // feedback comes from the alert after the remote call completes and from
     // the status banner.
 
-    private var prepareButton: some View {
-        Button {
-            prepareNow()
-        } label: {
-            HStack(spacing: 10) {
-                if mgr.dsrunning {
-                    ProgressView()
-                        .tint(.white)
-                }
-                Text(LaraL10n.text(en: "Prepare iPhone", es: "Preparar iPhone"))
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.indigo)
-        .disabled(mgr.dsrunning || mgr.rcrunning || busy)
-        .accessibilityHint(LaraL10n.text(
-            en: "Runs the exploit so Apply can install the gesture.",
-            es: "Ejecuta el exploit para que Aplicar pueda instalar el gesto."
-        ))
-    }
+    // The Prepare card above (LaraAccessView) owns the exploit flow with the
+    // exact same visuals as the Access tab.
 
     private var applyButton: some View {
         Button {
@@ -180,7 +160,10 @@ struct DoubleTapLockView: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .tint(Color(red: 0.88, green: 0.60, blue: 0.12))
-        .disabled(!mgr.dsready || busy || mgr.rcrunning)
+        .disabled(
+            !mgr.dsready || busy || mgr.rcrunning
+                || mgr.dsrunning || mgr.vfsrunning || mgr.sbxrunning
+        )
         .accessibilityHint(LaraL10n.text(
             en: "Installs the double-tap gesture into SpringBoard.",
             es: "Instala el gesto de doble toque en SpringBoard."
@@ -251,31 +234,6 @@ struct DoubleTapLockView: View {
     }
 
     // MARK: - Actions
-
-    private func prepareNow() {
-        guard !mgr.dsrunning else { return }
-        mgr.logmsg("(ds) prepare requested from Double-Tap to Lock")
-        mgr.run { success in
-            DispatchQueue.main.async {
-                if success {
-                    Alertinator.shared.alert(
-                        title: LaraL10n.text(en: "Prepared", es: "Preparado"),
-                        body: LaraL10n.text(
-                            en: "Exploit succeeded — tap Apply to install the gesture.",
-                            es: "Exploit completado — toca Aplicar para instalar el gesto."
-                        )
-                    )
-                } else {
-                    let error = self.mgr.rcLastError
-                        ?? LaraL10n.text(en: "The device could not be prepared. Try again.", es: "No se pudo preparar el dispositivo. Inténtalo de nuevo.")
-                    Alertinator.shared.alert(
-                        title: LaraL10n.text(en: "Prepare Failed", es: "Prepare falló"),
-                        body: error
-                    )
-                }
-            }
-        }
-    }
 
     private func respringNow() {
         // Generic respring used by every other page: works without Prepare or
