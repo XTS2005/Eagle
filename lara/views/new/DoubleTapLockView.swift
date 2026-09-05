@@ -258,7 +258,11 @@ struct DoubleTapLockView: View {
                 self.mgr.logmsg("(rc) session init failed: \(error)")
                 Alertinator.shared.alert(
                     title: "SpringBoard Session Failed",
-                    body: error
+                    body: "\(error)\n\n"
+                        + "Kernel read/write looks unavailable. Run Prepare again "
+                        + "(Access tab) to refresh it, then tap Apply.",
+                    actionLabel: LaraL10n.text(en: "Try Again", es: "Reintentar"),
+                    action: { self.performWithSession(action) }
                 )
                 return
             }
@@ -297,9 +301,13 @@ struct DoubleTapLockView: View {
                     )
                 } else {
                     self.mgr.logmsg("(rc) double-tap to lock failed: \(result)")
+                    let detail = proc.lastError ?? ""
+                    let message = detail.isEmpty
+                        ? "SpringBoard reported failure (\(result))."
+                        : "SpringBoard reported failure (\(result)). \(detail)"
                     Alertinator.shared.alert(
                         title: "Double-Tap to Lock Failed",
-                        body: "SpringBoard reported failure (\(result))."
+                        body: message
                     )
                 }
             }
