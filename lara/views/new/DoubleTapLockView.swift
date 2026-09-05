@@ -93,12 +93,14 @@ struct DoubleTapLockView: View {
         }
         busy = true
         mgr.logmsg("(rc) double-tap to lock: \(enabled ? "enabling" : "disabling")...")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // DoubleTapLockView is a struct (SwiftUI View), so [weak self] is not
+        // allowed; capturing the value is safe here because @AppStorage and
+        // @State share reference storage with the live view.
+        DispatchQueue.global(qos: .userInitiated).async {
             let result = enabled
                 ? enable_double_tap_to_lock(proc)
                 : disable_double_tap_to_lock(proc)
             DispatchQueue.main.async {
-                guard let self else { return }
                 self.busy = false
                 if result == 0 {
                     self.mgr.logmsg("(rc) double-tap to lock: \(enabled ? "enabled" : "disabled")")
