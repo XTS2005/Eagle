@@ -140,6 +140,20 @@ struct LaraHomeView: View {
 
                                     Divider().padding(.leading, 65)
 
+                                    NavigationLink(destination: DoubleTapLockView(mgr: mgr)) {
+                                        LaraToolRow(
+                                            title: "Double-Tap to Lock",
+                                            subtitle: LaraL10n.text(
+                                                en: "Lock from an empty background",
+                                                es: "Bloquear desde un fondo vacío"
+                                            ),
+                                            systemImage: "hand.tap.fill",
+                                            accent: Color(red: 0.88, green: 0.60, blue: 0.12)
+                                        )
+                                    }
+
+                                    Divider().padding(.leading, 65)
+
                                     LaraToolRow(
                                         title: LaraL10n.text(en: "Icon Studio", es: "Icon Studio"),
                                         subtitle: LaraL10n.text(
@@ -455,7 +469,7 @@ struct LaraHomeView: View {
             switch route {
             case .auraStudio, .completeStyles, .wallpapers,
                     .homeLabelColor, .cards, .passcode, .icons, .dock,
-                    .dockGallery:
+                    .dockGallery, .doubleTapLock:
                 return true
             case .eagleSystem, .advancedSettings:
                 return false
@@ -635,6 +649,8 @@ struct LaraHomeView: View {
             DockCustomizerView()
         case .dockGallery:
             DockGalleryView()
+        case .doubleTapLock:
+            DoubleTapLockView(mgr: mgr)
         case .advancedSettings:
             EmptyView()
         case .auraStudio:
@@ -682,6 +698,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case passcode
     case dock
     case dockGallery
+    case doubleTapLock
     case advancedSettings
     case icons
 
@@ -700,6 +717,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .dock: return "Dock"
         case .dockGallery:
             return LaraL10n.text(en: "Dock Gallery", es: "Galería Dock")
+        case .doubleTapLock:
+            return "Double-Tap to Lock"
         case .advancedSettings:
             return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas")
         case .auraStudio: return "Aura Studio"
@@ -732,6 +751,11 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
                 en: "Artwork behind your Dock apps",
                 es: "Arte detrás de las apps del Dock"
             )
+        case .doubleTapLock:
+            return LaraL10n.text(
+                en: "Lock from an empty background",
+                es: "Bloquear desde un fondo vacío"
+            )
         case .advancedSettings:
             return LaraL10n.text(en: "Expert controls", es: "Controles expertos")
         case .auraStudio:
@@ -750,6 +774,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .icons: return "square.grid.2x2.fill"
         case .dock: return "dock.rectangle"
         case .dockGallery: return "dock.rectangle"
+        case .doubleTapLock: return "hand.tap.fill"
         case .advancedSettings: return "wrench.and.screwdriver.fill"
         case .auraStudio: return "sparkles"
         }
@@ -766,6 +791,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .icons: return Color(red: 0.18, green: 0.60, blue: 0.42)
         case .dock: return Color(red: 0.12, green: 0.46, blue: 0.86)
         case .dockGallery: return Color(red: 1.00, green: 0.18, blue: 0.62)
+        case .doubleTapLock: return Color(red: 0.88, green: 0.60, blue: 0.12)
         case .advancedSettings: return .orange
         case .auraStudio: return Color(red: 0.10, green: 0.78, blue: 1.00)
         }
@@ -784,6 +810,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         case .dock: return "dock apps icons iconos capacity capacidad"
         case .dockGallery:
             return "dock gallery galería art arte photo foto theme tema apps"
+        case .doubleTapLock:
+            return "lock locks bloqueo bloquear double tap doble toque gesture gesto background fondo empty vacío screen pantalla"
         case .advancedSettings: return "advanced avanzado settings ajustes expert experto kernelcache"
         case .auraStudio: return "aura neon neón island isla dock glow"
         }
