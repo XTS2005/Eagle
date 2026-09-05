@@ -135,15 +135,15 @@ struct EagleCompatibilityCenterView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
 
                 EagleSupportSnapshotCard()
-                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
 
                 EaglePrepareCrashReportCard()
-                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
             } header: {
                 Text(LaraL10n.text(en: "Support", es: "Soporte"))
