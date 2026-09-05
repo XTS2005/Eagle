@@ -145,6 +145,7 @@ struct EagleSupportSnapshotCard: View {
                         .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
 
                     copyButton
                 }
@@ -158,12 +159,14 @@ struct EagleSupportSnapshotCard: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
 
                     Button(action: copySnapshot) {
                         copyLabel
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
                 }
             }
             .font(.subheadline.weight(.semibold))
@@ -183,6 +186,7 @@ struct EagleSupportSnapshotCard: View {
             copyLabel
         }
         .buttonStyle(.bordered)
+        .controlSize(.large)
     }
 
     private var copyLabel: some View {

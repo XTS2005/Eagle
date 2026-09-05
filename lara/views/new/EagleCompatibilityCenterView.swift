@@ -122,7 +122,21 @@ struct EagleCompatibilityCenterView: View {
                         LaraL10n.text(en: "Open live logs", es: "Abrir logs en vivo"),
                         systemImage: "terminal"
                     )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(
+                        Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(.primary.opacity(0.05), lineWidth: 1)
+                    }
                 }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                .listRowBackground(Color.clear)
 
                 EagleSupportSnapshotCard()
                     .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
