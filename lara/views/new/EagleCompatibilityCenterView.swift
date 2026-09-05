@@ -137,14 +137,17 @@ struct EagleCompatibilityCenterView: View {
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 EagleSupportSnapshotCard()
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
 
                 EaglePrepareCrashReportCard()
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } header: {
                 Text(LaraL10n.text(en: "Support", es: "Soporte"))
             } footer: {
