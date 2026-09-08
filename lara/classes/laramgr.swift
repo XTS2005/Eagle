@@ -96,7 +96,14 @@ final class laramgr: ObservableObject {
             }
         }
     }
-    @Published var dsrunning: Bool = false
+    @Published var dsrunning: Bool = false {
+        didSet {
+            #if !DISABLE_REMOTECALL
+            if dsrunning { beginRemoteBackgroundTask() }
+            else { DispatchQueue.main.async { [weak self] in self?.finishRemoteWorkIfIdle() } }
+            #endif
+        }
+    }
     @Published var dsready: Bool = false
     @Published var dsattempted: Bool = false
     @Published var dsfailed: Bool = false
@@ -106,10 +113,27 @@ final class laramgr: ObservableObject {
     
     @Published var kaccessready: Bool = false
     @Published var kaccesserror: String?
-    @Published var fileopinprogress: Bool = false
+    @Published var fileopinprogress: Bool = false {
+        didSet {
+            #if !DISABLE_REMOTECALL
+            if !fileopinprogress { DispatchQueue.main.async { [weak self] in self?.finishRemoteWorkIfIdle() } }
+            #endif
+        }
+    }
     @Published var testresult: String?
     #if !DISABLE_REMOTECALL
-    @Published var rcrunning: Bool = false
+    @Published var rcrunning: Bool = false {
+        didSet {
+            // Reserve execution time before native work starts, including if
+            // the user switches apps halfway through an apply operation.
+            if rcrunning { beginRemoteBackgroundTask() }
+            else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.finishRemoteWorkIfIdle()
+                }
+            }
+        }
+    }
     @Published var eligibilitystate: Bool?
     @Published var eu1progress: Double = 0.0
     @Published var eu1running: Bool = false
@@ -147,11 +171,9 @@ final class laramgr: ObservableObject {
             if let issue = remoteCallSessionIssue(storedSBProc, process: "SpringBoard") {
                 rcLastError = issue
                 rcready = false
-                self.storedSBProc = nil
-                logmsg("discarding invalid SpringBoard session: \(issue)")
-                DispatchQueue.global(qos: .utility).async {
-                    storedSBProc.destroy()
-                }
+                // Reading a property must not launch untracked teardown while
+                // preparation or another worker is about to use the transport.
+                logmsg("invalid SpringBoard session awaiting serialized cleanup: \(issue)")
                 return nil
             }
             #endif
@@ -167,6 +189,63 @@ final class laramgr: ObservableObject {
     private var rcNativeCallLabel: String?
     private var rcDaemonRunning = false
     private var rcDaemonQueue: [RemoteCallDaemonRequest] = []
+    private var remoteBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var remoteCleanupPending = false
+    private var appIsBackgrounded = false
+
+    func remoteAppDidEnterBackground() {
+        precondition(Thread.isMainThread)
+        appIsBackgrounded = true
+        remoteCleanupPending = true
+        if storedSBProc != nil || rcrunning || dsrunning { beginRemoteBackgroundTask() }
+        finishRemoteWorkIfIdle()
+    }
+
+    func remoteAppDidBecomeActive() {
+        precondition(Thread.isMainThread)
+        appIsBackgrounded = false
+        remoteCleanupPending = false
+        finishRemoteWorkIfIdle()
+    }
+
+    private func beginRemoteBackgroundTask() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.beginRemoteBackgroundTask() }
+            return
+        }
+        guard remoteBackgroundTask == .invalid else { return }
+        remoteBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "EagleRemoteOperation") { [weak self] in
+            guard let self else { return }
+            // Expiration cannot cancel an in-flight native call. Do not race
+            // its teardown or allow another operation to reuse this session.
+            if self.fileopinprogress || self.dsrunning || self.rcrunning || self.rcNativeCallInFlight || self.rcFreshSessionInFlight {
+                self.quarantineRemoteCall(reason: "Background time expired before the remote operation completed")
+            }
+            self.endRemoteBackgroundTask()
+        }
+    }
+
+    private func endRemoteBackgroundTask() {
+        guard remoteBackgroundTask != .invalid else { return }
+        let task = remoteBackgroundTask
+        remoteBackgroundTask = .invalid
+        UIApplication.shared.endBackgroundTask(task)
+    }
+
+    private func finishRemoteWorkIfIdle() {
+        precondition(Thread.isMainThread)
+        guard !fileopinprogress, !dsrunning, !rcrunning, !rcFreshSessionInFlight, !rcNativeCallInFlight,
+              !rcDaemonRunning else { return }
+        if appIsBackgrounded, remoteCleanupPending, !rcSafetyLocked {
+            remoteCleanupPending = false
+            // Read the stored object even when validation has marked it stale.
+            if storedSBProc != nil {
+                rcdestroy { [weak self] in self?.finishRemoteWorkIfIdle() }
+                return
+            }
+        }
+        endRemoteBackgroundTask()
+    }
     // YouTube is optional. Constructing this at manager startup used to probe
     // for a process that often is not installed (and before Prepare was ready),
     // producing a misleading RemoteCall failure in every diagnostic report.
@@ -190,7 +269,10 @@ final class laramgr: ObservableObject {
     private func scheduleDSUIFlush(logLine: String?, progress: Double?) {
         dsUICallbackLock.lock()
         if let logLine {
-            pendingDSLogLines.append(logLine)
+            pendingDSLogLines.append(String(logLine.prefix(8192)))
+            if pendingDSLogLines.count > 400 {
+                pendingDSLogLines.removeFirst(pendingDSLogLines.count - 400)
+            }
         }
         if let progress {
             pendingDSProgress = progress
@@ -219,6 +301,7 @@ final class laramgr: ObservableObject {
         if !lines.isEmpty {
             let batch = lines.joined(separator: "\n")
             log += batch + "\n"
+            if log.utf8.count > 256 * 1024 { log = String(log.suffix(128 * 1024)) }
             globallogger.log(batch)
         }
         if let progress {
@@ -282,7 +365,7 @@ final class laramgr: ObservableObject {
 
     private func detachRemoteCallStateForPrepareStart() -> RemoteCall? {
         rcGeneration &+= 1
-        let previousSession = sbProc
+        let previousSession = storedSBProc
         sbProc = nil
         rcready = false
         rcfailed = false
@@ -303,7 +386,7 @@ final class laramgr: ObservableObject {
     }
     
     func run(completion: ((Bool) -> Void)? = nil) {
-        guard !dsrunning else {
+        guard !dsrunning, !fileopinprogress else {
             completion?(false)
             return
         }
@@ -326,11 +409,6 @@ final class laramgr: ObservableObject {
         resetPreparedSubsystemStateForNewRun()
         #if !DISABLE_REMOTECALL
         let previousRemoteCallSession = detachRemoteCallStateForPrepareStart()
-        if let previousRemoteCallSession {
-            DispatchQueue.global(qos: .utility).async {
-                previousRemoteCallSession.destroy()
-            }
-        }
         #endif
 
         let systemBuild = eagleSystemBuild()?.trimmingCharacters(
@@ -353,11 +431,7 @@ final class laramgr: ObservableObject {
                 systemBuild: systemBuild.flatMap { $0.isEmpty ? nil : $0 } ?? "unknown"
             )
         }
-        EaglePrepareAttemptJournal.mark(
-            prepareAttemptID,
-            stage: .darkSwordRunning,
-            detail: "native exploit entered"
-        )
+        let attemptID = prepareAttemptID
         dsrunning = true
         dsready = false
         dsfailed = false
@@ -375,6 +449,38 @@ final class laramgr: ObservableObject {
         }
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            #if !DISABLE_REMOTECALL
+            // Finish the old transport before Prepare changes shared kernel
+            // state. Previously these ran on two unrelated global workers.
+            if let previousRemoteCallSession {
+                EaglePrepareAttemptJournal.mark(
+                    attemptID,
+                    stage: .armed,
+                    detail: "cleaning previous remote session before DarkSword"
+                )
+                if previousRemoteCallSession.destroy() != 0 {
+                    EaglePrepareAttemptJournal.finish(
+                        attemptID,
+                        succeeded: false,
+                        detail: "previous remote session cleanup failed; DarkSword was not entered"
+                    )
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.dsrunning = false
+                        self.dsfailed = true
+                        self.storedSBProc = previousRemoteCallSession
+                        self.quarantineRemoteCall(reason: "Previous remote session could not be cleaned up before Prepare")
+                        completion?(false)
+                    }
+                    return
+                }
+            }
+            #endif
+            EaglePrepareAttemptJournal.mark(
+                attemptID,
+                stage: .darkSwordRunning,
+                detail: "native exploit entered"
+            )
             let result = ds_run()
             
             DispatchQueue.main.async {
@@ -422,6 +528,7 @@ final class laramgr: ObservableObject {
     func logmsg(_ message: String) {
         DispatchQueue.main.async {
             self.log += message + "\n"
+            if self.log.utf8.count > 256 * 1024 { self.log = String(self.log.suffix(128 * 1024)) }
             globallogger.log(message)
         }
     }
@@ -462,7 +569,10 @@ final class laramgr: ObservableObject {
     }
     
     func vfsinit(completion: ((Bool) -> Void)? = nil) {
-        guard dsready, hasOffsets, !vfsrunning else { return }
+        guard dsready, hasOffsets, !vfsrunning else {
+            completion?(false)
+            return
+        }
         vfs_setlogcallback(laramgr.vfslogcallback)
         vfs_setprogresscallback { progress in
             DispatchQueue.main.async {
@@ -971,6 +1081,11 @@ final class laramgr: ObservableObject {
     
     #if !DISABLE_REMOTECALL
     func rcinit(process: String, migbypass: Bool = false, completion: ((Bool) -> Void)? = nil) {
+        guard !fileopinprogress else { completion?(false); return }
+        guard UIApplication.shared.applicationState == .active else {
+            completion?(false)
+            return
+        }
         guard dsready else {
             completion?(false)
             return
@@ -997,7 +1112,7 @@ final class laramgr: ObservableObject {
                 rcready = false
                 rcrunning = true
                 DispatchQueue.global(qos: .utility).async { [weak self] in
-                    staleSession?.destroy()
+                    let cleanupResult = staleSession?.destroy() ?? 0
                     DispatchQueue.main.async {
                         guard let self else {
                             completion?(false)
@@ -1009,6 +1124,12 @@ final class laramgr: ObservableObject {
                             return
                         }
                         self.rcrunning = false
+                        guard cleanupResult == 0 else {
+                            self.storedSBProc = staleSession
+                            self.quarantineRemoteCall(reason: "Stale remote session cleanup failed")
+                            completion?(false)
+                            return
+                        }
                         self.rcinit(
                             process: process,
                             migbypass: migbypass,
@@ -1027,7 +1148,7 @@ final class laramgr: ObservableObject {
         // Repair split state left by an interrupted RemoteCall lifecycle before
         // creating another session. Never overwrite a live object and leak its
         // exception ports/thread state.
-        if let staleSession = sbProc {
+        if let staleSession = storedSBProc {
             rcGeneration &+= 1
             let repairGeneration = rcGeneration
             sbProc = nil
@@ -1035,7 +1156,7 @@ final class laramgr: ObservableObject {
             rcrunning = true
             logmsg("repairing incomplete remote call session...")
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                staleSession.destroy()
+                let cleanupResult = staleSession.destroy()
                 DispatchQueue.main.async {
                     guard let self else {
                         completion?(false)
@@ -1047,6 +1168,12 @@ final class laramgr: ObservableObject {
                         return
                     }
                     self.rcrunning = false
+                    guard cleanupResult == 0 else {
+                        self.storedSBProc = staleSession
+                        self.quarantineRemoteCall(reason: "Incomplete remote session cleanup failed")
+                        completion?(false)
+                        return
+                    }
                     self.rcinit(
                         process: process,
                         migbypass: migbypass,
@@ -1090,6 +1217,7 @@ final class laramgr: ObservableObject {
                     self.rcLastError = issue
                     self.logmsg("remote call verification failed on \(process): \(issue)")
                     self.rcrunning = false
+                    self.quarantineRemoteCall(reason: issue)
                     DispatchQueue.global(qos: .utility).async {
                         candidate.destroy()
                     }
@@ -1145,6 +1273,10 @@ final class laramgr: ObservableObject {
             completion(nil, "Eagle access is not ready")
             return
         }
+        guard UIApplication.shared.applicationState == .active else {
+            completion(nil, "Return to Eagle before applying a change")
+            return
+        }
         guard !rcSafetyLocked else {
             completion(
                 nil,
@@ -1152,7 +1284,7 @@ final class laramgr: ObservableObject {
             )
             return
         }
-        guard !rcFreshSessionInFlight, !rcrunning,
+        guard !fileopinprogress, !rcFreshSessionInFlight, !rcrunning,
               !rcNativeCallInFlight else {
             completion(nil, "Another RemoteCall lifecycle operation is still running")
             return
@@ -1169,7 +1301,7 @@ final class laramgr: ObservableObject {
             generation: generation,
             process: process
         )
-        let previousSession = sbProc
+        let previousSession = storedSBProc
         sbProc = nil
 
         func complete(_ session: RemoteCall?, _ error: String?) {
@@ -1223,11 +1355,18 @@ final class laramgr: ObservableObject {
 
         logmsg("preparing a fresh remote call session on \(process)...")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            previousSession?.destroy()
+            let cleanupResult = previousSession?.destroy() ?? 0
             DispatchQueue.main.async {
                 guard let self,
                       self.rcGeneration == generation,
                       !preparation.completed else { return }
+                guard cleanupResult == 0 else {
+                    let reason = "Previous remote session cleanup failed"
+                    self.storedSBProc = previousSession
+                    complete(nil, reason)
+                    self.quarantineRemoteCall(reason: reason)
+                    return
+                }
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                     let candidate = RemoteCall(
                         process: process,
@@ -1250,6 +1389,7 @@ final class laramgr: ObservableObject {
                             process: process
                         ) {
                             self.logmsg("fresh remote call verification failed on \(process): \(issue)")
+                            self.quarantineRemoteCall(reason: issue)
                             DispatchQueue.global(qos: .utility).async {
                                 candidate.destroy()
                             }
@@ -1296,9 +1436,14 @@ final class laramgr: ObservableObject {
         logmsg("remote call safety lock: \(reason)")
     }
 
-    func beginExclusiveRemoteCall(label: String) -> Bool {
+    func beginExclusiveRemoteCall(label: String, expectedSession: RemoteCall) -> Bool {
         precondition(Thread.isMainThread)
-        guard let session = sbProc,
+        guard !fileopinprogress else { return false }
+        guard UIApplication.shared.applicationState == .active else { return false }
+        // Awaiting preparation yields the main actor. Another caller may have
+        // replaced (and destroyed) that session before this caller resumes.
+        // Compare identity before reading any native session properties.
+        guard let session = storedSBProc, session === expectedSession,
               rcready, !rcrunning,
               !rcNativeCallInFlight, !rcSafetyLocked else {
             return false
@@ -1322,11 +1467,12 @@ final class laramgr: ObservableObject {
             logmsg("ignored duplicate remote call completion: \(label)")
             return
         }
-        if let activeLabel = rcNativeCallLabel, activeLabel != label {
+        guard rcNativeCallLabel == label else {
             logmsg(
                 "remote call completion label mismatch: " +
-                "active=\(activeLabel), finishing=\(label)"
+                "active=\(rcNativeCallLabel ?? "none"), finishing=\(label)"
             )
+            return
         }
         rcNativeCallInFlight = false
         rcNativeCallLabel = nil
@@ -1343,7 +1489,7 @@ final class laramgr: ObservableObject {
             completion: completion
         )
 
-        guard dsready, !rcSafetyLocked, sbProc != nil else {
+        guard !fileopinprogress, dsready, !rcSafetyLocked, sbProc != nil else {
             completion?(nil)
             return
         }
@@ -1417,6 +1563,10 @@ final class laramgr: ObservableObject {
     }
     
     func rcdestroy(completion: (() -> Void)? = nil) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.rcdestroy(completion: completion) }
+            return
+        }
         guard !rcrunning, !rcFreshSessionInFlight,
               !rcNativeCallInFlight, !rcSafetyLocked else {
             rcLastError = "A serialized or quarantined RemoteCall operation is still running"
@@ -1425,26 +1575,30 @@ final class laramgr: ObservableObject {
         }
         rcGeneration &+= 1
         let generation = rcGeneration
-        guard rcready || sbProc != nil else {
+        guard rcready || storedSBProc != nil else {
             rcready = false
             completion?()
             return
         }
         
         logmsg("destroying remote call session...")
-        let session = sbProc
+        let session = storedSBProc
         sbProc = nil
         rcready = false
         rcrunning = true
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            session?.destroy()
+            let result = session?.destroy() ?? 0
             
             DispatchQueue.main.async {
-                self?.logmsg("remote call session destroyed")
                 if self?.rcGeneration == generation {
                     self?.rcrunning = false
+                    if result != 0 {
+                        self?.storedSBProc = session
+                        self?.quarantineRemoteCall(reason: "Remote session teardown did not finish safely")
+                    }
                 }
+                self?.logmsg(result == 0 ? "remote call session destroyed" : "remote call cleanup failed; further changes are locked")
                 completion?()
             }
         }

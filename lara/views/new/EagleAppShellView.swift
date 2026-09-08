@@ -11,16 +11,23 @@ struct EagleAppShellView: View {
     @State private var selectedSection = EagleAppSection.customize
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 0) {
+            ZStack {
             EagleBeta10AccessView()
+                .environment(\.laraMediaPreviewsEnabled, selectedSection == .access)
                 .opacity(selectedSection == .access ? 1 : 0)
                 .allowsHitTesting(selectedSection == .access)
+                .accessibilityHidden(selectedSection != .access)
 
             LaraHomeView()
+                .environment(\.laraMediaPreviewsEnabled, selectedSection == .customize)
                 .opacity(selectedSection == .customize ? 1 : 0)
                 .allowsHitTesting(selectedSection == .customize)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+                .accessibilityHidden(selectedSection != .customize)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
             bottomBar
         }
         .alert(item: $sceneManager.notice) { notice in
@@ -56,12 +63,15 @@ struct EagleAppShellView: View {
                 systemImage: "sparkles"
             )
         }
-        .frame(height: 66)
-        .background(.ultraThinMaterial)
+        // This is a layout sibling of the navigation stacks, not an inset
+        // over them. Child action bars cannot end up behind the shell tabs.
+        .frame(maxWidth: .infinity)
+        .frame(height: 68, alignment: .center)
+        .clipped()
+        .background(Color(uiColor: .secondarySystemBackground))
         .overlay(alignment: .top) {
             Divider().opacity(0.35)
         }
-        .ignoresSafeArea(edges: .bottom)
     }
 
     private func bottomBarButton(
@@ -84,13 +94,14 @@ struct EagleAppShellView: View {
                     }
                 }
                 .font(.system(size: 25, weight: .semibold))
-                .frame(height: 30)
+                .frame(width: 30, height: 30)
 
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .frame(height: 68, alignment: .center)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

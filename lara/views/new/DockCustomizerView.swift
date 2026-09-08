@@ -87,7 +87,8 @@ struct DockCustomizerView: View {
     /// each icon breathes on its own phase, so the preview feels alive without
     /// distracting. Everything freezes cleanly when Reduce Motion is on.
     private var dockStrip: some View {
-        let compact = selectedCapacity == 6
+        let previewCapacity = EagleStoredThemeValues.dockPreviewCapacity(selectedCapacity)
+        let compact = previewCapacity == 6
         return TimelineView(.animation(paused: reduceMotion)) { context in
             ZStack {
                 AngularGradient(
@@ -100,7 +101,7 @@ struct DockCustomizerView: View {
                 .allowsHitTesting(false)
 
                 HStack(spacing: compact ? 8 : 11) {
-                    ForEach(0..<selectedCapacity, id: \.self) { index in
+                    ForEach(0..<previewCapacity, id: \.self) { index in
                         let glow = reduceMotion ? 0.8 : tileGlow(at: context.date, index: index)
                         RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
                             .fill(previewColor(for: index).gradient)
@@ -291,6 +292,23 @@ struct DockCustomizerView: View {
 
     private func applySelectedCapacity() {
         guard !isApplying else { return }
+        guard UIApplication.shared.applicationState == .active,
+              !mgr.dsrunning, !mgr.rcrunning,
+              !mgr.rcSafetyLocked else {
+            finishWithError(mgr.rcLastError ?? LaraL10n.text(
+                en: "Finish the current operation before changing the Dock.",
+                es: "Termina la operación actual antes de cambiar el Dock."
+            ))
+            return
+        }
+        guard capacities.contains(selectedCapacity) else {
+            finishWithError(LaraL10n.text(
+                en: "Choose 4, 5, or 6 Dock icons.",
+                es: "Elige 4, 5 o 6 iconos para el Dock."
+            ))
+            return
+        }
+        let capacity = selectedCapacity
         isApplying = true
 
         let applyWithSession = {
@@ -302,12 +320,29 @@ struct DockCustomizerView: View {
                 return
             }
 
-            let capacity = self.selectedCapacity
+            let operationLabel = "Dock capacity \(UUID().uuidString)"
+            guard self.mgr.beginExclusiveRemoteCall(label: operationLabel, expectedSession: process) else {
+                self.finishWithError(self.mgr.rcLastError ?? LaraL10n.text(
+                    en: "The Dock session is busy or unavailable.",
+                    es: "La sesión del Dock está ocupada o no está disponible."
+                ))
+                return
+            }
             DispatchQueue.global(qos: .userInitiated).async {
                 let capacityResult = set_dock_icon_count(process, Int32(capacity))
+                let healthy = process.isHealthy && !process.lastCallTimedOut
                 DispatchQueue.main.async {
+                    if !healthy {
+                        self.mgr.quarantineRemoteCall(reason: "Dock capacity session failed verification")
+                    }
+                    self.mgr.endExclusiveRemoteCall(label: operationLabel)
                     self.isApplying = false
-                    if capacityResult == 0 {
+                    if !healthy {
+                        self.alert = EagleDockAlert(message: LaraL10n.text(
+                            en: "The Dock update could not be verified. Fully close and reopen Eagle before another operation.",
+                            es: "No se pudo verificar el cambio del Dock. Cierra Eagle completamente y vuelve a abrirlo antes de otra operación."
+                        ))
+                    } else if capacityResult == 0 {
                         self.alert = EagleDockAlert(message: LaraL10n.text(
                             en: "The Dock now accepts \(capacity) icons. Return to the Home Screen and drag apps into the new spaces.",
                             es: "El Dock ahora acepta \(capacity) iconos. Vuelve a la pantalla de inicio y arrastra apps a los espacios nuevos."
@@ -333,7 +368,7 @@ struct DockCustomizerView: View {
         }
 
         mgr.rcinit(process: "SpringBoard") { success in
-            if success || (self.mgr.rcready && self.mgr.sbProc != nil) {
+            if success {
                 applyWithSession()
             } else {
                 let detail = self.mgr.rcLastError?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -368,8 +403,8 @@ struct DockCustomizerView: View {
             )
         case -5:
             return LaraL10n.text(
-                en: "SpringBoard rejected the main-thread update. No Dock changes were made.",
-                es: "SpringBoard rechazó la actualización principal. No se cambió el Dock."
+                en: "SpringBoard could not confirm the Dock update.",
+                es: "SpringBoard no pudo confirmar el cambio del Dock."
             )
         default:
             return LaraL10n.text(

@@ -8,6 +8,10 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
     case vortex = 12
     case bubblegum = 13
     case traffic = 14
+    case duckMood = 32
+    case blueScreen = 33
+    case walkingFlame = 34
+    case singularityLive = 36
 
     var id: Int { rawValue }
 
@@ -19,6 +23,10 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
         case .vortex: return LaraL10n.text(en: "Vortex", es: "Vórtice")
         case .bubblegum: return LaraL10n.text(en: "Bubblegum", es: "Chicle")
         case .traffic: return LaraL10n.text(en: "Traffic", es: "Tráfico")
+        case .duckMood: return LaraL10n.text(en: "Duck Mood", es: "Humor de pato")
+        case .blueScreen: return LaraL10n.text(en: "Blue Screen", es: "Pantalla azul")
+        case .walkingFlame: return LaraL10n.text(en: "Walking Flame", es: "Llama ambulante")
+        case .singularityLive: return "Singularity"
         }
     }
 
@@ -36,6 +44,14 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
             return LaraL10n.text(en: "Pink and yellow bubbles", es: "Burbujas rosas y amarillas")
         case .traffic:
             return LaraL10n.text(en: "Painted road signs", es: "Señales de tránsito pintadas")
+        case .duckMood:
+            return LaraL10n.text(en: "Classic animated duck close-up", es: "Primer plano de pato animado clásico")
+        case .blueScreen:
+            return LaraL10n.text(en: "Electric blue system portrait", es: "Retrato de sistema azul eléctrico")
+        case .walkingFlame:
+            return LaraL10n.text(en: "Surreal street fire portrait", es: "Retrato surrealista de fuego urbano")
+        case .singularityLive:
+            return LaraL10n.text(en: "Live video · Vortex fit", es: "Video Live · ajuste de Vortex")
         }
     }
 
@@ -47,6 +63,10 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
         case .vortex: return "PhotoAuraVortex"
         case .bubblegum: return "PhotoAuraBubblegum"
         case .traffic: return "PhotoAuraTraffic"
+        case .duckMood: return "PhotoAuraDuckMood"
+        case .blueScreen: return "PhotoAuraBlueScreen"
+        case .walkingFlame: return "PhotoAuraWalkingFlame"
+        case .singularityLive: return "PhotoAuraVortex"
         }
     }
 
@@ -58,6 +78,10 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
         case .vortex: return Color(red: 0.36, green: 1.00, blue: 0.08)
         case .bubblegum: return Color(red: 1.00, green: 0.25, blue: 0.60)
         case .traffic: return Color(red: 1.00, green: 0.32, blue: 0.08)
+        case .duckMood: return Color(red: 1.00, green: 0.47, blue: 0.08)
+        case .blueScreen: return Color(red: 0.10, green: 0.28, blue: 1.00)
+        case .walkingFlame: return Color(red: 1.00, green: 0.30, blue: 0.06)
+        case .singularityLive: return Color(white: 0.85)
         }
     }
 
@@ -69,6 +93,10 @@ enum IslandGalleryStyle: Int, CaseIterable, Identifiable {
         case .vortex: return (92, 255, 20)
         case .bubblegum: return (255, 64, 154)
         case .traffic: return (255, 82, 20)
+        case .duckMood: return (255, 120, 20)
+        case .blueScreen: return (26, 71, 255)
+        case .walkingFlame: return (255, 77, 15)
+        case .singularityLive: return (217, 217, 217)
         }
     }
 }
@@ -96,8 +124,8 @@ struct IslandGalleryApplyResult {
 }
 
 /// Runs the same isolated, one-surface native transaction as Aura Studio.
-/// Gallery styles differ only by their native mode/asset and fixed halo color;
-/// every style is installed and read back through the shared Island verifier.
+/// Gallery styles differ by native mode/asset, halo color and user-selected
+/// shadow strength; every style is installed and read back by one verifier.
 @MainActor
 final class IslandGalleryExecutor {
     static let shared = IslandGalleryExecutor()
@@ -105,11 +133,21 @@ final class IslandGalleryExecutor {
     private let manager = laramgr.shared
     private let islandFlag: UInt32 = 1
     private let supportedFlags: UInt32 = 1 | (1 << 5)
+    private var operationInProgress = false
 
     private init() {}
 
-    func apply(_ style: IslandGalleryStyle) async -> IslandGalleryApplyResult {
-        await run(style: style, restoring: false)
+    func apply(_ style: IslandGalleryStyle, shadowIntensity: Double) async -> IslandGalleryApplyResult {
+        await run(style: style, restoring: false, shadowIntensity: shadowIntensity)
+    }
+
+    func applyLive(_ theme: IslandLiveTheme, shadowIntensity: Double) async -> IslandGalleryApplyResult {
+        await run(
+            style: .singularityLive,
+            restoring: false,
+            liveTheme: theme,
+            shadowIntensity: shadowIntensity
+        )
     }
 
     func restore() async -> IslandGalleryApplyResult {
@@ -118,8 +156,22 @@ final class IslandGalleryExecutor {
 
     private func run(
         style: IslandGalleryStyle?,
-        restoring: Bool
+        restoring: Bool,
+        liveTheme: IslandLiveTheme? = nil,
+        shadowIntensity: Double = 0.72
     ) async -> IslandGalleryApplyResult {
+        // Views can disappear and be reopened while a package is downloading.
+        // The singleton owns the lock across every suspension, not just the UI.
+        guard !operationInProgress else {
+            return failure(en: "An Island update is already running. Please wait.",
+                           es: "Ya hay una actualización de Island en curso. Espera a que termine.")
+        }
+        operationInProgress = true
+        defer { operationInProgress = false }
+        guard !Task.isCancelled, UIApplication.shared.applicationState == .active else {
+            return failure(en: "Return to Eagle before applying a theme.",
+                           es: "Vuelve a Eagle antes de aplicar un tema.")
+        }
         let version = ProcessInfo.processInfo.operatingSystemVersion
         let compatibility = EagleDynamicIslandCompatibility.current
 
@@ -163,11 +215,31 @@ final class IslandGalleryExecutor {
             }
         }
 
+        let liveDirectory: URL?
+        if style == .singularityLive && !restoring {
+            do {
+                liveDirectory = try await IslandLiveMedia.prepare(theme: liveTheme)
+            } catch {
+                return failure(
+                    en: "The Island video could not be downloaded or verified. Your current Island was not changed.",
+                    es: "No se pudo descargar o verificar el video de Island. Tu Island actual no se cambió."
+                )
+            }
+        } else {
+            liveDirectory = nil
+        }
+
+        guard !Task.isCancelled, UIApplication.shared.applicationState == .active,
+              manager.dsready, !manager.rcSafetyLocked else {
+            return failure(en: "The theme is ready. Return to Eagle and apply it again.",
+                           es: "El tema está listo. Vuelve a Eagle y aplícalo de nuevo.")
+        }
+
         let operationID = String(UUID().uuidString.prefix(8))
         log(
             "begin",
             "op=\(operationID) action=\(restoring ? "restore" : "apply") " +
-                "mode=\(style?.rawValue ?? 0) device=\(compatibility.modelIdentifier) " +
+                "mode=\(style?.rawValue ?? 0) liveID=\(liveTheme?.id ?? "singularity-live") device=\(compatibility.modelIdentifier) " +
                 "display=\(AuraStudioDisplayGeometry.current.isDisplayZoomed ? "zoomed" : "standard")"
         )
 
@@ -183,6 +255,16 @@ final class IslandGalleryExecutor {
             )
         }
 
+        let label = "Island Gallery \(operationID)"
+        guard !Task.isCancelled,
+              manager.beginExclusiveRemoteCall(label: label, expectedSession: process) else {
+            return failure(
+                en: "Another protected SpringBoard operation is still active.",
+                es: "Otra operación protegida de SpringBoard sigue activa."
+            )
+        }
+        defer { manager.endExclusiveRemoteCall(label: label) }
+
         let targetPID = process.pid
         let currentPID = Self.readSpringBoardPID()
         guard targetPID > 0,
@@ -194,22 +276,24 @@ final class IslandGalleryExecutor {
             )
         }
 
-        let label = "Island Gallery \(operationID)"
-        guard manager.beginExclusiveRemoteCall(label: label) else {
-            return failure(
-                en: "Another protected SpringBoard operation is still active.",
-                es: "Otra operación protegida de SpringBoard sigue activa."
-            )
-        }
-
         let processBox = IslandGalleryRemoteCallBox(process)
         let mode = Int32(style?.rawValue ?? 0)
-        let rgb = style?.rgb ?? (red: 0, green: 0, blue: 0)
+        let rgb = liveTheme?.rgb ?? style?.rgb ?? (red: 0, green: 0, blue: 0)
         let requestedFlag = islandFlag
+        let requestedShadowIntensity = Int32(
+            (min(max(shadowIntensity.isFinite ? shadowIntensity : 0.72, 0), 1) * 100).rounded()
+        )
         let response: IslandGalleryNativeResponse = await withCheckedContinuation { continuation in
             let workItem = DispatchWorkItem {
                 let nativeResult = autoreleasepool {
-                    eagle_set_aura_studio(
+                    if let liveDirectory {
+                        liveDirectory.path.withCString { eagle_configure_island_live_gallery($0) }
+                    } else {
+                        eagle_configure_island_live_gallery(nil)
+                    }
+                    defer { eagle_configure_island_live_gallery(nil) }
+                    eagle_set_island_gallery_shadow_intensity(requestedShadowIntensity)
+                    return eagle_set_aura_studio(
                         processBox.value,
                         rgb.red,
                         rgb.green,
@@ -229,7 +313,6 @@ final class IslandGalleryExecutor {
             }
             DispatchQueue.global(qos: .userInitiated).async(execute: workItem)
         }
-        manager.endExclusiveRemoteCall(label: label)
         log(
             "native.end",
             "op=\(operationID) result=\(response.result) target=\(response.targetPID) " +
@@ -303,7 +386,28 @@ final class IslandGalleryExecutor {
         guard let style else {
             return failure(en: "No style was selected.", es: "No se seleccionó ningún estilo.")
         }
-        persistVerified(style: style, springBoardPID: response.springBoardPID)
+        persistVerified(
+            style: style,
+            springBoardPID: response.springBoardPID,
+            liveTheme: liveTheme,
+            shadowIntensity: Double(requestedShadowIntensity) / 100.0
+        )
+        let title = liveTheme.map { LaraL10n.text(en: $0.title, es: $0.titleES) } ?? style.title
+        if style == .singularityLive && UIAccessibility.isReduceMotionEnabled {
+            return IslandGalleryApplyResult(
+                succeeded: true,
+                message: LaraL10n.text(
+                    en: "\(title) was applied as a still image because Reduce Motion is enabled.",
+                    es: "\(title) se aplicó como imagen fija porque Reducir movimiento está activado."
+                )
+            )
+        }
+        if style == .singularityLive {
+            return IslandGalleryApplyResult(succeeded: true, message: LaraL10n.text(
+                en: "\(title) was applied with Live playback.",
+                es: "\(title) se aplicó con reproducción Live."
+            ))
+        }
         return IslandGalleryApplyResult(
             succeeded: true,
             message: LaraL10n.text(
@@ -315,12 +419,14 @@ final class IslandGalleryExecutor {
 
     private func persistVerified(
         style: IslandGalleryStyle,
-        springBoardPID: Int32
+        springBoardPID: Int32,
+        liveTheme: IslandLiveTheme? = nil,
+        shadowIntensity: Double
     ) {
         let defaults = UserDefaults.standard
         let savedPID = defaults.integer(forKey: "eagle.auraStudio.activeSpringBoardPID")
         var flags = savedPID == Int(springBoardPID)
-            ? UInt32(max(defaults.integer(forKey: "eagle.auraStudio.activeFlags"), 0)) & supportedFlags
+            ? EagleStoredThemeValues.flags(defaults.integer(forKey: "eagle.auraStudio.activeFlags")) & supportedFlags
             : 0
         flags |= islandFlag
         defaults.set(Int(flags), forKey: "eagle.auraStudio.activeFlags")
@@ -329,18 +435,26 @@ final class IslandGalleryExecutor {
         defaults.set(style.rawValue, forKey: "eagle.auraStudio.activeMode")
         defaults.set(style.rawValue, forKey: "eagle.auraStudio.activeIslandMode")
         defaults.set(style.rawValue, forKey: "eagle.islandGallery.selectedStyle")
-        defaults.set(Int(style.rgb.red), forKey: "eagle.auraStudio.activeIslandRed")
-        defaults.set(Int(style.rgb.green), forKey: "eagle.auraStudio.activeIslandGreen")
-        defaults.set(Int(style.rgb.blue), forKey: "eagle.auraStudio.activeIslandBlue")
+        defaults.set(shadowIntensity, forKey: "eagle.islandGallery.appliedShadowIntensity")
+        let rgb = liveTheme?.rgb ?? style.rgb
+        defaults.set(Int(rgb.red), forKey: "eagle.auraStudio.activeIslandRed")
+        defaults.set(Int(rgb.green), forKey: "eagle.auraStudio.activeIslandGreen")
+        defaults.set(Int(rgb.blue), forKey: "eagle.auraStudio.activeIslandBlue")
+        if style == .singularityLive {
+            defaults.set(liveTheme?.id ?? "singularity-live", forKey: "eagle.islandGallery.activeLiveID")
+        } else {
+            defaults.removeObject(forKey: "eagle.islandGallery.activeLiveID")
+        }
     }
 
     private func clearVerifiedIsland(springBoardPID: Int32? = nil) {
         let defaults = UserDefaults.standard
-        var flags = UInt32(max(defaults.integer(forKey: "eagle.auraStudio.activeFlags"), 0)) & supportedFlags
+        var flags = EagleStoredThemeValues.flags(defaults.integer(forKey: "eagle.auraStudio.activeFlags")) & supportedFlags
         flags &= ~islandFlag
         defaults.set(Int(flags), forKey: "eagle.auraStudio.activeFlags")
         defaults.set(0, forKey: "eagle.auraStudio.activeIslandMode")
         defaults.set(0, forKey: "eagle.auraStudio.activeMode")
+        defaults.removeObject(forKey: "eagle.islandGallery.activeLiveID")
         if flags == 0 {
             defaults.set(0, forKey: "eagle.auraStudio.activeSpringBoardPID")
         } else if let springBoardPID {
@@ -356,6 +470,10 @@ final class IslandGalleryExecutor {
         case .vortex: return LaraL10n.text(en: "green", es: "verde")
         case .bubblegum: return LaraL10n.text(en: "pink", es: "rosa")
         case .traffic: return LaraL10n.text(en: "orange", es: "naranja")
+        case .duckMood: return LaraL10n.text(en: "orange", es: "naranja")
+        case .blueScreen: return LaraL10n.text(en: "blue", es: "azul")
+        case .walkingFlame: return LaraL10n.text(en: "fire orange", es: "naranja fuego")
+        case .singularityLive: return LaraL10n.text(en: "silver", es: "plateado")
         }
     }
 
@@ -376,271 +494,5 @@ final class IslandGalleryExecutor {
         globallogger.log(
             "[\(formatter.string(from: Date()))] (eagle.island.gallery) stage=\(stage) \(detail)"
         )
-    }
-}
-
-struct IslandGalleryView: View {
-    @ObservedObject private var manager = laramgr.shared
-    @AppStorage("eagle.islandGallery.selectedStyle")
-    private var selectedRaw = IslandGalleryStyle.starlight.rawValue
-    @AppStorage("eagle.auraStudio.activeFlags") private var activeFlagsRaw = 0
-    @AppStorage("eagle.auraStudio.activeIslandMode") private var activeIslandModeRaw = 0
-    @State private var isApplying = false
-    @State private var notice: String?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-    ]
-
-    private var selectedStyle: IslandGalleryStyle {
-        IslandGalleryStyle(rawValue: selectedRaw) ?? .starlight
-    }
-
-    private var hasVerifiedIsland: Bool {
-        UInt32(max(activeFlagsRaw, 0)) & 1 != 0
-    }
-
-    /// Slow breathing level (0.70…1.0) for a card's colour halo.
-    private func breatheLevel(at date: Date, offset: Double) -> Double {
-        let cycles = date.timeIntervalSinceReferenceDate / 5.6 + offset
-        let phase = cycles - floor(cycles)
-        return 0.70 + 0.30 * (0.5 - 0.5 * cos(phase * 2 * Double.pi))
-    }
-
-    /// Angle (0…360) for the slow colour sheen that circles behind the art.
-    private func sheenAngle(at date: Date, offset: Double) -> Double {
-        let cycles = date.timeIntervalSinceReferenceDate / 9.0 + offset
-        return (cycles - floor(cycles)) * 360
-    }
-
-    private func cardPhaseOffset(for style: IslandGalleryStyle) -> Double {
-        Double(IslandGalleryStyle.allCases.firstIndex(of: style) ?? 0) * 0.17
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                intro
-
-                if !manager.dsready {
-                    LaraAccessView(compact: true)
-                }
-
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(IslandGalleryStyle.allCases) { style in
-                        styleCard(style)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 28)
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(LaraL10n.text(en: "Island Gallery", es: "Galería Island"))
-        .navigationBarTitleDisplayMode(.inline)
-        .alert(
-            LaraL10n.text(en: "Island Gallery", es: "Galería Island"),
-            isPresented: Binding(
-                get: { notice != nil },
-                set: { if !$0 { notice = nil } }
-            )
-        ) {
-            Button(LaraL10n.text(en: "OK", es: "Aceptar"), role: .cancel) {
-                notice = nil
-            }
-        } message: {
-            Text(notice ?? "")
-        }
-        .onAppear {
-            if IslandGalleryStyle(rawValue: selectedRaw) == nil {
-                selectedRaw = IslandGalleryStyle.starlight.rawValue
-            }
-            if let active = IslandGalleryStyle(rawValue: activeIslandModeRaw),
-               hasVerifiedIsland {
-                selectedRaw = active.rawValue
-            }
-        }
-    }
-
-    private var intro: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(LaraL10n.text(
-                en: "Choose an Island made from art",
-                es: "Elige una Island hecha con arte"
-            ))
-                .font(.title2.weight(.bold))
-            Text(LaraL10n.text(
-                en: "Every design uses the same verified size and position. Its strongest color becomes an intense fixed halo.",
-                es: "Cada diseño usa el mismo tamaño y la misma posición verificada. Su color más fuerte se convierte en un halo fijo intenso."
-            ))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func styleCard(_ style: IslandGalleryStyle) -> some View {
-        let active = hasVerifiedIsland && style.rawValue == activeIslandModeRaw
-        return VStack(alignment: .leading, spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.black)
-
-                TimelineView(.animation(paused: reduceMotion)) { context in
-                    let offset = cardPhaseOffset(for: style)
-                    let breathe = reduceMotion
-                        ? 0.85
-                        : breatheLevel(at: context.date, offset: offset)
-                    let angle = reduceMotion
-                        ? 0
-                        : sheenAngle(at: context.date, offset: offset)
-
-                    ZStack {
-                        AngularGradient(
-                            colors: [
-                                style.accent.opacity(0),
-                                style.accent.opacity(0.55),
-                                style.accent.opacity(0),
-                                style.accent.opacity(0.55),
-                                style.accent.opacity(0),
-                            ],
-                            center: .center,
-                            angle: .degrees(angle)
-                        )
-                        .blur(radius: 26)
-                        .opacity(0.6)
-
-                        RadialGradient(
-                            colors: [style.accent.opacity(0.42 * breathe), .clear],
-                            center: .center,
-                            startRadius: 4,
-                            endRadius: 105
-                        )
-                    }
-                    .allowsHitTesting(false)
-                }
-
-                Image(style.assetName)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .padding(.horizontal, 4)
-                    .shadow(color: style.accent.opacity(0.85), radius: 16)
-            }
-            .frame(height: 128)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(style.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                if active {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(style.accent)
-                }
-            }
-
-            cardActionButton(style, active: active)
-        }
-        .padding(12)
-        .background(
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 21, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 21, style: .continuous)
-                .strokeBorder(
-                    active ? style.accent : Color.primary.opacity(0.07),
-                    lineWidth: active ? 2 : 1
-                )
-        }
-        .shadow(
-            color: active ? style.accent.opacity(0.28) : Color.black.opacity(0.05),
-            radius: active ? 12 : 5,
-            y: active ? 5 : 2
-        )
-        .animation(.easeOut(duration: 0.18), value: active)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(style.title)
-        .accessibilityValue(active
-            ? LaraL10n.text(en: "Active", es: "Activo")
-            : style.subtitle)
-    }
-
-    @ViewBuilder
-    private func cardActionButton(_ style: IslandGalleryStyle, active: Bool) -> some View {
-        if active {
-            // Applied style: this same card offers to remove it, in red.
-            Button(role: .destructive) {
-                restore()
-            } label: {
-                Label(
-                    LaraL10n.text(en: "Remove", es: "Quitar"),
-                    systemImage: "arrow.counterclockwise"
-                )
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .disabled(isApplying)
-        } else {
-            Button {
-                selectedRaw = style.rawValue
-                applySelectedStyle()
-            } label: {
-                HStack(spacing: 6) {
-                    if isApplying && style == selectedStyle {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "sparkles")
-                    }
-                    Text(LaraL10n.text(en: "Apply", es: "Aplicar"))
-                        .font(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .disabled(isApplying || !manager.dsready)
-        }
-    }
-
-    private func applySelectedStyle() {
-        guard !isApplying else { return }
-        isApplying = true
-        let style = selectedStyle
-        Task { @MainActor in
-            let result = await IslandGalleryExecutor.shared.apply(style)
-            isApplying = false
-            if result.succeeded {
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
-            notice = result.message
-        }
-    }
-
-    private func restore() {
-        guard !isApplying else { return }
-        isApplying = true
-        Task { @MainActor in
-            let result = await IslandGalleryExecutor.shared.restore()
-            isApplying = false
-            if result.succeeded {
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
-            notice = result.message
-        }
     }
 }

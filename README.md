@@ -16,13 +16,13 @@
 
   <br>
 
-  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.3/Eagle-1.0.3-62.ipa">
-    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.3-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.3 IPA" height="48">
+  <a href="https://github.com/leonardob8777-bit/Eagle/releases/download/v1.0.4/Eagle-1.0.4-80.ipa">
+    <img src="https://img.shields.io/badge/DOWNLOAD_EAGLE.IPA-VERSION_1.0.4-7C3AED?style=for-the-badge&logo=apple&logoColor=white" alt="Download Eagle 1.0.4 IPA" height="48">
   </a>
 
   <br><br>
 
-  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.3)
+  [Release notes](https://github.com/leonardob8777-bit/Eagle/releases/tag/v1.0.4)
   · [Report a bug](https://github.com/leonardob8777-bit/Eagle/issues/new?template=bug_report.md)
   · [Request a feature](https://github.com/leonardob8777-bit/Eagle/issues/new?template=feature_request.md)
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| **Current release** | Eagle 1.0.3 · build 62 |
+| **Current release** | Eagle 1.0.4 · build 80 |
 | **Primarily verified on** | iPhone 16 Pro (`iPhone17,1`) · iOS 18.6.2 (`22G100`) |
 | **Architecture** | `arm64e` |
 | **Verified Aura surfaces** | Dynamic Island, Dock and current-page icon glow/outline · isolated apply and verification |
@@ -62,7 +62,7 @@
 | 🔤 **App Name Color · Advanced** | Applies a page-owned solid color to app names on the current Home Screen page. |
 | 🛡️ **Eagle System** | Adds Guardian checks, Scenes and shareable personalization recipes. |
 
-### New in Eagle 1.0.3
+### New in Eagle 1.0.4
 
 - Added Island Gallery with Starlight, Inferno, Horizon, Vortex, Bubblegum and Traffic artwork, all using one verified geometry and color-matched fixed halos.
 - Added Dock Gallery with Bubblegum, Springfield and Bikini Bottom themes rendered at the exact 382 × 106-point Dock frame.
@@ -71,6 +71,8 @@
 - Aura Studio and Dock Gallery now synchronize their verified active state instead of leaving stale selection badges.
 - Improved TrollStore preparation by recognizing an existing mobile-filesystem access path before attempting a sandbox transition.
 - Refined Home navigation, Passcode localization, wallpaper copy, diagnostics and adaptive light/dark presentation throughout the app.
+- Added Live/Static/Saves presentation, Island shadow control, Dock glow control, and the combined Hide Dock + Island screen.
+- Added session ownership checks, invalid preference guards, safer cancellation/recovery, and monochrome New badges.
 
 ### Aura Studio safety model
 

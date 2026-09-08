@@ -357,7 +357,7 @@ class SpringboardColorManager {
 
 // MARK: whatever this is
 class ColorSwapManager {
-    public static func setColor(url: URL, color: CIColor, blur: Int) throws -> Data {
+    public nonisolated static func setColor(url: URL, color: CIColor, blur: Int) throws -> Data {
         let plistData = try Data(contentsOf: url)
         if let originalPlist = try PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any] {
             let plist = setColor(list: originalPlist, color: color, blur: blur)
@@ -372,7 +372,7 @@ class ColorSwapManager {
         }
     }
     
-    public static func setColor(list: [String: Any], color: CIColor, blur: Int) -> [String: Any] {
+    public nonisolated static func setColor(list: [String: Any], color: CIColor, blur: Int) -> [String: Any] {
         func changeValue(dict: [String: Any], keyName: String, newName: String, replacement: Any, remove: Bool = true, appends: Bool = false) -> [String: Any] {
             var newDict = dict
             for (k, _) in dict {
@@ -426,7 +426,7 @@ class ColorSwapManager {
 }
 
 // MARK: what the fuck is this lemin???
-func addEmptyData(matchingSize: Int, to plist: [String: Any]) throws -> Data {
+nonisolated func addEmptyData(matchingSize: Int, to plist: [String: Any]) throws -> Data {
     var newPlist = plist
     // create the new data
     guard var newData = try? PropertyListSerialization.data(fromPropertyList: newPlist, format: .binary, options: 0) else { throw "Unable to get data" }

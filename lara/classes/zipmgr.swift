@@ -145,16 +145,20 @@ nonisolated public final class ZipArchive {
     public subscript(path: String) -> ZipEntry? { entryMap[path] }
 
     public func extract(_ entry: ZipEntry) throws -> Data {
-        let end = entry.dataOffset + entry.compressedSize
-        guard entry.dataOffset < UInt64(data.count),
-              end <= data.count else {
+        guard entry.dataOffset <= UInt64(data.count),
+              entry.compressedSize <= UInt64(data.count) - entry.dataOffset,
+              entry.uncompressedSize <= 256 * 1024 * 1024 else {
             error = "(zip) entry data out of bounds"
             zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
+        let end = entry.dataOffset + entry.compressedSize
 
         switch entry.compressionMethod {
         case 0:
+            guard entry.compressedSize == entry.uncompressedSize else {
+                throw ZipError.corruptArchive("Stored entry size mismatch")
+            }
             let raw = data.subdata(in: Int(entry.dataOffset)..<Int(end))
             guard raw.zipCRC32 == entry.crc32 else {
                 error = "(zip) crc mismatch"
@@ -205,15 +209,17 @@ nonisolated public final class ZipArchive {
             totalEntries = UInt64(totalEntries16)
         }
 
-        guard cdOffset + cdSize <= UInt64(data.count) else {
+        guard cdOffset <= UInt64(data.count), cdSize <= UInt64(data.count) - cdOffset,
+              totalEntries <= cdSize / 46 else {
             error = "(zip) cd out of bounds"
             zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
 
+        let cdEnd = Int(cdOffset + cdSize)
         var pos = Int(cdOffset)
         for _ in 0..<totalEntries {
-            guard pos + 46 <= data.count else {
+            guard pos <= cdEnd, cdEnd - pos >= 46 else {
                 error = "(zip) cd entry truncated"
                 zipLog(error)
                 throw ZipError.corruptArchive("\(error)")
@@ -234,6 +240,11 @@ nonisolated public final class ZipArchive {
             let commentLen: UInt16 = data.scan(at: pos + 32)
             let lfhOffset32: UInt32 = data.scan(at: pos + 42)
 
+            let entryLength = 46 + Int(nameLen) + Int(extraLen) + Int(commentLen)
+            guard entryLength <= cdEnd - pos else {
+                throw ZipError.corruptArchive("Central directory variable fields are truncated")
+            }
+
             let nameData = data.subdata(in: pos + 46..<pos + 46 + Int(nameLen))
             let extraData = data.subdata(in: pos + 46 + Int(nameLen)..<pos + 46 + Int(nameLen) + Int(extraLen))
             let flags: UInt16 = data.scan(at: pos + 8)
@@ -246,7 +257,15 @@ nonisolated public final class ZipArchive {
             let lfhOff: UInt64
 
             if csize32 == UInt32.max || usize32 == UInt32.max || lfhOffset32 == UInt32.max {
-                let fields = parseZIP64Extra(extraData)
+                let fields = parseZIP64Extra(extraData,
+                    needsUncompressed: usize32 == UInt32.max,
+                    needsCompressed: csize32 == UInt32.max,
+                    needsOffset: lfhOffset32 == UInt32.max)
+                guard (usize32 != UInt32.max || fields.uncompressedSize != nil),
+                      (csize32 != UInt32.max || fields.compressedSize != nil),
+                      (lfhOffset32 != UInt32.max || fields.relativeOffset != nil) else {
+                    throw ZipError.corruptArchive("Missing ZIP64 entry fields")
+                }
                 csize = fields.compressedSize ?? UInt64(csize32)
                 usize = fields.uncompressedSize ?? UInt64(usize32)
                 lfhOff = fields.relativeOffset ?? UInt64(lfhOffset32)
@@ -274,12 +293,12 @@ nonisolated public final class ZipArchive {
     }
 
     private func computeDataOffset(lfhOffset: UInt64) throws -> UInt64 {
-        let off = Int(lfhOffset)
-        guard off + 30 <= data.count else {
+        guard lfhOffset <= UInt64(data.count), UInt64(data.count) - lfhOffset >= 30 else {
             error = "(zip) lfh truncated"
             zipLog(error)
             throw ZipError.corruptArchive("\(error)")
         }
+        let off = Int(lfhOffset)
         let sig: UInt32 = data.scan(at: off)
         guard sig == lfhSignature else {
             error = "(zip) bad lfh sig"
@@ -288,11 +307,17 @@ nonisolated public final class ZipArchive {
         }
         let nameLen: UInt16 = data.scan(at: off + 26)
         let extraLen: UInt16 = data.scan(at: off + 28)
-        return lfhOffset + 30 + UInt64(nameLen) + UInt64(extraLen)
+        let headerSize = 30 + UInt64(nameLen) + UInt64(extraLen)
+        guard headerSize <= UInt64(data.count) - lfhOffset else {
+            throw ZipError.corruptArchive("Local header variable fields are truncated")
+        }
+        return lfhOffset + headerSize
     }
 
     private func decompressDeflate(_ compressed: Data, decompressedSize: Int) throws -> Data {
-        var result = Data(count: decompressedSize)
+        // zlib needs a non-empty output buffer even for a valid empty entry.
+        let capacity = max(1, decompressedSize)
+        var result = Data(count: capacity)
         var actualSize: Int = 0
 
         let status: Int32 = result.withUnsafeMutableBytes { destBuf in
@@ -304,18 +329,18 @@ nonisolated public final class ZipArchive {
                 stream.next_in   = UnsafeMutablePointer<Bytef>(mutating: src.assumingMemoryBound(to: Bytef.self))
                 stream.avail_in  = uInt(compressed.count)
                 stream.next_out  = dest.assumingMemoryBound(to: Bytef.self)
-                stream.avail_out = uInt(decompressedSize)
+                stream.avail_out = uInt(capacity)
 
                 var ret = inflateInit2_(&stream, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
                 guard ret == Z_OK else { return ret }
                 ret = inflate(&stream, Z_FINISH)
-                actualSize = decompressedSize - Int(stream.avail_out)
+                actualSize = capacity - Int(stream.avail_out)
                 inflateEnd(&stream)
                 return ret
             }
         }
 
-        guard status == Z_STREAM_END else {
+        guard status == Z_STREAM_END, actualSize == decompressedSize else {
             error = "(zip) raw deflate failed with zlib status \(status)"
             zipLog(error)
             throw ZipError.corruptArchive("\(error)")
@@ -325,10 +350,11 @@ nonisolated public final class ZipArchive {
 
     private func locateEOCD() throws -> (offset: Int, commentLen: Int) {
         let searchStart = max(0, data.count - 65557)
-        for i in (searchStart..<data.count - 3).reversed() {
+        for i in (searchStart...data.count - 22).reversed() {
             let sig: UInt32 = data.scan(at: i)
             if sig == eocdSignature {
                 let commentLen: UInt16 = data.scan(at: i + 20)
+                guard Int(commentLen) == data.count - i - 22 else { continue }
                 return (i, Int(commentLen))
             }
         }
@@ -344,12 +370,12 @@ nonisolated public final class ZipArchive {
         guard sig == zip64EOCDLocatorSignature else { return (0, Data()) }
         let z64Off: UInt64 = data.scan(at: locatorOff + 8)
 
-        guard z64Off < UInt64(data.count) - 56 else { return (0, Data()) }
+        guard z64Off <= UInt64(data.count), UInt64(data.count) - z64Off >= 56 else { return (0, Data()) }
         let recSig: UInt32 = data.scan(at: Int(z64Off))
         guard recSig == zip64EOCDRecordSignature else { return (0, Data()) }
         let recSize: UInt64 = data.scan(at: Int(z64Off) + 4)
+        guard recSize >= 44, recSize <= UInt64(data.count) - z64Off - 12 else { return (0, Data()) }
         let totalSize = Int(recSize) + 12
-        guard Int(z64Off) + totalSize <= data.count else { return (0, Data()) }
         let recData = data.subdata(in: Int(z64Off)..<Int(z64Off) + totalSize)
         return (Int(z64Off), recData)
     }
@@ -360,7 +386,8 @@ nonisolated public final class ZipArchive {
         var relativeOffset: UInt64?
     }
 
-    private func parseZIP64Extra(_ extra: Data) -> ZIP64Fields {
+    private func parseZIP64Extra(_ extra: Data, needsUncompressed: Bool,
+                                 needsCompressed: Bool, needsOffset: Bool) -> ZIP64Fields {
         var offset = 0
         while offset + 4 <= extra.count {
             let id: UInt16 = extra.scan(at: offset)
@@ -370,16 +397,16 @@ nonisolated public final class ZipArchive {
             if id == 0x0001 {
                 var fields = ZIP64Fields()
                 var readOff = offset + 4
-                if readOff + 8 <= fieldEnd {
-                    fields.uncompressedSize = extra.scan(at: readOff)
+                if needsUncompressed, readOff + 8 <= fieldEnd {
+                    fields.uncompressedSize = extra.scan(at: readOff) as UInt64
                     readOff += 8
                 }
-                if readOff + 8 <= fieldEnd {
-                    fields.compressedSize = extra.scan(at: readOff)
+                if needsCompressed, readOff + 8 <= fieldEnd {
+                    fields.compressedSize = extra.scan(at: readOff) as UInt64
                     readOff += 8
                 }
-                if readOff + 8 <= fieldEnd {
-                    fields.relativeOffset = extra.scan(at: readOff)
+                if needsOffset, readOff + 8 <= fieldEnd {
+                    fields.relativeOffset = extra.scan(at: readOff) as UInt64
                     readOff += 8
                 }
                 return fields

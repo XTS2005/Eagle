@@ -905,7 +905,7 @@ struct HomeIconNeonView: View {
             }
 
             let label = "Home Icon Neon \(UUID().uuidString)"
-            guard mgr.beginExclusiveRemoteCall(label: label) else {
+            guard mgr.beginExclusiveRemoteCall(label: label, expectedSession: process) else {
                 finishBeforeCall(LaraL10n.text(
                     en: "Another protected operation is active. Wait and try again.",
                     es: "Hay otra operación protegida activa. Espera e inténtalo de nuevo."

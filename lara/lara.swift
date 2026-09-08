@@ -19,7 +19,7 @@ struct LaraCustomApp: App {
     @AppStorage(LaraLanguage.storageKey) private var language = LaraLanguage.english
     @AppStorage(EagleAppearanceMode.storageKey)
     private var appearanceModeRaw = EagleAppearanceMode.dark.rawValue
-    @AppStorage("eagle.updates.stable103.completed")
+    @AppStorage("eagle.updates.galleryStability.completed")
     private var hasSeenStableUpdate = false
     @State private var showingStableUpdate = false
 
@@ -85,12 +85,20 @@ struct LaraCustomApp: App {
     
     private func handleScenePhase(_ phase: ScenePhase) {
         switch phase {
-        case .inactive, .background:
-            handlebg()
-            globallogger.stopcapture()
+        case .inactive:
+            // Permission sheets and Control Center also make the app inactive.
+            // They must not tear down a session while a user action is running.
+            break
+
+        case .background:
+            mgr.remoteAppDidEnterBackground()
+            // Preserve cleanup diagnostics without closing stdout underneath
+            // a worker that is still finishing a native operation.
+            globallogger.flushToDisk()
 
         case .active:
             globallogger.capture()
+            mgr.remoteAppDidBecomeActive()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 EagleSceneManager.shared.applyPendingShortcutIfNeeded()
             }
@@ -100,29 +108,6 @@ struct LaraCustomApp: App {
         }
     }
 
-    private func handlebg() {
-        guard mgr.rcready else { return }
-        let keepSpringBoardRemoteCallAlive = UserDefaults.standard.bool(forKey: "keepSpringBoardRemoteCallAliveIOS16")
-        if isIOS16() && keepSpringBoardRemoteCallAlive {
-            return
-        }
-
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "RemoteCallCleanup") {
-            endbgtask(&bgTask)
-        }
-
-        mgr.rcdestroy {
-            self.endbgtask(&bgTask)
-        }
-    }
-
-    private func endbgtask(_ task: inout UIBackgroundTaskIdentifier) {
-        guard task != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(task)
-        task = .invalid
-    }
 }
 
 // file picker fixes

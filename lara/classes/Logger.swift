@@ -31,6 +31,23 @@ class Logger: ObservableObject {
     private var ogstderr: Int32 = -1
     private var logfileurl: URL?
     private var logfilehandle: FileHandle?
+    private let fileLock = NSRecursiveLock()
+    private var lastFileSync: TimeInterval = 0
+
+    private func trimVisibleLogs() {
+        // Both raw native lines and grouped UI messages must be bounded.
+        if let index = logs.indices.last, logs[index].utf8.count > 8192 {
+            logs[index] = String(logs[index].suffix(4096))
+        }
+        if logs.count > 400 { logs.removeFirst(logs.count - 400) }
+    }
+
+    func flushToDisk() {
+        fileLock.lock()
+        defer { fileLock.unlock() }
+        try? logfilehandle?.synchronize()
+        lastFileSync = ProcessInfo.processInfo.systemUptime
+    }
     private let nobullshitkey = EaglePreferenceKeys.disableLogDividers
     private let ignoredlogsubstrings = [
         "Faulty glyph",
@@ -130,6 +147,7 @@ class Logger: ObservableObject {
             }
 
             self.lastwasdivider = false
+            self.trimVisibleLogs()
         }
 
         appendtofile([message])
@@ -163,6 +181,7 @@ class Logger: ObservableObject {
             
             self.lastwasdivider = false
             self.pendingdivider = true
+            self.trimVisibleLogs()
         }
     }
     
@@ -184,6 +203,8 @@ class Logger: ObservableObject {
             self.lastmessage = nil
             self.repeatCount = 0
         }
+        fileLock.lock()
+        defer { fileLock.unlock() }
         if let url = logfileurl {
             try? logfilehandle?.close()
             try? "".write(to: url, atomically: true, encoding: .utf8)
@@ -234,6 +255,8 @@ class Logger: ObservableObject {
         try? pipe.fileHandleForReading.close()
         stdoutpipe = nil
 
+        fileLock.lock()
+        defer { fileLock.unlock() }
         if let handle = logfilehandle {
             try? handle.synchronize()
             try? handle.close()
@@ -244,11 +267,12 @@ class Logger: ObservableObject {
     private func appendraw(_ chunk: String) {
         let text = panding + chunk
         var lines = text.components(separatedBy: "\n")
-        panding = lines.removeLast()
+        panding = String(lines.removeLast().suffix(16 * 1024))
         if !lines.isEmpty {
-            let filtered = lines.filter { !shouldignore($0) }
+            let filtered = lines.filter { !shouldignore($0) }.map { String($0.prefix(8192)) }
             DispatchQueue.main.async {
-                self.logs.append(contentsOf: filtered)
+                self.logs.append(contentsOf: filtered.suffix(400))
+                self.trimVisibleLogs()
             }
             appendtofile(filtered)
             for line in filtered {
@@ -390,6 +414,8 @@ class Logger: ObservableObject {
     }
 
     private func reopenlogfileondemand() {
+        fileLock.lock()
+        defer { fileLock.unlock() }
         if logfilehandle != nil { return }
         guard let url = logfileurl else { return }
         if !FileManager.default.fileExists(atPath: url.path) {
@@ -402,13 +428,19 @@ class Logger: ObservableObject {
     }
 
     private func appendtofile(_ lines: [String]) {
+        fileLock.lock()
+        defer { fileLock.unlock() }
         guard let handle = logfilehandle else { return }
         let filtered = lines.filter { !shouldignore($0) }
         guard !filtered.isEmpty else { return }
         let text = filtered.joined(separator: "\n") + "\n"
         if let data = text.data(using: .utf8) {
             try? handle.write(contentsOf: data)
-            try? handle.synchronize()
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastFileSync >= 1 {
+                try? handle.synchronize()
+                lastFileSync = now
+            }
         }
     }
 }

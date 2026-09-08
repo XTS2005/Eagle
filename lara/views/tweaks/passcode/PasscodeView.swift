@@ -33,6 +33,28 @@ struct PasscodeKey: Identifiable {
     var sourceFilename: String { "\(id).png" }
 }
 
+nonisolated enum PasscodeDigitFilename {
+    static func digit(in path: String) -> String? {
+        let name = (path.replacingOccurrences(of: "\\", with: "/") as NSString)
+            .lastPathComponent.lowercased()
+        let stem = (name as NSString).deletingPathExtension
+        if stem.count == 1, "0123456789".contains(stem) { return stem }
+
+        // TelephonyUI's "2" is a format marker, not the displayed digit.
+        // Resolve this format before searching generic numeric separators.
+        for value in 0...9 where name.contains("other-2-\(value)--dark") {
+            return String(value)
+        }
+        for value in 0...9 {
+            if name.contains("-\(value)-") || name.contains("-\(value)@") ||
+                name.contains("_\(value)_") || name.contains("_\(value)@") {
+                return String(value)
+            }
+        }
+        return nil
+    }
+}
+
 final class PasscodeThemeManager: ObservableObject {
     static let shared = PasscodeThemeManager()
 
@@ -74,7 +96,14 @@ final class PasscodeThemeManager: ObservableObject {
     }
 
     func restoreBackup(targetPath: String) throws {
-        guard let data = originalDataIfAvailable(targetPath: targetPath) else { return }
+        guard let data = originalDataIfAvailable(targetPath: targetPath), !data.isEmpty else {
+            throw NSError(domain: "PasscodeTheme", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The original digit backup is missing or unreadable.",
+                    es: "La copia del número original falta o no se puede leer."
+                )
+            ])
+        }
         
         let overwrite = laramgr.shared.lara_overwritefile(
             target: targetPath,
@@ -84,6 +113,16 @@ final class PasscodeThemeManager: ObservableObject {
         if !overwrite.ok {
             throw NSError(domain: "PasscodeTheme", code: 1, userInfo: [ NSLocalizedDescriptionKey: overwrite.message ]
             )
+        }
+        let restored = (try? Data(contentsOf: URL(fileURLWithPath: targetPath), options: .mappedIfSafe))
+            ?? laramgr.shared.vfsread(path: targetPath, maxSize: 8 * 1024 * 1024)
+        guard restored == data else {
+            throw NSError(domain: "PasscodeTheme", code: 7, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The restored digit could not be verified. Its original backup is retained.",
+                    es: "No se pudo verificar el número restaurado. Se conserva su copia original."
+                )
+            ])
         }
     }
     
@@ -98,31 +137,50 @@ final class PasscodeThemeManager: ObservableObject {
         for case let file as String in enumerator {
             guard file.lowercased().hasSuffix(".png") else { continue }
             let fullPath = "\(basePath)/\(file)"
-            let lower = file.lowercased()
-            for i in 0...9 {
-                if lower.contains("other-2-\(i)--dark") ||
-                   lower.contains("-\(i)-") ||
-                   lower.contains("_\(i)_") ||
-                   lower.contains("_\(i)@") {
-                    allTargets.append(fullPath)
-                    break
-                }
+            if PasscodeDigitFilename.digit(in: file) != nil, hasBackup(targetPath: fullPath) {
+                allTargets.append(fullPath)
             }
         }
 
+        guard !allTargets.isEmpty else {
+            throw NSError(domain: "PasscodeTheme", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "No original digit backups were found to restore.",
+                    es: "No se encontraron copias de números originales para restaurar."
+                )
+            ])
+        }
+        var failures: [String] = []
         for path in allTargets {
             do {
                 try restoreBackup(targetPath: path)
                 logmsg?("restored \(path)")
             } catch {
+                failures.append(error.localizedDescription)
                 logmsg?("failed to restore \(path): \(error.localizedDescription)")
             }
+        }
+        if !failures.isEmpty {
+            throw NSError(domain: "PasscodeTheme", code: 6, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "Could not restore \(failures.count) digit files. Original backups are retained.",
+                    es: "No se pudieron restaurar \(failures.count) archivos de números. Se conservan las copias originales."
+                ) + "\n" + failures.joined(separator: "\n")
+            ])
         }
     }
 
     func applyImage(data: Data, to targetPath: String) throws {
+        guard !data.isEmpty else {
+            throw NSError(domain: "PasscodeTheme", code: 8, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The selected digit image is empty.",
+                    es: "La imagen del número seleccionado está vacía."
+                )
+            ])
+        }
         backupIfNeeded(targetPath: targetPath)
-        guard hasBackup(targetPath: targetPath) else {
+        guard let original = originalDataIfAvailable(targetPath: targetPath), !original.isEmpty else {
             throw NSError(
                 domain: "PasscodeTheme",
                 code: 4,
@@ -132,9 +190,39 @@ final class PasscodeThemeManager: ObservableObject {
                 )]
             )
         }
+        // Roll back to the current theme on failure, while keeping the original
+        // digit backup available for an explicit Restore.
+        func readCurrent() -> Data? {
+            (try? Data(contentsOf: URL(fileURLWithPath: targetPath)))
+                ?? laramgr.shared.vfsread(path: targetPath, maxSize: 8 * 1024 * 1024)
+        }
+        guard let previous = readCurrent(), !previous.isEmpty else {
+            throw NSError(domain: "PasscodeTheme", code: 9, userInfo: [
+                NSLocalizedDescriptionKey: LaraL10n.text(
+                    en: "The current digit could not be saved before applying the image.",
+                    es: "No se pudo guardar el número actual antes de aplicar la imagen."
+                )
+            ])
+        }
         let overwrite = laramgr.shared.lara_overwritefile(target: targetPath, data: data)
-
-        if !overwrite.ok { throw NSError(domain: "PasscodeTheme", code: 2, userInfo: [NSLocalizedDescriptionKey: overwrite.message]) }
+        let applied = readCurrent()
+        guard overwrite.ok, applied == data else {
+            var recovered = applied == previous
+            if !recovered {
+                let rollback = laramgr.shared.lara_overwritefile(target: targetPath, data: previous)
+                recovered = rollback.ok && readCurrent() == previous
+            }
+            let detail = recovered
+                ? LaraL10n.text(
+                    en: "The digit was not applied. The previous image is preserved.",
+                    es: "El número no se aplicó. Se conserva la imagen anterior."
+                )
+                : LaraL10n.text(
+                    en: "The digit could not be applied or recovered. Its original backup is retained; use Restore to retry recovery.",
+                    es: "No se pudo aplicar ni recuperar el número. Se conserva su copia original; usa Restaurar para reintentar la recuperación."
+                )
+            throw NSError(domain: "PasscodeTheme", code: 2, userInfo: [NSLocalizedDescriptionKey: detail])
+        }
     }
 
     private func backupURLFor(targetPath: String) -> URL {
@@ -568,22 +656,7 @@ struct PasscodeView: View {
     }
     
     func matchFilenameToKey(_ filename: String) -> String? {
-        let lowercased = filename.lowercased()
-        
-        for i in 0...9 {
-            if lowercased.contains("other-2-\(i)--dark") ||
-                lowercased.contains("-\(i)-") ||
-                lowercased.contains("-\(i)@") ||
-                lowercased.contains("_\(i)_") ||
-                lowercased.contains("_\(i)@") ||
-                lowercased.contains("/\(i).png") ||
-                lowercased.contains("/\(i).jpg") ||
-                lowercased.contains("/\(i).jpeg") {
-                return String(i)
-            }
-        }
-        
-        return nil
+        PasscodeDigitFilename.digit(in: filename)
     }
     
     func applyTheme() {
@@ -619,13 +692,8 @@ struct PasscodeView: View {
                 let lower = file.lowercased()
                 guard lower.hasSuffix(".png") else { continue }
 
-                for i in 0...9 {
-                    if lower.contains("other-2-\(i)--dark") ||
-                        lower.contains("-\(i)-") ||
-                        lower.contains("_\(i)_") ||
-                        lower.contains("_\(i)@") {
-                        targets[String(i), default: []].append("\(basePath)/\(file)")
-                    }
+                if let digit = PasscodeDigitFilename.digit(in: file) {
+                    targets[digit, default: []].append("\(basePath)/\(file)")
                 }
             }
 

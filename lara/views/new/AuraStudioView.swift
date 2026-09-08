@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
-import CoreImage
 import Darwin
+import Combine
 
 private struct AuraStudioNotice: Identifiable {
     let id = UUID()
@@ -11,114 +11,6 @@ private struct AuraStudioNotice: Identifiable {
     init(message: String, offersRespring: Bool = false) {
         self.message = message
         self.offersRespring = offersRespring
-    }
-}
-
-private enum EagleDockBackgroundRecipe {
-    private static let targets = [
-        "/System/Library/PrivateFrameworks/CoreMaterial.framework/dockDark.materialrecipe",
-        "/System/Library/PrivateFrameworks/CoreMaterial.framework/dockLight.materialrecipe",
-    ]
-
-    private static var backupDirectory: URL {
-        URL.documents.appendingPathComponent(
-            "EagleDockBackgroundBackup",
-            isDirectory: true
-        )
-    }
-
-    static func setHidden(_ hidden: Bool, manager: laramgr) throws {
-        if hidden {
-            try installTransparentRecipes(manager: manager)
-        } else {
-            try restoreOriginalRecipes(manager: manager)
-        }
-    }
-
-    private static func installTransparentRecipes(manager: laramgr) throws {
-        try FileManager.default.createDirectory(
-            at: backupDirectory,
-            withIntermediateDirectories: true
-        )
-
-        var prepared: [(path: String, original: Data, replacement: Data)] = []
-        let transparent = CIColor(red: 0, green: 0, blue: 0, alpha: 0)
-
-        for path in targets {
-            let sourceURL = URL(fileURLWithPath: path)
-            let original = try Data(contentsOf: sourceURL)
-            let backupURL = backupDirectory.appendingPathComponent(
-                sourceURL.lastPathComponent
-            )
-            if !FileManager.default.fileExists(atPath: backupURL.path) {
-                try original.write(to: backupURL, options: .atomic)
-            }
-
-            let replacement = try ColorSwapManager.setColor(
-                url: sourceURL,
-                color: transparent,
-                blur: 0
-            )
-            guard replacement.count == original.count else {
-                throw NSError(
-                    domain: "Eagle.DockBackground",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Dock recipe size mismatch"]
-                )
-            }
-            prepared.append((path, original, replacement))
-        }
-
-        try apply(
-            prepared.map { ($0.path, $0.replacement) },
-            rollback: prepared.map { ($0.path, $0.original) },
-            manager: manager
-        )
-    }
-
-    private static func restoreOriginalRecipes(manager: laramgr) throws {
-        let originals = try targets.map { path -> (String, Data) in
-            let name = URL(fileURLWithPath: path).lastPathComponent
-            let backupURL = backupDirectory.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: backupURL.path) else {
-                throw NSError(
-                    domain: "Eagle.DockBackground",
-                    code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "Original Dock backup is missing"]
-                )
-            }
-            return (path, try Data(contentsOf: backupURL))
-        }
-
-        let current = try targets.map {
-            ($0, try Data(contentsOf: URL(fileURLWithPath: $0)))
-        }
-        try apply(originals, rollback: current, manager: manager)
-    }
-
-    private static func apply(
-        _ files: [(String, Data)],
-        rollback: [(String, Data)],
-        manager: laramgr
-    ) throws {
-        var applied = 0
-        for (path, data) in files {
-            let result = manager.lara_overwritefile(target: path, data: data)
-            guard result.ok else {
-                for index in 0..<applied {
-                    _ = manager.lara_overwritefile(
-                        target: rollback[index].0,
-                        data: rollback[index].1
-                    )
-                }
-                throw NSError(
-                    domain: "Eagle.DockBackground",
-                    code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: result.message]
-                )
-            }
-            applied += 1
-        }
     }
 }
 
@@ -530,7 +422,6 @@ struct AuraStudioView: View {
     @AppStorage("eagle.auraStudio.activeDockGreen") private var activeDockGreen = 64
     @AppStorage("eagle.auraStudio.activeDockBlue") private var activeDockBlue = 255
     @AppStorage("eagle.dockGallery.activeStyle") private var activeDockGalleryStyleRaw = 0
-    @AppStorage("eagle.dock.backgroundRecipeHidden") private var dockBackgroundHidden = false
     @AppStorage(EagleReleaseChannel.storageKey) private var releaseChannelRaw =
         EagleReleaseChannel.stable.rawValue
     @State private var isApplying = false
@@ -542,13 +433,7 @@ struct AuraStudioView: View {
     @State private var operationStepIndex = 0
     @State private var operationStepCount = 0
     @State private var operationIsRemoval = false
-    @State private var systemIslandSuppressed = false
-    @State private var isReadingSystemIslandSetting = false
-    @State private var isUpdatingDockBackground = false
 
-    private let springBoardPreferencesPath =
-        "/var/Managed Preferences/mobile/com.apple.springboard.plist"
-    private let suppressSystemIslandKey = "SBSuppressDynamicIslandCompletely"
 
     private let auraEngineBuild = "2026.08.31-r57-trimmed-styles"
 
@@ -887,7 +772,6 @@ struct AuraStudioView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                systemIslandCard
                 surfaceProfilesCard
                 if editingIcons {
                     HomeIconNeonView(embedded: true)
@@ -910,7 +794,7 @@ struct AuraStudioView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Aura Studio")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isApplying || isUpdatingDockBackground)
+        .navigationBarBackButtonHidden(isApplying)
         .alert(item: $notice) { notice in
             if notice.offersRespring {
                 return Alert(
@@ -935,17 +819,12 @@ struct AuraStudioView: View {
             )
         }
         .overlay {
-            if isApplying || isUpdatingDockBackground {
+            if isApplying {
                 ZStack {
                     Color.black.opacity(0.14).ignoresSafeArea()
                 VStack(spacing: 12) {
                     EagleRainbowSpinner(size: 28)
-                        Text(isUpdatingDockBackground
-                             ? LaraL10n.text(
-                                en: "Updating the Dock background…",
-                                es: "Actualizando el fondo del Dock…"
-                             )
-                             : applyStage.isEmpty
+                        Text(applyStage.isEmpty
                              ? LaraL10n.text(
                                 en: "Preparing a safe system update…",
                                 es: "Preparando una actualización segura…"
@@ -981,9 +860,6 @@ struct AuraStudioView: View {
                 selectedTargetRaw = AuraStudioTarget.dock.rawValue
             }
             reconcilePersistedActiveState()
-            if mgr.sbxready {
-                readSystemIslandSetting()
-            }
             if mgr.rcSafetyLocked { applySafetyBlocked = true }
 #if DEBUG
             if !AuraStudioNativeContract.invariantsHold {
@@ -998,282 +874,7 @@ struct AuraStudioView: View {
             guard !isApplying else { return }
             normalizeDraftModesForPolicy()
         }
-        .onChange(of: mgr.sbxready) { ready in
-            if ready {
-                readSystemIslandSetting()
-            } else {
-                systemIslandSuppressed = false
-            }
-        }
-    }
 
-    private var systemIslandCard: some View {
-        VStack(spacing: 0) {
-            systemIslandRow
-
-            Divider()
-                .padding(.leading, 62)
-
-            dockBackgroundRow
-        }
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
-        }
-    }
-
-    private var systemIslandRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "eye.slash.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 36, height: 36)
-                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(LaraL10n.text(
-                    en: "Hide system Island",
-                    es: "Ocultar Island del sistema"
-                ))
-                .font(.subheadline.weight(.semibold))
-                Text(mgr.sbxready
-                     ? LaraL10n.text(en: "Requires respring", es: "Requiere respring")
-                     : LaraL10n.text(en: "Prepare access first", es: "Prepara el acceso primero"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 4)
-
-            Toggle("", isOn: Binding(
-                get: { systemIslandSuppressed },
-                set: updateSystemIslandSuppression
-            ))
-            .labelsHidden()
-            .disabled(
-                !mgr.sbxready || isReadingSystemIslandSetting ||
-                isApplying || isUpdatingDockBackground
-            )
-        }
-        .padding(14)
-    }
-
-    private var dockBackgroundRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "dock.rectangle")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 36, height: 36)
-                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(LaraL10n.text(
-                    en: "Hide Dock background",
-                    es: "Ocultar fondo del Dock"
-                ))
-                .font(.subheadline.weight(.semibold))
-                Text(mgr.vfsready
-                     ? LaraL10n.text(
-                        en: "Requires respring",
-                        es: "Requiere respring"
-                     )
-                     : (mgr.dsready && mgr.hasOffsets)
-                     ? LaraL10n.text(
-                        en: "VFS prepares automatically",
-                        es: "VFS se prepara automáticamente"
-                     )
-                     : LaraL10n.text(en: "Prepare access first", es: "Prepara el acceso primero"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 4)
-
-            Toggle("", isOn: Binding(
-                get: { dockBackgroundHidden },
-                set: updateDockBackgroundVisibility
-            ))
-            .labelsHidden()
-            .disabled(
-                !mgr.dsready || !mgr.hasOffsets || mgr.vfsrunning ||
-                isApplying || isUpdatingDockBackground
-            )
-        }
-        .padding(14)
-    }
-
-    private func updateDockBackgroundVisibility(_ enabled: Bool) {
-        guard !isApplying, !isUpdatingDockBackground else { return }
-        guard mgr.dsready, mgr.hasOffsets else {
-            notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Prepare Eagle access before changing the Dock background.",
-                es: "Prepara el acceso de Eagle antes de cambiar el fondo del Dock."
-            ))
-            return
-        }
-
-        let previousValue = dockBackgroundHidden
-        isUpdatingDockBackground = true
-
-        let apply = {
-            self.applyDockBackgroundRecipe(
-                enabled,
-                previousValue: previousValue
-            )
-        }
-        if mgr.vfsready {
-            apply()
-        } else {
-            mgr.vfsinit { ready in
-                guard ready else {
-                    self.dockBackgroundHidden = previousValue
-                    self.isUpdatingDockBackground = false
-                    self.notice = AuraStudioNotice(message: LaraL10n.text(
-                        en: "VFS could not be initialized for the Dock change.",
-                        es: "No se pudo inicializar VFS para cambiar el Dock."
-                    ))
-                    return
-                }
-                apply()
-            }
-        }
-    }
-
-    private func applyDockBackgroundRecipe(
-        _ enabled: Bool,
-        previousValue: Bool
-    ) {
-        do {
-            try EagleDockBackgroundRecipe.setHidden(enabled, manager: mgr)
-            dockBackgroundHidden = enabled
-            isUpdatingDockBackground = false
-            notice = AuraStudioNotice(
-                message: LaraL10n.text(
-                    en: enabled
-                        ? "The Dock background is ready to be hidden. Respring to apply it."
-                        : "The original Dock background is ready to return. Respring to apply it.",
-                    es: enabled
-                        ? "El fondo del Dock está listo para ocultarse. Haz respring para aplicarlo."
-                        : "El fondo original del Dock está listo para volver. Haz respring para aplicarlo."
-                ),
-                offersRespring: true
-            )
-        } catch {
-            dockBackgroundHidden = previousValue
-            isUpdatingDockBackground = false
-            notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "The Dock background could not be changed: \(error.localizedDescription)",
-                es: "No se pudo cambiar el fondo del Dock: \(error.localizedDescription)"
-            ))
-        }
-    }
-
-    private func readSystemIslandSetting() {
-        guard mgr.sbxready else {
-            systemIslandSuppressed = false
-            return
-        }
-        // Lara treats an absent SpringBoard preferences domain as the
-        // setting's normal default (`false`). Some devices have never created
-        // this plist, so opening Aura Studio must not show an error alert.
-        guard FileManager.default.fileExists(
-            atPath: springBoardPreferencesPath
-        ) else {
-            systemIslandSuppressed = false
-            return
-        }
-        isReadingSystemIslandSetting = true
-        defer { isReadingSystemIslandSetting = false }
-        let result = mgr.getplistvalue(
-            path: springBoardPreferencesPath,
-            key: suppressSystemIslandKey
-        )
-        guard result.ok else {
-            systemIslandSuppressed = false
-            if !result.message.hasPrefix("key ") {
-                notice = AuraStudioNotice(message: result.message)
-            }
-            return
-        }
-        guard let value = plistBoolean(result.value) else {
-            systemIslandSuppressed = false
-            notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Could not read \(suppressSystemIslandKey) as a Boolean value.",
-                es: "No se pudo leer \(suppressSystemIslandKey) como un valor booleano."
-            ))
-            return
-        }
-        systemIslandSuppressed = value
-    }
-
-    private func updateSystemIslandSuppression(_ enabled: Bool) {
-        guard mgr.sbxready else {
-            systemIslandSuppressed = false
-            notice = AuraStudioNotice(message: LaraL10n.text(
-                en: "Prepare Eagle access before changing the system Island setting.",
-                es: "Prepara el acceso de Eagle antes de cambiar el ajuste de la Island del sistema."
-            ))
-            return
-        }
-        if !enabled,
-           !FileManager.default.fileExists(atPath: springBoardPreferencesPath) {
-            // Missing domain already means the original system behavior. Do
-            // not create an empty protected plist merely to switch it off.
-            systemIslandSuppressed = false
-            return
-        }
-        let previousValue = systemIslandSuppressed
-        systemIslandSuppressed = enabled
-        let result = mgr.setplistvalue(
-            path: springBoardPreferencesPath,
-            key: (suppressSystemIslandKey, enabled ? true : nil),
-            force: true
-        )
-        guard result.ok else {
-            systemIslandSuppressed = previousValue
-            notice = AuraStudioNotice(message: result.message)
-            return
-        }
-
-        let verification = mgr.getplistvalue(
-            path: springBoardPreferencesPath,
-            key: suppressSystemIslandKey
-        )
-        let verified: Bool
-        if verification.ok, let storedValue = plistBoolean(verification.value) {
-            verified = storedValue == enabled
-        } else {
-            verified = !enabled &&
-                (!FileManager.default.fileExists(atPath: springBoardPreferencesPath) ||
-                 (verification.value == nil && verification.message.hasPrefix("key ")))
-        }
-        guard verified else {
-            systemIslandSuppressed = previousValue
-            notice = AuraStudioNotice(message: verification.ok
-                ? LaraL10n.text(
-                    en: "The system value did not match the requested setting.",
-                    es: "El valor del sistema no coincidió con el ajuste solicitado."
-                )
-                : verification.message)
-            return
-        }
-
-        notice = AuraStudioNotice(message: LaraL10n.text(
-            en: enabled
-                ? "The system Island will be hidden after a respring. To complete the change, manually restart your iPhone once more after the respring. Your Aura profile is unchanged."
-                : "The system Island will return after a respring. To complete the change, manually restart your iPhone once more after the respring. Your Aura profile is unchanged.",
-            es: enabled
-                ? "La Island del sistema se ocultará después de un respring. Para completar el cambio, reinicia manualmente tu iPhone una vez más después del respring. Tu perfil Aura no cambió."
-                : "La Island del sistema volverá después de un respring. Para completar el cambio, reinicia manualmente tu iPhone una vez más después del respring. Tu perfil Aura no cambió."
-        ), offersRespring: true)
-    }
-
-    private func plistBoolean(_ value: Any?) -> Bool? {
-        if let value = value as? Bool { return value }
-        if let value = value as? NSNumber { return value.boolValue }
-        return nil
     }
 
     private var previewCard: some View {
@@ -1926,7 +1527,7 @@ struct AuraStudioView: View {
     }
 
     private func isTargetActive(_ target: AuraStudioTarget) -> Bool {
-        UInt32(max(activeFlagsRaw, 0)) & flag(for: target) != 0
+        EagleStoredThemeValues.flags(activeFlagsRaw) & flag(for: target) != 0
     }
 
     private func activeMode(for target: AuraStudioTarget) -> AuraStudioMode? {
@@ -1976,10 +1577,18 @@ struct AuraStudioView: View {
         }
         if target == .dock,
            isTargetActive(target),
-           (15...17).contains(activeDockModeRaw) {
+           ((15...31).contains(activeDockModeRaw) || activeDockModeRaw == 35) {
             return LaraL10n.text(
                 en: "Dock Gallery artwork active",
                 es: "Arte de Galería Dock activo"
+            )
+        }
+        if target == .island,
+           isTargetActive(target),
+           ((32...34).contains(activeIslandModeRaw) || activeIslandModeRaw == 36) {
+            return LaraL10n.text(
+                en: "Island Gallery artwork active",
+                es: "Arte de Galería Island activo"
             )
         }
         guard let appliedMode = activeMode(for: target), isTargetActive(target) else {
@@ -2016,7 +1625,7 @@ struct AuraStudioView: View {
     }
 
     private var activeModuleCount: Int {
-        (UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags).nonzeroBitCount
+        (EagleStoredThemeValues.flags(activeFlagsRaw) & deviceSupportedFlags).nonzeroBitCount
     }
 
     private var verifiedSurfaceSummary: String {
@@ -2036,7 +1645,7 @@ struct AuraStudioView: View {
         let currentPID = providedPID ?? "SpringBoard".withCString {
             find_process_pid($0)
         }
-        let rawSavedFlags = UInt32(max(activeFlagsRaw, 0)) & Flag.supported
+        let rawSavedFlags = EagleStoredThemeValues.flags(activeFlagsRaw) & Flag.supported
         let savedFlags = rawSavedFlags & deviceSupportedFlags
         if rawSavedFlags != savedFlags {
             AuraStudioDiagnostics.log(
@@ -2266,7 +1875,7 @@ struct AuraStudioView: View {
                 "mode=\(requestedProfileMode.rawValue) " +
                 "rgb=\(redValue),\(greenValue),\(blueValue)"
         )
-        let previouslyVerified = UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags
+        let previouslyVerified = EagleStoredThemeValues.flags(activeFlagsRaw) & deviceSupportedFlags
         var retainedVerified = previouslyVerified
         var newlyApplied: UInt32 = 0
         var removedFlags: UInt32 = 0
@@ -2520,7 +2129,7 @@ struct AuraStudioView: View {
                     return
                 }
                 guard mgr.beginExclusiveRemoteCall(
-                    label: "Aura \(step.englishName) \(operationID)"
+                    label: "Aura \(step.englishName) \(operationID)", expectedSession: process
                 ) else {
                     failBeforeNativeCall(
                         "Could not acquire the serialized \(step.englishName) session"
@@ -2921,7 +2530,7 @@ struct AuraStudioView: View {
             "islandDraft=mode:\(islandModeRaw) rgb:\(rgb255String(islandRed, islandGreen, islandBlue))",
             "dockDraft=mode:\(dockModeRaw) rgb:\(rgb255String(dockRed, dockGreen, dockBlue))",
             "selectedFlags=0x\(String(selectedFlags, radix: 16))",
-            "activeFlags=0x\(String(UInt32(max(activeFlagsRaw, 0)) & deviceSupportedFlags, radix: 16))",
+            "activeFlags=0x\(String(EagleStoredThemeValues.flags(activeFlagsRaw) & deviceSupportedFlags, radix: 16))",
             "activeIsland=mode:\(activeIslandModeRaw) rgb:\(activeIslandRed),\(activeIslandGreen),\(activeIslandBlue)",
             "activeDock=mode:\(activeDockModeRaw) rgb:\(activeDockRed),\(activeDockGreen),\(activeDockBlue)",
             "activeSpringBoardPID=\(activeSpringBoardPID)",

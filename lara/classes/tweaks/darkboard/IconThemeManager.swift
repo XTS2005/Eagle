@@ -946,7 +946,7 @@ final class IconThemeManager: ObservableObject {
             let iconPaths = self.preferredLiveIconPaths()
             let shape = self.selectedIconShape.liveValue
             let label = "Live Icons \(UUID().uuidString)"
-            guard self.mgr.beginExclusiveRemoteCall(label: label) else {
+            guard self.mgr.beginExclusiveRemoteCall(label: label, expectedSession: process) else {
                 finish(.failure(NSError(
                     domain: "IconThemer",
                     code: 15,

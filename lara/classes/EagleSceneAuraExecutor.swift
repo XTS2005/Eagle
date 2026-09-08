@@ -119,6 +119,18 @@ final class EagleSceneAuraExecutor {
             )
         }
 
+        let label = "Scene Aura \(target.displayName) \(operationID)"
+        guard !Task.isCancelled,
+              manager.beginExclusiveRemoteCall(label: label, expectedSession: process) else {
+            return result(
+                component,
+                .failed,
+                en: "Another protected SpringBoard operation is still active.",
+                es: "Otra operación protegida de SpringBoard sigue activa."
+            )
+        }
+        defer { manager.endExclusiveRemoteCall(label: label) }
+
         let targetPID = process.pid
         let currentPID = springBoardPID()
         guard targetPID > 0,
@@ -130,16 +142,6 @@ final class EagleSceneAuraExecutor {
                 .failed,
                 en: "The SpringBoard session identity changed before Apply. Nothing was sent.",
                 es: "La identidad de la sesión de SpringBoard cambió antes de Aplicar. No se envió nada."
-            )
-        }
-
-        let label = "Scene Aura \(target.displayName) \(operationID)"
-        guard manager.beginExclusiveRemoteCall(label: label) else {
-            return result(
-                component,
-                .failed,
-                en: "Another protected SpringBoard operation is still active.",
-                es: "Otra operación protegida de SpringBoard sigue activa."
             )
         }
 
@@ -166,7 +168,6 @@ final class EagleSceneAuraExecutor {
                 ))
             }
         }
-        manager.endExclusiveRemoteCall(label: label)
         log(
             "native.end",
             operationID,
@@ -281,7 +282,7 @@ final class EagleSceneAuraExecutor {
         let defaults = UserDefaults.standard
         let savedPID = defaults.integer(forKey: "eagle.auraStudio.activeSpringBoardPID")
         var flags = savedPID == Int(springBoardPID)
-            ? UInt32(max(defaults.integer(forKey: "eagle.auraStudio.activeFlags"), 0)) &
+            ? EagleStoredThemeValues.flags(defaults.integer(forKey: "eagle.auraStudio.activeFlags")) &
                 supportedNativeFlags
             : 0
         flags |= target.nativeFlag
@@ -313,7 +314,7 @@ final class EagleSceneAuraExecutor {
 
     private func clearVerifiedBadge(for target: EagleSceneAuraTarget) {
         let defaults = UserDefaults.standard
-        var flags = UInt32(max(defaults.integer(forKey: "eagle.auraStudio.activeFlags"), 0)) &
+        var flags = EagleStoredThemeValues.flags(defaults.integer(forKey: "eagle.auraStudio.activeFlags")) &
             supportedNativeFlags
         flags &= ~target.nativeFlag
         defaults.set(Int(flags), forKey: "eagle.auraStudio.activeFlags")

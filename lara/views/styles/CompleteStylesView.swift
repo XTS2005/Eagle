@@ -565,37 +565,57 @@ private final class CompletePasscodeOriginalStore {
     }
 
     func saveIfNeeded(_ files: [CompleteStyleFileSnapshot]) throws {
-        if let existing = load(), !existing.isEmpty {
-            let existingPaths = Set(existing.map(\.path))
-            let currentPaths = Set(files.map(\.path))
-            if existingPaths == currentPaths {
-                return
+        let incoming = try validatedOriginals(files)
+        let previousData: Data?
+        var originals: [String: Data] = [:]
+        if fm.fileExists(atPath: fileURL.path) {
+            guard let data = try? Data(contentsOf: fileURL),
+                  let existing = try? PropertyListDecoder().decode([CompleteStyleFileSnapshot].self, from: data) else {
+                throw CompleteStyleEngineError.passcodeOriginalBackupFailed
             }
+            previousData = data
+            originals = try validatedOriginals(existing)
+        } else {
+            previousData = nil
         }
-        try? fm.removeItem(at: fileURL)
-        guard !files.isEmpty, files.allSatisfy({ !$0.data.isEmpty }) else {
-            throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+
+        // A cache can gain another scale/appearance variant after a theme was
+        // applied. Keep the first original for every known path and add only
+        // new variants; current themed bytes must never replace originals.
+        let previousCount = originals.count
+        for (path, data) in incoming where originals[path] == nil {
+            originals[path] = data
+        }
+        if previousData != nil, originals.count == previousCount { return }
+        let merged = originals.keys.sorted().map {
+            CompleteStyleFileSnapshot(path: $0, data: originals[$0]!)
         }
 
         do {
             let encoder = PropertyListEncoder()
             encoder.outputFormat = .binary
-            let data = try encoder.encode(files)
+            let data = try encoder.encode(merged)
             try data.write(to: fileURL, options: .atomic)
 
-            guard
-                let saved = try? Data(contentsOf: fileURL),
-                let decoded = try? PropertyListDecoder().decode([CompleteStyleFileSnapshot].self, from: saved),
-                decoded.count == files.count,
-                Dictionary(uniqueKeysWithValues: decoded.map { ($0.path, $0.data) }) ==
-                    Dictionary(uniqueKeysWithValues: files.map { ($0.path, $0.data) })
-            else {
+            guard try Data(contentsOf: fileURL) == data else {
                 throw CompleteStyleEngineError.passcodeOriginalBackupFailed
             }
         } catch {
-            try? fm.removeItem(at: fileURL)
+            if let previousData { try? previousData.write(to: fileURL, options: .atomic) }
             throw CompleteStyleEngineError.passcodeOriginalBackupFailed
         }
+    }
+
+    private func validatedOriginals(_ files: [CompleteStyleFileSnapshot]) throws -> [String: Data] {
+        guard !files.isEmpty else { throw CompleteStyleEngineError.passcodeOriginalBackupFailed }
+        var originals: [String: Data] = [:]
+        for file in files {
+            guard !file.path.isEmpty, !file.data.isEmpty, originals[file.path] == nil else {
+                throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+            }
+            originals[file.path] = file.data
+        }
+        return originals
     }
 
     func load() -> [CompleteStyleFileSnapshot]? {
@@ -1736,7 +1756,7 @@ enum CompletePasscodeStyleEngine {
         }
 
         return try paths.map { path in
-            guard let data = read(path, maximumSize: 8 * 1024 * 1024) else {
+            guard let data = read(path, maximumSize: 8 * 1024 * 1024), !data.isEmpty else {
                 throw CompleteStyleEngineError.undoPreparationFailed(
                     LaraL10n.text(en: "the passcode", es: "el código")
                 )
@@ -1759,7 +1779,9 @@ enum CompletePasscodeStyleEngine {
     }
 
     static func restoreSnapshot(_ files: [CompleteStyleFileSnapshot]) throws -> Int {
-        guard !files.isEmpty else {
+        guard !files.isEmpty,
+              files.allSatisfy({ !$0.path.isEmpty && !$0.data.isEmpty }),
+              Set(files.map(\.path)).count == files.count else {
             throw CompleteStyleEngineError.undoPreparationFailed(
                 LaraL10n.text(en: "the passcode", es: "el código")
             )
@@ -1769,6 +1791,9 @@ enum CompletePasscodeStyleEngine {
             let result = laramgr.shared.lara_overwritefile(target: file.path, data: file.data)
             guard result.ok else {
                 throw CompleteStyleEngineError.undoWriteFailed(result.message)
+            }
+            guard read(file.path, maximumSize: 8 * 1024 * 1024) == file.data else {
+                throw CompleteStyleEngineError.passcodeVerificationFailed
             }
             restored += 1
         }
@@ -1782,11 +1807,18 @@ enum CompletePasscodeStyleEngine {
         guard let basePath = basePath() else { throw CompleteStyleEngineError.passcodeUnavailable }
         let targets = targetPaths(in: basePath)
         guard hasAllDigits(targets) else { throw CompleteStyleEngineError.passcodeTargetsIncomplete }
-        guard (0...9).allSatisfy({ images[String($0)] != nil }) else {
+        guard (0...9).allSatisfy({ images[String($0)]?.isEmpty == false }) else {
             throw CompleteStyleEngineError.incompletePasscode
         }
 
+        guard rollbackFiles.allSatisfy({ !$0.path.isEmpty && !$0.data.isEmpty }),
+              Set(rollbackFiles.map(\.path)).count == rollbackFiles.count else {
+            throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+        }
         let rollbackByPath = Dictionary(uniqueKeysWithValues: rollbackFiles.map { ($0.path, $0.data) })
+        guard targets.values.joined().allSatisfy({ rollbackByPath[$0] != nil }) else {
+            throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+        }
         var writtenPaths: [String] = []
         var applied = 0
 
@@ -1800,12 +1832,16 @@ enum CompletePasscodeStyleEngine {
                 }
 
                 for path in digitTargets {
+                    // A failed overwrite may already have changed some bytes.
+                    // Include the attempted target in rollback before writing.
+                    guard rollbackByPath[path] != nil else {
+                        throw CompleteStyleEngineError.passcodeOriginalBackupFailed
+                    }
+                    writtenPaths.append(path)
                     let result = laramgr.shared.lara_overwritefile(target: path, data: image)
                     guard result.ok else {
                         throw CompleteStyleEngineError.passcodeWriteFailed(result.message)
                     }
-                    writtenPaths.append(path)
-
                     guard read(path, maximumSize: 8 * 1024 * 1024) == image else {
                         throw CompleteStyleEngineError.passcodeVerificationFailed
                     }
@@ -1910,19 +1946,7 @@ enum CompletePasscodeStyleEngine {
     }
 
     private static func digit(in lower: String) -> String? {
-        for value in 0...9 {
-            if lower.contains("other-2-\(value)--dark") ||
-                lower.contains("-\(value)-") ||
-                lower.contains("-\(value)@") ||
-                lower.contains("_\(value)_") ||
-                lower.contains("_\(value)@") ||
-                lower.hasSuffix("/\(value).png") ||
-                lower.hasSuffix("/\(value).jpg") ||
-                lower.hasSuffix("/\(value).jpeg") {
-                return String(value)
-            }
-        }
-        return nil
+        PasscodeDigitFilename.digit(in: lower)
     }
 }
 
@@ -2384,12 +2408,7 @@ struct CompleteStylesView: View {
                                 Text("Eagle Resonance")
                                     .font(.headline)
                                     .foregroundStyle(.primary)
-                                Text(LaraL10n.text(en: "NEW", es: "NUEVO"))
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.pink)
-                                    .padding(.horizontal, 6)
-                                    .frame(height: 19)
-                                    .background(.pink.opacity(0.10), in: Capsule())
+                                EagleNewBadge()
                             }
                             Text(LaraL10n.text(
                                 en: "A sound becomes your visual signature",
