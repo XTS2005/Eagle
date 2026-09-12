@@ -151,6 +151,20 @@ struct LaraHomeView: View {
 
                                     Divider().padding(.leading, 65)
 
+                                    NavigationLink(destination: DoubleTapLockView(mgr: mgr)) {
+                                        LaraToolRow(
+                                            title: "Double-Tap to Lock",
+                                            subtitle: LaraL10n.text(
+                                                en: "Lock from an empty background",
+                                                es: "Bloquear desde un fondo vacío"
+                                            ),
+                                            systemImage: "hand.tap.fill",
+                                            accent: Color(red: 0.88, green: 0.60, blue: 0.12)
+                                        )
+                                    }
+
+                                    Divider().padding(.leading, 65)
+
                                     LaraToolRow(
                                         title: LaraL10n.text(en: "Icon Studio", es: "Icon Studio"),
                                         subtitle: LaraL10n.text(
@@ -481,7 +495,7 @@ struct LaraHomeView: View {
             switch route {
             case .auraStudio, .completeStyles, .wallpapers,
                     .homeLabelColor, .cards, .passcode, .icons, .dock,
-                    .islandGallery, .dockGallery, .hideSurfaces:
+                    .islandGallery, .dockGallery, .hideSurfaces, .doubleTapLock:
                 return true
             case .advancedSettings:
                 return EagleFeaturePolicy.allows(.advancedSystemTools, channel: currentChannel)
@@ -669,6 +683,8 @@ struct LaraHomeView: View {
             dockGalleryDestination
         case .hideSurfaces:
             hideSurfacesDestination
+        case .doubleTapLock:
+            DoubleTapLockView(mgr: mgr)
         case .advancedSettings:
             SettingsView().environmentObject(mgr)
         case .auraStudio:
@@ -720,6 +736,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     case islandGallery
     case dockGallery
     case hideSurfaces
+    case doubleTapLock
     case advancedSettings
     case icons
 
@@ -742,6 +759,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
             return LaraL10n.text(en: "Dock Gallery", es: "Galería Dock")
         case .hideSurfaces:
             return "Hide Dock + Island"
+        case .doubleTapLock:
+            return "Double-Tap to Lock"
         case .advancedSettings:
             return LaraL10n.text(en: "Advanced system tools", es: "Herramientas avanzadas")
         case .auraStudio: return "Aura Studio"
@@ -752,6 +771,11 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
         switch self {
         case .hideSurfaces:
             return LaraL10n.text(en: "System visibility", es: "Visibilidad del sistema")
+        case .doubleTapLock:
+            return LaraL10n.text(
+                en: "Lock from an empty background",
+                es: "Bloquear desde un fondo vacío"
+            )
         case .completeStyles:
             return LaraL10n.text(en: "Complete visual styles", es: "Estilos visuales completos")
         case .eagleSystem:
@@ -788,6 +812,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .hideSurfaces: return "eye.slash.fill"
+        case .doubleTapLock: return "hand.tap.fill"
         case .completeStyles: return "sparkles"
         case .eagleSystem: return "checkmark.shield.fill"
         case .wallpapers: return "photo.on.rectangle.angled"
@@ -806,6 +831,7 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     var accent: Color {
         switch self {
         case .hideSurfaces: return .indigo
+        case .doubleTapLock: return Color(red: 0.88, green: 0.60, blue: 0.12)
         case .completeStyles: return Color(red: 0.33, green: 0.25, blue: 0.82)
         case .eagleSystem: return .indigo
         case .wallpapers: return Color(red: 0.34, green: 0.31, blue: 0.88)
@@ -824,6 +850,8 @@ private enum LaraHomeToolRoute: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .hideSurfaces: return "hide dock island ocultar isla fondo background visibility visibilidad"
+        case .doubleTapLock:
+            return "lock locks bloqueo bloquear double tap doble toque gesture gesto background fondo empty vacío screen pantalla"
         case .completeStyles: return "style styles estilo estilos complete completo visual"
         case .eagleSystem: return "system sistema guardian recovery recuperación"
         case .wallpapers: return "wallpaper wallpapers fondo fondos creator creador gallery galería"
