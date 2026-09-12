@@ -10,11 +10,12 @@ import SwiftUI
 /// Double-Tap to Lock — ported from Cyanide's darksword_tweaks.m.
 /// Double-tapping an empty area of the Home Screen or Lock Screen background
 /// locks the device. Icons, the dock and the passcode screen never trigger it.
-/// Passcode-style interaction: fixed "Apply" / "Turn Off" buttons (labels never
+/// Passcode-style interaction: fixed "Apply" / "Disable" buttons (labels never
 /// flip), the shared Prepare card while access is not ready yet, and feedback
-/// via alerts plus the status banner. Turning the gesture off needs no respring.
+/// via alerts plus the status card. Disabling needs no respring.
 struct DoubleTapLockView: View {
     @ObservedObject var mgr: laramgr
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("doubleTapToLock") private var doubleTapToLock: Bool = false
     @State private var busy: Bool = false
 
@@ -30,14 +31,13 @@ struct DoubleTapLockView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                statusBanner
+                statusCard
                 if !mgr.sbxready {
                     // Reuse the exact same Prepare card as the Access tab so
                     // the exploit entry looks and behaves identically.
                     LaraAccessView(compact: true)
                 }
-                applyButton
-                turnOffButton
+                actions
                 infoCard
             }
             .padding(.horizontal, 20)
@@ -52,34 +52,24 @@ struct DoubleTapLockView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Status banner
+    // MARK: - Status card
 
-    private var statusBanner: some View {
-        HStack(spacing: 14) {
-            Image(systemName: doubleTapToLock ? "hand.tap.fill" : "hand.tap")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(doubleTapToLock ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
-                .frame(width: 44, height: 44)
-                .background(
-                    (doubleTapToLock ? Color.green : Color.secondary).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
+    private var statusCard: some View {
+        HStack(alignment: .top, spacing: 14) {
+            statusIconPlate
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(statusTitle)
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Text(statusSubtitle)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                statusBadge
             }
 
-            Spacer(minLength: 4)
-
-            Circle()
-                .fill(indicatorColor)
-                .frame(width: 10, height: 10)
-                .accessibilityHidden(true)
+            Spacer(minLength: 0)
         }
         .padding(16)
         .background(
@@ -88,8 +78,36 @@ struct DoubleTapLockView: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
         }
+        .shadow(color: EagleVisualTheme.surfaceShadow(for: colorScheme), radius: 10, y: 4)
+    }
+
+    private var statusIconPlate: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: doubleTapToLock
+                            ? [Color(red: 0.20, green: 0.78, blue: 0.45),
+                               Color(red: 0.10, green: 0.62, blue: 0.60)]
+                            : [EagleVisualTheme.accent,
+                               EagleVisualTheme.accent.opacity(0.62)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Image(systemName: doubleTapToLock ? "hand.tap.fill" : "hand.tap")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: 46, height: 46)
+        .shadow(
+            color: (doubleTapToLock ? Color.green : EagleVisualTheme.accent).opacity(0.28),
+            radius: 8,
+            y: 3
+        )
+        .accessibilityHidden(true)
     }
 
     private var statusTitle: String {
@@ -104,7 +122,7 @@ struct DoubleTapLockView: View {
         }
         return doubleTapToLock
             ? LaraL10n.text(en: "Applied", es: "Aplicado")
-            : LaraL10n.text(en: "Not applied", es: "No aplicado")
+            : LaraL10n.text(en: "Disabled", es: "Desactivado")
     }
 
     private var statusSubtitle: String {
@@ -131,33 +149,59 @@ struct DoubleTapLockView: View {
             )
     }
 
-    private var indicatorColor: Color {
+    private var statusBadgeColor: Color {
         if !mgr.dsready { return .red }
         if !sessionReady { return .orange }
-        return doubleTapToLock ? .green : Color.secondary.opacity(0.4)
+        return doubleTapToLock ? .green : Color.secondary
+    }
+
+    private var statusBadge: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(statusBadgeColor)
+                .frame(width: 6, height: 6)
+            Text(statusTitle.uppercased())
+                .font(.caption2.weight(.bold))
+                .tracking(0.4)
+                .foregroundStyle(statusBadgeColor)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(statusBadgeColor.opacity(0.12), in: Capsule())
+        .accessibilityHidden(true)
     }
 
     // MARK: - Action buttons
 
-    // Fixed buttons, Passcode-style: "Apply" installs the gesture and "Turn
-    // Off" removes it right away (no respring needed). The labels never flip;
+    // Fixed buttons, Passcode-style: "Apply" installs the gesture and "Disable"
+    // removes it right away (no respring needed). The labels never flip;
     // feedback comes from the alert after the remote call completes and from
-    // the status banner.
+    // the status card.
+
+    private var actions: some View {
+        VStack(spacing: 12) {
+            applyButton
+            disableButton
+        }
+    }
 
     private var applyButton: some View {
         Button {
             applyDoubleTapToLock(true)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 if busy {
                     ProgressView()
                         .tint(.white)
+                } else {
+                    Image(systemName: "hand.tap.fill")
+                        .font(.subheadline.weight(.semibold))
                 }
                 Text(LaraL10n.text(en: "Apply", es: "Aplicar"))
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
@@ -169,20 +213,23 @@ struct DoubleTapLockView: View {
         ))
     }
 
-    private var turnOffButton: some View {
+    private var disableButton: some View {
         Button(role: .destructive) {
             applyDoubleTapToLock(false)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 if busy {
                     ProgressView()
                         .tint(.white)
+                } else {
+                    Image(systemName: "power")
+                        .font(.subheadline.weight(.semibold))
                 }
-                Text(LaraL10n.text(en: "Turn Off", es: "Apagar"))
+                Text(LaraL10n.text(en: "Disable", es: "Desactivar"))
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
@@ -196,36 +243,42 @@ struct DoubleTapLockView: View {
     // MARK: - Info
 
     private var infoCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(
-                LaraL10n.text(
-                    en: "How it works",
-                    es: "Cómo funciona"
-                ),
-                systemImage: "info.circle.fill"
+        VStack(alignment: .leading, spacing: 12) {
+            Label {
+                Text(LaraL10n.text(en: "How it works", es: "Cómo funciona"))
+                    .font(.subheadline.weight(.semibold))
+            } icon: {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(EagleVisualTheme.accent)
+            }
+
+            infoRow(
+                icon: "hand.tap",
+                text: LaraL10n.text(
+                    en: "Double-tap an empty Home Screen or Lock Screen area to lock. Icons, the dock and the passcode screen never trigger it.",
+                    es: "Toca dos veces un área vacía de Inicio o de bloqueo para bloquear. Los iconos, el dock y la pantalla de código no lo activan."
+                )
             )
-            .font(.subheadline.weight(.semibold))
 
-            Text(LaraL10n.text(
-                en: "Double-tap an empty area of the Home Screen or Lock Screen background to lock the device. Icons, the dock and the passcode screen never trigger it.",
-                es: "Toca dos veces un área vacía de la pantalla de inicio o de bloqueo para bloquear el dispositivo. Los iconos, el dock y la pantalla de código no lo activan."
-            ))
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            Divider().opacity(0.4)
 
-            Text(LaraL10n.text(
-                en: "Prepare runs the exploit once; Apply then starts the SpringBoard RemoteCall session automatically and installs the gesture.",
-                es: "Prepare ejecuta el exploit una vez; Aplicar inicia entonces la sesión RemoteCall de SpringBoard automáticamente e instala el gesto."
-            ))
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            infoRow(
+                icon: "wand.and.stars",
+                text: LaraL10n.text(
+                    en: "Prepare runs the exploit once; Apply then starts the SpringBoard session and installs the gesture automatically.",
+                    es: "Prepare ejecuta el exploit una vez; Aplicar inicia la sesión de SpringBoard e instala el gesto automáticamente."
+                )
+            )
 
-            Text(LaraL10n.text(
-                en: "Turn Off removes the gesture right away — no respring and no restart needed. Tap Apply again afterwards to reinstall it.",
-                es: "Apagar elimina el gesto al instante — sin respring ni reinicio. Toca Aplicar de nuevo después para reinstalarlo."
-            ))
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            Divider().opacity(0.4)
+
+            infoRow(
+                icon: "power",
+                text: LaraL10n.text(
+                    en: "Disable removes the gesture instantly — no respring and no restart needed. Tap Apply again afterwards to reinstall it.",
+                    es: "Desactivar elimina el gesto al instante — sin respring ni reinicio. Toca Aplicar de nuevo después para reinstalarlo."
+                )
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -235,7 +288,21 @@ struct DoubleTapLockView: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(EagleVisualTheme.surfaceBorder(for: colorScheme), lineWidth: 1)
+        }
+        .shadow(color: EagleVisualTheme.surfaceShadow(for: colorScheme), radius: 10, y: 4)
+    }
+
+    private func infoRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(EagleVisualTheme.accent)
+                .frame(width: 18)
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -292,7 +359,7 @@ struct DoubleTapLockView: View {
                     Alertinator.shared.alert(
                         title: enabled
                             ? LaraL10n.text(en: "Double-Tap to Lock Applied", es: "Bloqueo con doble toque aplicado")
-                            : LaraL10n.text(en: "Double-Tap to Lock Turned Off", es: "Bloqueo con doble toque apagado"),
+                            : LaraL10n.text(en: "Double-Tap to Lock Disabled", es: "Bloqueo con doble toque desactivado"),
                         body: enabled
                             ? LaraL10n.text(en: "Double-tap an empty area of the Home Screen or Lock Screen to lock the device.", es: "Toca dos veces un área vacía de Inicio o de bloqueo para bloquear el dispositivo.")
                             : LaraL10n.text(en: "The double-tap gesture was removed from SpringBoard.", es: "El gesto de doble toque se eliminó de SpringBoard.")
