@@ -14,6 +14,16 @@ import SwiftUI
 /// flip), the shared Prepare card while access is not ready yet, and feedback
 /// via alerts plus the status card. Disabling needs no respring.
 struct DoubleTapLockView: View {
+    /// Single source of truth for the status card: title, subtitle, badge,
+    /// colour and icon all derive from one case, so a new state only needs to
+    /// be added here.
+    private enum Stage {
+        case prepareRequired
+        case sessionMissing
+        case applied
+        case disabled
+    }
+
     @ObservedObject var mgr: laramgr
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("doubleTapToLock") private var doubleTapToLock: Bool = false
@@ -26,6 +36,12 @@ struct DoubleTapLockView: View {
     private var controlsDisabled: Bool {
         !mgr.dsready || busy || mgr.rcrunning
             || mgr.dsrunning || mgr.vfsrunning || mgr.sbxrunning
+    }
+
+    private var stage: Stage {
+        if !mgr.dsready { return .prepareRequired }
+        if !sessionReady { return .sessionMissing }
+        return doubleTapToLock ? .applied : .disabled
     }
 
     var body: some View {
@@ -59,10 +75,10 @@ struct DoubleTapLockView: View {
             statusIconPlate
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(statusTitle)
+                Text(stageTitle)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(statusSubtitle)
+                Text(stageSubtitle)
                     .font(.footnote)
                     .foregroundStyle(EagleVisualTheme.secondaryText(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -88,86 +104,106 @@ struct DoubleTapLockView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: doubleTapToLock
-                            ? [Color(red: 0.20, green: 0.78, blue: 0.45),
-                               Color(red: 0.10, green: 0.62, blue: 0.60)]
-                            : [EagleVisualTheme.accent,
-                               EagleVisualTheme.accent.opacity(0.62)],
+                        colors: stagePlateColors,
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-            Image(systemName: doubleTapToLock ? "hand.tap.fill" : "hand.tap")
+            Image(systemName: stageIcon)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
         }
         .frame(width: 46, height: 46)
-        .shadow(
-            color: (doubleTapToLock ? Color.green : EagleVisualTheme.accent).opacity(0.28),
-            radius: 8,
-            y: 3
-        )
+        .shadow(color: stageColor.opacity(0.28), radius: 8, y: 3)
         .accessibilityHidden(true)
     }
 
-    private var statusTitle: String {
-        if !mgr.dsready {
+    private var stageTitle: String {
+        switch stage {
+        case .prepareRequired:
             return LaraL10n.text(en: "Prepare required", es: "Se requiere Prepare")
+        case .sessionMissing:
+            return LaraL10n.text(en: "Session not started", es: "Sesión no iniciada")
+        case .applied:
+            return LaraL10n.text(en: "Applied", es: "Aplicado")
+        case .disabled:
+            return LaraL10n.text(en: "Disabled", es: "Desactivado")
         }
-        if !sessionReady {
-            return LaraL10n.text(
-                en: "Session not started",
-                es: "Sesión no iniciada"
-            )
-        }
-        return doubleTapToLock
-            ? LaraL10n.text(en: "Applied", es: "Aplicado")
-            : LaraL10n.text(en: "Disabled", es: "Desactivado")
     }
 
-    private var statusSubtitle: String {
-        if !mgr.dsready {
+    private var stageSubtitle: String {
+        switch stage {
+        case .prepareRequired:
             return LaraL10n.text(
                 en: "Run Prepare below — the buttons unlock once the exploit succeeds.",
                 es: "Ejecuta Prepare abajo — los botones se desbloquean tras el exploit."
             )
-        }
-        if !sessionReady {
+        case .sessionMissing:
             return LaraL10n.text(
                 en: "The SpringBoard session starts automatically when you tap Apply.",
                 es: "La sesión de SpringBoard se inicia automáticamente al tocar Aplicar."
             )
-        }
-        return doubleTapToLock
-            ? LaraL10n.text(
+        case .applied:
+            return LaraL10n.text(
                 en: "Double-tap an empty Home Screen or Lock Screen area to lock.",
                 es: "Toca dos veces un área vacía de Inicio o de bloqueo para bloquear."
             )
-            : LaraL10n.text(
+        case .disabled:
+            return LaraL10n.text(
                 en: "The gesture is not installed.",
                 es: "El gesto no está instalado."
             )
+        }
     }
 
-    private var statusBadgeColor: Color {
-        if !mgr.dsready { return .red }
-        if !sessionReady { return .orange }
-        return doubleTapToLock ? .green : Color.secondary
+    /// Compact badge label: kept short on purpose so the capsule stays narrow
+    /// even in the longer states.
+    private var stageBadgeText: String {
+        switch stage {
+        case .prepareRequired:
+            return LaraL10n.text(en: "PREPARE", es: "PREPARAR")
+        case .sessionMissing:
+            return LaraL10n.text(en: "NO SESSION", es: "SIN SESIÓN")
+        case .applied:
+            return LaraL10n.text(en: "APPLIED", es: "APLICADO")
+        case .disabled:
+            return LaraL10n.text(en: "DISABLED", es: "DESACTIVADO")
+        }
+    }
+
+    private var stageColor: Color {
+        switch stage {
+        case .prepareRequired: return .red
+        case .sessionMissing: return .orange
+        case .applied: return .green
+        case .disabled: return .secondary
+        }
+    }
+
+    private var stageIcon: String {
+        stage == .applied ? "hand.tap.fill" : "hand.tap"
+    }
+
+    private var stagePlateColors: [Color] {
+        stage == .applied
+            ? [Color(red: 0.20, green: 0.78, blue: 0.45),
+               Color(red: 0.10, green: 0.62, blue: 0.60)]
+            : [EagleVisualTheme.accent, EagleVisualTheme.accent.opacity(0.62)]
     }
 
     private var statusBadge: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(statusBadgeColor)
+                .fill(stageColor)
                 .frame(width: 6, height: 6)
-            Text(statusTitle.uppercased())
+            Text(stageBadgeText)
                 .font(.caption2.weight(.bold))
                 .tracking(0.4)
-                .foregroundStyle(statusBadgeColor)
+                .foregroundStyle(stageColor)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .background(statusBadgeColor.opacity(0.12), in: Capsule())
+        .background(stageColor.opacity(0.12), in: Capsule())
         .accessibilityHidden(true)
     }
 
